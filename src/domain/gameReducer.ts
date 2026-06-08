@@ -123,6 +123,23 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       if (action.stackIndex < 0 || action.stackIndex >= player.stack.length) return state;
 
       const newStack = player.stack.filter((_, i) => i !== action.stackIndex);
+      const newSum = newStack.reduce((s, item) => s + item.value, 0);
+
+      if (newSum === TARGET_SUM) {
+        // Removing led to exactly 21 → score and clear
+        return {
+          ...state,
+          players: {
+            ...state.players,
+            [action.playerId]: {
+              ...player,
+              score: player.score + 1,
+              stack: [],
+              removeCooldownUntil: logicalTime + REMOVE_COOLDOWN_MS,
+            },
+          },
+        };
+      }
 
       return {
         ...state,

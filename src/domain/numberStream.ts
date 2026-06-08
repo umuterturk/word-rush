@@ -66,6 +66,19 @@ function randomFallSpeed(rng: () => number, spawnTime: number): number {
   return base * fallSpeedRamp(spawnTime);
 }
 
+/**
+ * Wave size increases as match progresses.
+ * Early: 2-3 tiles per wave. Late: 3-5 tiles per wave.
+ */
+function getWaveSize(rng: () => number, spawnTime: number): number {
+  const progress = Math.min(1, spawnTime / SPAWN_CUTOFF_MS);
+  // Gradually shift the min from SPAWN_WAVE_MIN toward SPAWN_WAVE_MIN+1
+  const minBoost = Math.floor(progress * 1.5);
+  const effectiveMin = Math.min(SPAWN_WAVE_MIN + minBoost, SPAWN_WAVE_MAX - 1);
+  const effectiveMax = SPAWN_WAVE_MAX;
+  return effectiveMin + Math.floor(rng() * (effectiveMax - effectiveMin + 1));
+}
+
 /** Pick distinct lane indices for a wave (no two tiles in the same lane). */
 function pickLaneIndices(rng: () => number, count: number): number[] {
   const available = LANES.map((_, i) => i);
@@ -99,9 +112,7 @@ export function generateNumberStream(seed: string): NumberStreamEntry[] {
   let idx = 0;
 
   while (time < SPAWN_CUTOFF_MS) {
-    const waveSize =
-      SPAWN_WAVE_MIN +
-      Math.floor(rng() * (SPAWN_WAVE_MAX - SPAWN_WAVE_MIN + 1));
+    const waveSize = getWaveSize(rng, time);
     const lanes = pickLaneIndices(rng, waveSize);
     const spawnTime = Math.round(time);
 
