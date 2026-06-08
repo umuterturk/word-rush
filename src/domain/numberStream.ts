@@ -13,6 +13,7 @@ import {
   SPAWN_WAVE_MAX,
   SPAWN_INTERVAL_MIN,
   SPAWN_INTERVAL_VARIANCE,
+  SPAWN_CUTOFF_BEFORE_END_MS,
 } from './constants';
 
 // Pre-compute weighted value selection table
@@ -43,7 +44,7 @@ function randomWeightedValue(rng: () => number): number {
  */
 const LANES: readonly number[] = [0.12, 0.28, 0.50, 0.72, 0.88];
 
-const SPAWN_CUTOFF_MS = MATCH_DURATION_MS - 4000;
+const SPAWN_CUTOFF_MS = MATCH_DURATION_MS - SPAWN_CUTOFF_BEFORE_END_MS;
 
 /**
  * Speed multiplier that ramps from start to end as match time progresses.

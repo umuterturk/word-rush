@@ -24,7 +24,7 @@ export const FALL_SPEED_MAX = 0.00034;
 
 // Speed multiplier at match start vs end (tiles fall faster as time passes)
 export const FALL_SPEED_RAMP_START = 1.0;
-export const FALL_SPEED_RAMP_END = 2.4;
+export const FALL_SPEED_RAMP_END = 2.0;
 
 // Wave spawns: how many tiles appear together each wave
 export const SPAWN_WAVE_MIN = 2;
@@ -33,6 +33,9 @@ export const SPAWN_WAVE_MAX = 4;
 // Time between successive spawn waves
 export const SPAWN_INTERVAL_MIN = 700;   // ms
 export const SPAWN_INTERVAL_VARIANCE = 900; // ms
+
+// Stop spawning this many ms before match ends (tiles still need time to fall)
+export const SPAWN_CUTOFF_BEFORE_END_MS = 1_500;
 
 // Tile dimensions as fraction of arena width (for hit-test awareness)
 export const TILE_RADIUS_NORM = 0.07;

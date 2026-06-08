@@ -5,6 +5,7 @@ import {
   NUMBER_MIN,
   NUMBER_MAX,
   SPAWN_WAVE_MIN,
+  SPAWN_CUTOFF_BEFORE_END_MS,
 } from '../constants';
 
 describe('generateNumberStream', () => {
@@ -78,10 +79,10 @@ describe('generateNumberStream', () => {
     expect(uniqueSpeeds.size).toBeGreaterThan(1);
   });
 
-  it('all tiles spawn before the last 4 seconds of the match', () => {
+  it('all tiles spawn before the spawn cutoff', () => {
     const stream = generateNumberStream('timing-check');
     for (const entry of stream) {
-      expect(entry.spawnTime).toBeLessThan(MATCH_DURATION_MS - 4000);
+      expect(entry.spawnTime).toBeLessThan(MATCH_DURATION_MS - SPAWN_CUTOFF_BEFORE_END_MS);
     }
   });
 
