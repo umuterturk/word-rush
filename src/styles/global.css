@@ -354,6 +354,40 @@ button {
 .game-screen {
   background: #0b0b18;
   padding-top: env(safe-area-inset-top, 0px);
+  position: relative;
+}
+
+.game-screen--paused .arena,
+.game-screen--paused .stack-panel {
+  filter: brightness(0.55);
+}
+
+.pause-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  pointer-events: auto;
+  background: rgba(11, 11, 24, 0.35);
+}
+
+.pause-label {
+  font-size: clamp(32px, 10vw, 48px);
+  font-weight: 900;
+  letter-spacing: 8px;
+  color: #fff176;
+  text-shadow: 0 0 30px rgba(255, 241, 118, 0.4);
+}
+
+.pause-hint {
+  font-size: 12px;
+  letter-spacing: 2px;
+  color: #555;
+  font-weight: 600;
 }
 
 /* VS HUD (multiplayer) */
@@ -702,7 +736,189 @@ button {
   overflow: hidden;
 }
 
-/* Falling letter tiles */
+/* ─── Target Word Banner ─────────────────────────────────────────────────── */
+
+.target-word-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 8px 16px;
+  background: rgba(255, 255, 255, 0.03);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  flex-shrink: 0;
+}
+
+.target-word-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: #444;
+  text-transform: uppercase;
+}
+
+.target-word-text {
+  font-size: clamp(22px, 6vw, 32px);
+  font-weight: 900;
+  letter-spacing: 6px;
+  color: #fff;
+  text-shadow: 0 0 20px rgba(255, 255, 255, 0.15);
+}
+
+.target-word-score {
+  font-size: 14px;
+  font-weight: 900;
+  color: #81c784;
+  background: rgba(129, 199, 132, 0.15);
+  border-radius: 100px;
+  padding: 3px 10px;
+  letter-spacing: 0.5px;
+  animation: pop 0.2s ease-out;
+}
+
+/* ─── Grid Arena ─────────────────────────────────────────────────────────── */
+
+.grid-arena {
+  /* no extra styles needed — inherits .arena */
+}
+
+/* Faint background slot for each possible cell position */
+.grid-cell-bg {
+  position: absolute;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  pointer-events: none;
+}
+
+.grid-tile {
+  position: absolute;
+  border: none;
+  border-radius: 10px;
+  font-size: clamp(14px, 3.5vw, 18px);
+  font-weight: 900;
+  color: #0b0b18;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255,255,255,0.3);
+  /* sub-pixel padding so adjacent tiles have a thin gap */
+  padding: 2px;
+  /* CSS transition for landed cells collapsing downward */
+  will-change: top;
+  transition: box-shadow 0.15s ease;
+  touch-action: manipulation;
+  cursor: pointer;
+  position: absolute;
+}
+
+.grid-tile:active {
+  opacity: 0.85;
+  transform: scale(0.9);
+}
+
+.grid-tile--falling {
+  /* falling pieces don't transition top so physics feels instant */
+  transition: none;
+}
+
+.grid-tile--landed {
+  transition: top 0.15s ease-out, box-shadow 0.15s ease;
+}
+
+.grid-tile--selected {
+  outline: 2.5px solid #fff;
+  outline-offset: 1px;
+  box-shadow:
+    0 0 0 3px rgba(255, 255, 255, 0.25),
+    0 4px 16px rgba(255, 255, 255, 0.2),
+    inset 0 1px 0 rgba(255,255,255,0.3);
+  z-index: 2;
+}
+
+/* Order badge shown inside selected tile */
+.grid-tile__order {
+  position: absolute;
+  top: 1px;
+  right: 3px;
+  font-size: 9px;
+  font-weight: 900;
+  color: rgba(0, 0, 0, 0.6);
+  line-height: 1;
+  pointer-events: none;
+}
+
+/* Top-out flash */
+@keyframes topped-out-flash {
+  0%, 100% { background: #0b0b18; }
+  50% { background: rgba(239, 154, 154, 0.2); }
+}
+
+.game-screen--topped-out .arena {
+  animation: topped-out-flash 0.35s ease-out 2;
+}
+
+/* ─── Word Panel (replaces buffer panel) ─────────────────────────────────── */
+
+.word-panel {
+  flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.03);
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  padding: 10px 12px 10px;
+  padding-bottom: max(12px, env(safe-area-inset-bottom, 0px));
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: border-color 0.2s ease;
+}
+
+.word-panel--valid {
+  border-top-color: rgba(129, 199, 132, 0.5);
+  background: rgba(129, 199, 132, 0.04);
+}
+
+.word-panel--invalid {
+  animation: panel-shake 0.4s ease;
+  border-top-color: rgba(239, 154, 154, 0.5);
+}
+
+.word-panel-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.clear-btn {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 100px;
+  color: #555;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  padding: 9px 18px;
+  min-height: 36px;
+  flex-shrink: 0;
+  transition: opacity 0.1s ease;
+}
+
+.clear-btn:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.clear-btn:active:not(:disabled) {
+  opacity: 0.6;
+}
+
+/* Paused overlay dims the arena and word panel */
+.game-screen--paused .grid-arena,
+.game-screen--paused .word-panel {
+  filter: brightness(0.55);
+}
+
+/* Falling letter tiles (legacy, kept for safety) */
 .tile {
   position: absolute;
   width: 54px;
@@ -897,6 +1113,82 @@ button {
   transition: width 0.05s linear;
 }
 
+/* ─── Formed word row ────────────────────────────────────────────────────── */
+
+.formed-word-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-height: 52px;
+  flex-wrap: wrap;
+  padding: 2px 0;
+}
+
+.formed-word-row--match .formed-letter {
+  background: #81c784;
+  box-shadow:
+    0 0 0 2px rgba(129, 199, 132, 0.7),
+    0 4px 16px rgba(129, 199, 132, 0.35);
+  animation: match-pulse 0.5s ease-out;
+}
+
+@keyframes match-pulse {
+  0%   { transform: scale(1.12); }
+  60%  { transform: scale(0.97); }
+  100% { transform: scale(1); }
+}
+
+.formed-letter {
+  position: relative;
+  width: 42px;
+  height: 48px;
+  border-radius: 10px;
+  border: none;
+  font-size: 20px;
+  font-weight: 900;
+  color: #0b0b18;
+  background: #e0e0e0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255,255,255,0.5);
+  flex-shrink: 0;
+  cursor: pointer;
+  transition: transform 0.08s ease, opacity 0.08s ease;
+}
+
+.formed-letter:active {
+  transform: scale(0.88);
+  opacity: 0.75;
+}
+
+/* Score badge on the last letter when word matches */
+.formed-letter__score {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  font-size: 11px;
+  font-weight: 900;
+  color: #fff;
+  background: #4caf50;
+  border-radius: 100px;
+  padding: 2px 6px;
+  pointer-events: none;
+  animation: pop 0.2s ease-out;
+  white-space: nowrap;
+}
+
+.formed-word-placeholder {
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: 1px;
+  color: #333;
+  text-align: center;
+}
+
+/* legacy kept for safety */
 .word-display {
   flex: 1;
   display: flex;

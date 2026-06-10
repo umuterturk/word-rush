@@ -1,19 +1,14 @@
-import type { GameAction, GameState, PlayerState, BufferItem } from './types';
-import {
-  MAX_BUFFER_SIZE,
-  REMOVE_COOLDOWN_MS,
-  MATCH_DURATION_MS,
-  WORD_SCORE,
-} from './constants';
-import { generateLetterStream } from './letterStream';
-import { isValidWord } from './wordSet';
+import type { GameAction, GameState, PlayerState } from './types';
+import { MAX_BUFFER_SIZE, MATCH_DURATION_MS, WORD_SCORE } from './constants';
+import { createSeededRng } from './seededRng';
+import { fillGrid, pickTargetWord } from './gridUtils';
 
 export function createInitialPlayerState(): PlayerState {
   return {
     score: 0,
-    buffer: [],
-    removeCooldownUntil: 0,
-    collectedIds: new Set(),
+    columns: [],
+    selectedIds: [],
+    targetWord: '',
   };
 }
 
@@ -22,28 +17,31 @@ export const INITIAL_GAME_STATE: GameState = {
   matchStartedAt: 0,
   matchDuration: MATCH_DURATION_MS,
   seed: '',
-  stream: [],
   players: {},
 };
 
 /**
  * Pure reducer: (state, action) => state.
- *
  * No side effects, no imports from React/DOM/timers.
- * Remote actions from multiplayer adapters can be replayed through this
- * same function to reproduce any past state exactly.
  */
 export function gameReducer(state: GameState, action: GameAction): GameState {
   switch (action.type) {
     case 'START_MATCH': {
+      const rng = createSeededRng(action.seed);
+      const columns = fillGrid(rng);
+      const targetWord = pickTargetWord(rng, columns) ?? '';
       return {
         matchStatus: 'playing',
         matchStartedAt: action.at,
         matchDuration: MATCH_DURATION_MS,
         seed: action.seed,
-        stream: generateLetterStream(action.seed),
         players: {
-          local: createInitialPlayerState(),
+          local: {
+            score: 0,
+            columns,
+            selectedIds: [],
+            targetWord,
+          },
         },
       };
     }
@@ -57,106 +55,43 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       return INITIAL_GAME_STATE;
     }
 
-    case 'COLLECT_LETTER': {
+    case 'SELECT_LETTER': {
       const player = state.players[action.playerId];
       if (!player) return state;
 
-      const entry = state.stream.find(e => e.id === action.letterId);
-      if (!entry) return state;
+      const { letterId } = action;
+      const { selectedIds, columns } = player;
 
-      const logicalTime = action.at - state.matchStartedAt;
-      const fallDuration = 1 / entry.fallSpeed;
-      const isActive =
-        entry.spawnTime <= logicalTime &&
-        logicalTime < entry.spawnTime + fallDuration &&
-        !player.collectedIds.has(action.letterId);
+      // Verify the cell exists in the grid
+      const exists = columns.some(col => col.some(c => c.id === letterId));
+      if (!exists) return state;
 
-      if (!isActive) return state;
-
-      // Sliding window: when the buffer is full, evict the oldest letter first
-      const baseBuffer =
-        player.buffer.length >= MAX_BUFFER_SIZE
-          ? player.buffer.slice(1)
-          : player.buffer;
-
-      const newBuffer: BufferItem[] = [
-        ...baseBuffer,
-        { letterId: action.letterId, letter: entry.letter },
-      ];
-      const newCollectedIds = new Set(player.collectedIds);
-      newCollectedIds.add(action.letterId);
+      let newSelectedIds: string[];
+      if (selectedIds.includes(letterId)) {
+        // Truncate: keep only letters before the tapped one
+        newSelectedIds = selectedIds.slice(0, selectedIds.indexOf(letterId));
+      } else {
+        if (selectedIds.length >= MAX_BUFFER_SIZE) return state;
+        newSelectedIds = [...selectedIds, letterId];
+      }
 
       return {
         ...state,
         players: {
           ...state.players,
-          [action.playerId]: {
-            ...player,
-            buffer: newBuffer,
-            collectedIds: newCollectedIds,
-          },
+          [action.playerId]: { ...player, selectedIds: newSelectedIds },
         },
       };
     }
 
-    case 'REMOVE_BUFFER_ITEM': {
+    case 'CLEAR_SELECTION': {
       const player = state.players[action.playerId];
       if (!player) return state;
-
-      const logicalTime = action.at - state.matchStartedAt;
-      if (logicalTime < player.removeCooldownUntil) return state;
-
-      if (action.bufferIndex < 0 || action.bufferIndex >= player.buffer.length) return state;
-
-      const newBuffer = player.buffer.filter((_, i) => i !== action.bufferIndex);
-
       return {
         ...state,
         players: {
           ...state.players,
-          [action.playerId]: {
-            ...player,
-            buffer: newBuffer,
-            removeCooldownUntil: logicalTime + REMOVE_COOLDOWN_MS,
-          },
-        },
-      };
-    }
-
-    case 'REPLACE_BUFFER_ITEM': {
-      const player = state.players[action.playerId];
-      if (!player) return state;
-
-      const entry = state.stream.find(e => e.id === action.letterId);
-      if (!entry) return state;
-
-      const logicalTime = action.at - state.matchStartedAt;
-      const fallDuration = 1 / entry.fallSpeed;
-      const isActive =
-        entry.spawnTime <= logicalTime &&
-        logicalTime < entry.spawnTime + fallDuration &&
-        !player.collectedIds.has(action.letterId);
-
-      if (!isActive) return state;
-      if (action.bufferIndex < 0 || action.bufferIndex >= player.buffer.length) return state;
-
-      const newBuffer = player.buffer.map((item, i) =>
-        i === action.bufferIndex
-          ? { letterId: action.letterId, letter: entry.letter }
-          : item,
-      );
-      const newCollectedIds = new Set(player.collectedIds);
-      newCollectedIds.add(action.letterId);
-
-      return {
-        ...state,
-        players: {
-          ...state.players,
-          [action.playerId]: {
-            ...player,
-            buffer: newBuffer,
-            collectedIds: newCollectedIds,
-          },
+          [action.playerId]: { ...player, selectedIds: [] },
         },
       };
     }
@@ -165,10 +100,54 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       const player = state.players[action.playerId];
       if (!player) return state;
 
-      const word = player.buffer.map(b => b.letter).join('');
-      if (!isValidWord(word)) return state;
+      const { selectedIds, columns, targetWord } = player;
 
-      const points = WORD_SCORE[word.length] ?? 1;
+      // Build letter map from current grid
+      const letterMap = new Map<string, string>();
+      for (const col of columns) {
+        for (const cell of col) letterMap.set(cell.id, cell.letter);
+      }
+
+      const formed = selectedIds.map(id => letterMap.get(id) ?? '').join('');
+
+      if (formed !== targetWord) {
+        // Wrong word — clear selection only
+        return {
+          ...state,
+          players: {
+            ...state.players,
+            [action.playerId]: { ...player, selectedIds: [] },
+          },
+        };
+      }
+
+      // Correct! Clear selected cells and compute new score
+      const clearSet = new Set(selectedIds);
+      const newColumns = columns.map(col => col.filter(cell => !clearSet.has(cell.id)));
+      const points = WORD_SCORE[targetWord.length] ?? 1;
+
+      // Pick a new target word from the remaining letters
+      // Use a deterministic seed derived from current score + word to stay reproducible
+      const rng = createSeededRng(state.seed + '-' + (player.score + points));
+      const nextWord = pickTargetWord(rng, newColumns);
+
+      if (nextWord === null) {
+        // No more words can be formed — end the match
+        return {
+          ...state,
+          matchStatus: 'ended',
+          players: {
+            ...state.players,
+            [action.playerId]: {
+              ...player,
+              score: player.score + points,
+              columns: newColumns,
+              selectedIds: [],
+              targetWord: '',
+            },
+          },
+        };
+      }
 
       return {
         ...state,
@@ -177,7 +156,9 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
           [action.playerId]: {
             ...player,
             score: player.score + points,
-            buffer: [],
+            columns: newColumns,
+            selectedIds: [],
+            targetWord: nextWord,
           },
         },
       };

@@ -9,7 +9,9 @@ interface GameSession {
   /** Milliseconds elapsed since match start (updated every animation frame). */
   logicalTime: number;
   bestScore: number;
+  isPaused: boolean;
   dispatchAction: (action: GameAction) => void;
+  togglePause: () => void;
 }
 
 /**
@@ -29,10 +31,14 @@ export function useGameSession(clock: ClockPort, storage: StoragePort): GameSess
   const [gameState, setGameState] = useState<GameState>(INITIAL_GAME_STATE);
   const [logicalTime, setLogicalTime] = useState(0);
   const [bestScore, setBestScore] = useState(0);
+  const [isPaused, setIsPaused] = useState(false);
 
   // Refs let the rAF loop read/write current state without stale closures
   const stateRef = useRef<GameState>(INITIAL_GAME_STATE);
   const actionQueueRef = useRef<GameAction[]>([]);
+  const pausedRef = useRef(false);
+  const pausedAccumulatedMsRef = useRef(0);
+  const pauseStartedAtRef = useRef(0);
 
   // Load best score on mount
   useEffect(() => {
@@ -52,6 +58,52 @@ export function useGameSession(clock: ClockPort, storage: StoragePort): GameSess
     });
   }, [gameState.matchStatus, storage]); // intentional: fires once per status change
 
+  // Clear pause state when a match is not actively playing
+  useEffect(() => {
+    if (gameState.matchStatus === 'playing') return;
+    pausedRef.current = false;
+    pausedAccumulatedMsRef.current = 0;
+    setIsPaused(false);
+  }, [gameState.matchStatus]);
+
+  const getEffectiveNow = useCallback(() => {
+    const now = clock.now();
+    if (pausedRef.current) {
+      return pauseStartedAtRef.current - pausedAccumulatedMsRef.current;
+    }
+    return now - pausedAccumulatedMsRef.current;
+  }, [clock]);
+
+  const togglePause = useCallback(() => {
+    if (stateRef.current.matchStatus !== 'playing') return;
+    if (pausedRef.current) {
+      pausedAccumulatedMsRef.current += clock.now() - pauseStartedAtRef.current;
+      pausedRef.current = false;
+      setIsPaused(false);
+    } else {
+      pauseStartedAtRef.current = clock.now();
+      pausedRef.current = true;
+      setIsPaused(true);
+    }
+  }, [clock]);
+
+  // Debug: Space toggles pause (dev builds only)
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.code !== 'Space' && e.key !== ' ') return;
+      if (e.repeat) return;
+      const target = e.target;
+      if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) return;
+      e.preventDefault();
+      togglePause();
+    }
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [togglePause]);
+
   // Main animation loop
   useEffect(() => {
     let active = true;
@@ -60,7 +112,7 @@ export function useGameSession(clock: ClockPort, storage: StoragePort): GameSess
     const loop = () => {
       if (!active) return;
 
-      const now = clock.now();
+      const now = getEffectiveNow();
       const pending = actionQueueRef.current.splice(0);
       const prev = stateRef.current;
       const next = updateGame(prev, now, pending);
@@ -88,11 +140,11 @@ export function useGameSession(clock: ClockPort, storage: StoragePort): GameSess
       active = false;
       clock.cancelFrame(frameHandle);
     };
-  }, [clock]);
+  }, [clock, getEffectiveNow]);
 
   const dispatchAction = useCallback((action: GameAction) => {
     actionQueueRef.current.push(action);
   }, []);
 
-  return { gameState, logicalTime, bestScore, dispatchAction };
+  return { gameState, logicalTime, bestScore, isPaused, dispatchAction, togglePause };
 }

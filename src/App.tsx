@@ -24,7 +24,7 @@ type AppMode = 'solo' | 'multiplayer';
 type LobbyMode = 'quick' | 'create' | 'join';
 
 export default function App() {
-  const { gameState, logicalTime, bestScore, dispatchAction } = useGameSession(clock, storage);
+  const { gameState, logicalTime, bestScore, isPaused, dispatchAction } = useGameSession(clock, storage);
   const mp = useMultiplayer(multiplayer, firebaseReady);
 
   const [appMode, setAppMode] = useState<AppMode>('solo');
@@ -270,6 +270,7 @@ export default function App() {
         gameState={gameState}
         logicalTime={logicalTime}
         bestScore={bestScore}
+        isPaused={isPaused}
         onDispatch={dispatchAction}
         clock={clock}
         isMultiplayer={isMultiplayer}
