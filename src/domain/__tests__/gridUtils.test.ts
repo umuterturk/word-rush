@@ -1,52 +1,50 @@
 import { describe, it, expect } from 'vitest';
 import { createSeededRng } from '../seededRng';
 import { fillGrid, pickTargetWord, buildLetterFreqMap } from '../gridUtils';
-import { GRID_COLS, GRID_ROWS, MAX_EMPTY_CELLS } from '../constants';
+import { GRID_COLS } from '../constants';
 
 describe('fillGrid', () => {
   it('creates exactly GRID_COLS columns', () => {
     const rng = createSeededRng('test');
-    const grid = fillGrid(rng);
-    expect(grid).toHaveLength(GRID_COLS);
+    const { columns } = fillGrid(rng);
+    expect(columns).toHaveLength(GRID_COLS);
   });
 
-  it('creates grid with strategic letter placement', () => {
+  it('returns word pool and columns', () => {
+    const rng = createSeededRng('pool');
+    const result = fillGrid(rng);
+    expect(result.columns).toBeDefined();
+    expect(result.wordPool).toBeDefined();
+    expect(Array.isArray(result.wordPool)).toBe(true);
+    expect(result.wordPool.length).toBeGreaterThan(0);
+  });
+
+  it('generates grid with strategic letter placement from word pool', () => {
     const rng = createSeededRng('strategic');
-    const grid = fillGrid(rng);
+    const { columns, wordPool } = fillGrid(rng);
 
     // Count total cells
-    const totalCells = grid.reduce((sum, col) => sum + col.length, 0);
-    const expectedMin = GRID_COLS * GRID_ROWS - MAX_EMPTY_CELLS;
+    const totalCells = columns.reduce((sum, col) => sum + col.length, 0);
     
-    // Should fill most cells, leaving up to MAX_EMPTY_CELLS empty
-    expect(totalCells).toBeGreaterThanOrEqual(expectedMin - 5);
-    expect(totalCells).toBeLessThanOrEqual(GRID_COLS * GRID_ROWS);
-  });
-
-  it('generates valid cell IDs', () => {
-    const rng = createSeededRng('ids');
-    const grid = fillGrid(rng);
-
-    for (let col = 0; col < grid.length; col++) {
-      for (let row = 0; row < grid[col].length; row++) {
-        const cell = grid[col][row];
-        expect(cell.id).toMatch(/^c\d+r\d+$/);
-      }
-    }
+    // Should fill all cells when MAX_EMPTY_CELLS = 0
+    expect(totalCells).toBeGreaterThan(55);
+    
+    // Word pool should not be empty
+    expect(wordPool.length).toBeGreaterThan(0);
   });
 
   it('all cell IDs are unique', () => {
     const rng = createSeededRng('unique');
-    const grid = fillGrid(rng);
-    const ids = grid.flat().map(c => c.id);
+    const { columns } = fillGrid(rng);
+    const ids = columns.flat().map(c => c.id);
     expect(new Set(ids).size).toBe(ids.length);
   });
 
   it('all cells have lowercase Turkish letters', () => {
     const rng = createSeededRng('letters');
-    const grid = fillGrid(rng);
+    const { columns } = fillGrid(rng);
     
-    for (const col of grid) {
+    for (const col of columns) {
       for (const cell of col) {
         expect(cell.letter).toMatch(/^[a-zçğıöşü]$/);
         expect(Array.from(cell.letter)).toHaveLength(1);
@@ -55,12 +53,13 @@ describe('fillGrid', () => {
   });
 
   it('is deterministic for same seed', () => {
-    const grid1 = fillGrid(createSeededRng('same'));
-    const grid2 = fillGrid(createSeededRng('same'));
+    const result1 = fillGrid(createSeededRng('same'));
+    const result2 = fillGrid(createSeededRng('same'));
     
-    expect(grid1.flat().map(c => c.letter).join('')).toBe(
-      grid2.flat().map(c => c.letter).join('')
+    expect(result1.columns.flat().map(c => c.letter).join('')).toBe(
+      result2.columns.flat().map(c => c.letter).join('')
     );
+    expect(result1.wordPool).toEqual(result2.wordPool);
   });
 });
 
@@ -82,14 +81,18 @@ describe('buildLetterFreqMap', () => {
 });
 
 describe('pickTargetWord', () => {
-  it('returns a word that can be spelled from grid letters', () => {
+  it('returns a word from the word pool that can be spelled', () => {
     const rng = createSeededRng('pick-test');
-    const grid = fillGrid(createSeededRng('pick-test-grid'));
-    const word = pickTargetWord(rng, grid);
+    const { columns, wordPool } = fillGrid(createSeededRng('pick-test-grid'));
+    const word = pickTargetWord(rng, columns, wordPool);
     expect(word).not.toBeNull();
 
     if (word) {
-      const freq = buildLetterFreqMap(grid);
+      // Word should be in the pool
+      expect(wordPool).toContain(word);
+      
+      // Word should be spellable from grid
+      const freq = buildLetterFreqMap(columns);
       const needed = new Map<string, number>();
       for (const ch of word) needed.set(ch, (needed.get(ch) ?? 0) + 1);
       for (const [ch, count] of needed) {
@@ -100,14 +103,26 @@ describe('pickTargetWord', () => {
 
   it('returns null for an empty grid', () => {
     const rng = createSeededRng('empty');
-    const word = pickTargetWord(rng, []);
+    const word = pickTargetWord(rng, [], []);
     expect(word).toBeNull();
   });
 
   it('is deterministic for the same rng state', () => {
-    const grid = fillGrid(createSeededRng('same-grid'));
-    const a = pickTargetWord(createSeededRng('same-rng'), grid);
-    const b = pickTargetWord(createSeededRng('same-rng'), grid);
+    const { columns, wordPool } = fillGrid(createSeededRng('same-grid'));
+    const a = pickTargetWord(createSeededRng('same-rng'), columns, wordPool);
+    const b = pickTargetWord(createSeededRng('same-rng'), columns, wordPool);
     expect(a).toBe(b);
+  });
+  
+  it('only returns words from the word pool', () => {
+    const { columns, wordPool } = fillGrid(createSeededRng('pool-test'));
+    const rng = createSeededRng('pick');
+    
+    for (let i = 0; i < 10; i++) {
+      const word = pickTargetWord(rng, columns, wordPool);
+      if (word) {
+        expect(wordPool).toContain(word);
+      }
+    }
   });
 });

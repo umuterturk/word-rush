@@ -10,6 +10,7 @@ export function createInitialPlayerState(): PlayerState {
     selectedIds: [],
     targetWord: '',
     wordsCompleted: 0,
+    wordPool: [],
   };
 }
 
@@ -29,8 +30,8 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
   switch (action.type) {
     case 'START_MATCH': {
       const rng = createSeededRng(action.seed);
-      const columns = fillGrid(rng);
-      const targetWord = pickTargetWord(rng, columns, 0) ?? '';
+      const { columns, wordPool } = fillGrid(rng);
+      const targetWord = pickTargetWord(rng, columns, wordPool, 0) ?? '';
       return {
         matchStatus: 'playing',
         matchStartedAt: action.at,
@@ -43,6 +44,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
             selectedIds: [],
             targetWord,
             wordsCompleted: 0,
+            wordPool,
           },
         },
       };
@@ -129,10 +131,13 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       const points = WORD_SCORE[targetWord.length] ?? 1;
       const newWordsCompleted = player.wordsCompleted + 1;
 
-      // Pick a new target word from the remaining letters
+      // Remove the completed word from the pool
+      const newWordPool = player.wordPool.filter(w => w !== targetWord);
+
+      // Pick a new target word from the remaining letters and word pool
       // Use a deterministic seed derived from current score + word to stay reproducible
       const rng = createSeededRng(state.seed + '-' + (player.score + points));
-      const nextWord = pickTargetWord(rng, newColumns, newWordsCompleted);
+      const nextWord = pickTargetWord(rng, newColumns, newWordPool, newWordsCompleted);
 
       // Continue game even if no more words available (let timer run out naturally)
       return {
@@ -146,6 +151,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
             selectedIds: [],
             targetWord: nextWord ?? '', // Empty if no more words
             wordsCompleted: newWordsCompleted,
+            wordPool: newWordPool,
           },
         },
       };
@@ -159,9 +165,9 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       const newScore = player.score - SKIP_PENALTY;
       const newWordsCompleted = player.wordsCompleted + 1;
 
-      // Pick a new target word (same grid, just different word)
+      // Pick a new target word (same grid, just different word from pool)
       const rng = createSeededRng(state.seed + '-skip-' + newWordsCompleted);
-      const nextWord = pickTargetWord(rng, player.columns, newWordsCompleted);
+      const nextWord = pickTargetWord(rng, player.columns, player.wordPool, newWordsCompleted);
 
       // Continue game even if no more words available (let timer run out naturally)
       return {

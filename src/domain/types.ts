@@ -18,6 +18,8 @@ export interface PlayerState {
   targetWord: string;
   /** Number of words successfully completed (used for difficulty scaling). */
   wordsCompleted: number;
+  /** Pool of words that were used to create this grid (these are the only findable words). */
+  wordPool: string[];
 }
 
 export interface GameState {
