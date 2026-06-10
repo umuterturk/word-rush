@@ -79,7 +79,7 @@ export function GameScreen({
   const currentTime = gameState.matchStatus === 'playing' ? gameState.matchStartedAt + logicalTime : clock.now();
   const wordElapsed = wordStartedAt > 0 ? (currentTime - wordStartedAt) : 0;
   const wordTimeLeft = Math.max(0, wordDuration - wordElapsed);
-  const wordTimerPercent = wordDuration > 0 ? (wordTimeLeft / wordDuration) * 100 : 100;
+  const wordTimerKey = `${targetWord}-${wordStartedAt}`;
 
   // Build letter map for the current word display
   const letterMap = new Map<string, string>();
@@ -247,14 +247,15 @@ export function GameScreen({
       {/* Grid arena container with timer */}
       <div className="arena-container">
         {/* Vertical word timer bar */}
-        {targetWord && (
+        {targetWord && wordDuration > 0 && (
           <div className="word-timer-bar word-timer-bar--vertical">
-            <div
-              className="word-timer-bar__fill"
-              style={{
-                height: `${wordTimerPercent}%`,
-              }}
-            />
+            <div className="word-timer-bar__fill-track">
+              <div
+                key={wordTimerKey}
+                className="word-timer-bar__fill"
+                style={{ '--word-duration': `${wordDuration}ms` } as React.CSSProperties}
+              />
+            </div>
             <div className="word-timer-bar__text">
               {Math.ceil(wordTimeLeft / 1000)}s
             </div>

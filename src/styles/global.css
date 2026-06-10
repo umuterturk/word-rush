@@ -423,10 +423,19 @@ button {
   width: 8px;
   height: 100%;
   max-height: 400px;
+  min-height: 120px;
+  align-self: stretch;
   background: rgba(255, 255, 255, 0.08);
   border-radius: 4px;
   overflow: hidden;
   flex-shrink: 0;
+}
+
+.word-timer-bar--vertical .word-timer-bar__fill-track {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: inherit;
 }
 
 .word-timer-bar__fill {
@@ -447,21 +456,30 @@ button {
 
 .word-timer-bar--vertical .word-timer-bar__fill {
   width: 100%;
-  height: 0;
+  height: 100%;
   position: absolute;
   bottom: 0;
   left: 0;
-  background: linear-gradient(180deg, 
-    #ff6b6b 0%, 
-    #ffd93d 20%, 
-    #6bcf7f 40%, 
-    #4d9cff 60%, 
-    #c44dff 80%, 
+  transform: scaleY(1);
+  transform-origin: bottom center;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  background: linear-gradient(180deg,
+    #ff6b6b 0%,
+    #ffd93d 20%,
+    #6bcf7f 40%,
+    #4d9cff 60%,
+    #c44dff 80%,
     #ff6b6b 100%
   );
-  background-size: 100% 200%;
-  animation: shimmer-vertical 2s linear infinite;
-  transition: height 0.1s linear;
+  /* One-shot GPU animation — no per-frame JS updates, no competing shimmer */
+  animation: word-timer-drain var(--word-duration, 5s) linear forwards;
+  box-shadow: 0 0 8px rgba(255, 107, 107, 0.45);
+}
+
+@keyframes word-timer-drain {
+  from { transform: scale3d(1, 1, 1); }
+  to { transform: scale3d(1, 0, 1); }
 }
 
 .word-timer-bar__text {

@@ -193,9 +193,10 @@ export function pickTargetWord(
 
 /**
  * Calculate word duration in milliseconds based on word length and board density.
- * Formula: wordLength × secondsPerLetter × (1 + boardDensity) × 1000
- * 
- * More letters on board = harder to find words = more time given.
+ * Formula: wordLength × secondsPerLetter × (0.8 + 1.2 × boardDensity) × 1000
+ *
+ * Full board → 2.0× (e.g. 5 letters @ 1.2s = 12s).
+ * Empty board → 0.8× minimum (e.g. 5 letters @ 1.2s = 4.8s).
  */
 export function calculateWordDuration(
   wordLength: number,
@@ -206,8 +207,8 @@ export function calculateWordDuration(
   const currentLetters = columns.reduce((sum, col) => sum + col.length, 0);
   const boardDensity = currentLetters / maxCells;
 
-  // Scale more aggressively: full board = 1.5x, half = 1.0x, empty = 0.5x
-  const densityMultiplier = 0.5 + boardDensity;
+  // Linear scale: 0.8× at empty board, 2.0× at full board
+  const densityMultiplier = 0.8 + 1.2 * boardDensity;
 
   return wordLength * secondsPerLetter * densityMultiplier * 1000;
 }

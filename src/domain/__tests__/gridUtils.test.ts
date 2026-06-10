@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { createSeededRng } from '../seededRng';
-import { fillGrid, pickTargetWord, buildLetterFreqMap } from '../gridUtils';
-import { GRID_COLS } from '../constants';
+import { fillGrid, pickTargetWord, buildLetterFreqMap, calculateWordDuration } from '../gridUtils';
+import { GRID_COLS, GRID_ROWS, SECONDS_PER_LETTER } from '../constants';
 
 describe('fillGrid', () => {
   it('creates exactly GRID_COLS columns', () => {
@@ -124,5 +124,27 @@ describe('pickTargetWord', () => {
         expect(wordPool).toContain(word);
       }
     }
+  });
+});
+
+describe('calculateWordDuration', () => {
+  function fullBoardColumns() {
+    const letters = 'abcde'.repeat(Math.ceil((GRID_COLS * GRID_ROWS) / 5)).slice(0, GRID_COLS * GRID_ROWS);
+    const columns = Array.from({ length: GRID_COLS }, () => [] as { id: string; letter: string }[]);
+    letters.split('').forEach((letter, i) => {
+      columns[i % GRID_COLS].push({ id: String(i), letter });
+    });
+    return columns;
+  }
+
+  it('gives 12s for a 5-letter word on a full board', () => {
+    const duration = calculateWordDuration(5, fullBoardColumns(), SECONDS_PER_LETTER);
+    expect(duration).toBe(12_000);
+  });
+
+  it('floors at 0.8× word length on an empty board', () => {
+    const emptyColumns = Array.from({ length: GRID_COLS }, () => []);
+    const duration = calculateWordDuration(5, emptyColumns, SECONDS_PER_LETTER);
+    expect(duration).toBeCloseTo(4_800, 5);
   });
 });
