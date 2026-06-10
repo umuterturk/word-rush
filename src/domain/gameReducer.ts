@@ -134,25 +134,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       const rng = createSeededRng(state.seed + '-' + (player.score + points));
       const nextWord = pickTargetWord(rng, newColumns, newWordsCompleted);
 
-      if (nextWord === null) {
-        // No more words can be formed — end the match
-        return {
-          ...state,
-          matchStatus: 'ended',
-          players: {
-            ...state.players,
-            [action.playerId]: {
-              ...player,
-              score: player.score + points,
-              columns: newColumns,
-              selectedIds: [],
-              targetWord: '',
-              wordsCompleted: newWordsCompleted,
-            },
-          },
-        };
-      }
-
+      // Continue game even if no more words available (let timer run out naturally)
       return {
         ...state,
         players: {
@@ -162,7 +144,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
             score: player.score + points,
             columns: newColumns,
             selectedIds: [],
-            targetWord: nextWord,
+            targetWord: nextWord ?? '', // Empty if no more words
             wordsCompleted: newWordsCompleted,
           },
         },
@@ -181,24 +163,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       const rng = createSeededRng(state.seed + '-skip-' + newWordsCompleted);
       const nextWord = pickTargetWord(rng, player.columns, newWordsCompleted);
 
-      if (nextWord === null) {
-        // No more words available — end the match
-        return {
-          ...state,
-          matchStatus: 'ended',
-          players: {
-            ...state.players,
-            [action.playerId]: {
-              ...player,
-              score: newScore,
-              selectedIds: [],
-              targetWord: '',
-              wordsCompleted: newWordsCompleted,
-            },
-          },
-        };
-      }
-
+      // Continue game even if no more words available (let timer run out naturally)
       return {
         ...state,
         players: {
@@ -207,7 +172,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
             ...player,
             score: newScore,
             selectedIds: [],
-            targetWord: nextWord,
+            targetWord: nextWord ?? '', // Empty if no more words
             wordsCompleted: newWordsCompleted,
           },
         },

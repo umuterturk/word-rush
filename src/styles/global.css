@@ -962,7 +962,12 @@ button {
   transition: opacity 0.1s ease, background 0.1s ease;
 }
 
-.skip-btn:active {
+.skip-btn:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.skip-btn:active:not(:disabled) {
   opacity: 0.7;
   background: rgba(255, 140, 0, 0.25);
 }

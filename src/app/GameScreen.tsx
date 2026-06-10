@@ -57,7 +57,7 @@ export function GameScreen({
   opponentName: _opponentName,
   onScoreChange,
 }: Props) {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const player = gameState.players['local'];
   const timeLeft = gameState.matchDuration - logicalTime;
   const isUrgent = timeLeft < 30_000;
@@ -203,12 +203,20 @@ export function GameScreen({
 
       {/* Target word banner */}
       <div className="target-word-banner">
-        <span className="target-word-label">{t.find}</span>
-        <span className="target-word-text">
-          {Array.from(targetWord).map(turkishUpper).join('')}
-        </span>
-        {wordMatchesTarget && formedWord.length > 0 && (
-          <span className="target-word-score">+{wordScore}</span>
+        {targetWord ? (
+          <>
+            <span className="target-word-label">{t.find}</span>
+            <span className="target-word-text">
+              {Array.from(targetWord).map(turkishUpper).join('')}
+            </span>
+            {wordMatchesTarget && formedWord.length > 0 && (
+              <span className="target-word-score">+{wordScore}</span>
+            )}
+          </>
+        ) : (
+          <span className="target-word-label" style={{ opacity: 0.5 }}>
+            {language === 'tr' ? 'DAHA FAZLA KELİME YOK' : 'NO MORE WORDS'}
+          </span>
         )}
       </div>
 
@@ -299,6 +307,7 @@ export function GameScreen({
           <button
             className="skip-btn"
             onClick={handleSkip}
+            disabled={!targetWord}
             title={`Skip word (-${SKIP_PENALTY} points)`}
           >
             {t.skip(SKIP_PENALTY)}
