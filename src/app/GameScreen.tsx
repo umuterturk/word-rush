@@ -50,7 +50,7 @@ export function GameScreen({
   logicalTime,
   bestScore,
   onDispatch,
-  clock: _clock,
+  clock,
   isMultiplayer = false,
   opponentScore = 0,
   opponentName: _opponentName,
@@ -66,11 +66,12 @@ export function GameScreen({
   const selectedSet = new Set(selectedIds);
   const targetWord = player?.targetWord ?? '';
   
-  // Word timer calculations with board density
+  // Word timer calculations with board density (use clock for real-time updates)
   const wordStartedAt = player?.wordStartedAt ?? 0;
   const columns = player?.columns ?? [];
   const wordDuration = targetWord ? calculateWordDuration(targetWord.length, columns, SECONDS_PER_LETTER) : 0;
-  const wordElapsed = wordStartedAt > 0 ? (Date.now() - wordStartedAt) : 0;
+  const currentTime = gameState.matchStatus === 'playing' ? gameState.matchStartedAt + logicalTime : clock.now();
+  const wordElapsed = wordStartedAt > 0 ? (currentTime - wordStartedAt) : 0;
   const wordTimeLeft = Math.max(0, wordDuration - wordElapsed);
   const wordTimerPercent = wordDuration > 0 ? (wordTimeLeft / wordDuration) * 100 : 100;
 
@@ -152,22 +153,6 @@ export function GameScreen({
     <div
       className={`screen game-screen${isMultiplayer ? ' game-screen--vs' : ''}`}
     >
-      {/* Word timer bar */}
-      {targetWord && (
-        <div className="word-timer-bar">
-          <div
-            className="word-timer-bar__fill"
-            style={{
-              width: `${wordTimerPercent}%`,
-              transition: 'width 0.1s linear',
-            }}
-          />
-          <div className="word-timer-bar__text">
-            {Math.ceil(wordTimeLeft / 1000)}s
-          </div>
-        </div>
-      )}
-      
       {/* HUD */}
       {isMultiplayer ? (
         <div className="vs-hud">
@@ -236,11 +221,28 @@ export function GameScreen({
         )}
       </div>
 
-      {/* Grid arena */}
-      <div
-        className="arena grid-arena"
-        style={{ '--grid-cols': GRID_COLS, '--grid-rows': GRID_ROWS } as React.CSSProperties}
-      >
+      {/* Grid arena container with timer */}
+      <div className="arena-container">
+        {/* Vertical word timer bar */}
+        {targetWord && (
+          <div className="word-timer-bar word-timer-bar--vertical">
+            <div
+              className="word-timer-bar__fill"
+              style={{
+                height: `${wordTimerPercent}%`,
+              }}
+            />
+            <div className="word-timer-bar__text">
+              {Math.ceil(wordTimeLeft / 1000)}s
+            </div>
+          </div>
+        )}
+        
+        {/* Grid arena */}
+        <div
+          className="arena grid-arena"
+          style={{ '--grid-cols': GRID_COLS, '--grid-rows': GRID_ROWS } as React.CSSProperties}
+        >
         {/* Empty cell backgrounds */}
         {Array.from({ length: GRID_COLS }, (_, col) =>
           Array.from({ length: GRID_ROWS }, (_, rowFromTop) => (
@@ -284,6 +286,7 @@ export function GameScreen({
             );
           }),
         )}
+      </div>
       </div>
 
       {/* Word panel */}

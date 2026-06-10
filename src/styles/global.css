@@ -395,6 +395,16 @@ button {
 
 /* ─── Word Timer Bar ─────────────────────────────────────────────────────── */
 
+.arena-container {
+  flex: 1;
+  display: flex;
+  gap: 8px;
+  padding: 0 8px;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
 .word-timer-bar {
   position: absolute;
   top: 0;
@@ -404,6 +414,17 @@ button {
   background: rgba(255, 255, 255, 0.05);
   z-index: 1000;
   overflow: hidden;
+}
+
+.word-timer-bar--vertical {
+  position: relative;
+  width: 8px;
+  height: 100%;
+  max-height: 400px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  overflow: hidden;
+  flex-shrink: 0;
 }
 
 .word-timer-bar__fill {
@@ -422,6 +443,25 @@ button {
   transition: width 0.1s linear;
 }
 
+.word-timer-bar--vertical .word-timer-bar__fill {
+  width: 100%;
+  height: 0;
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  background: linear-gradient(180deg, 
+    #ff6b6b 0%, 
+    #ffd93d 20%, 
+    #6bcf7f 40%, 
+    #4d9cff 60%, 
+    #c44dff 80%, 
+    #ff6b6b 100%
+  );
+  background-size: 100% 200%;
+  animation: shimmer-vertical 2s linear infinite;
+  transition: height 0.1s linear;
+}
+
 .word-timer-bar__text {
   position: absolute;
   top: 8px;
@@ -434,9 +474,24 @@ button {
   z-index: 1001;
 }
 
+.word-timer-bar--vertical .word-timer-bar__text {
+  top: 50%;
+  left: 50%;
+  right: auto;
+  transform: translate(-50%, -50%);
+  font-size: 10px;
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+}
+
 @keyframes shimmer {
   0% { background-position: 0% center; }
   100% { background-position: 200% center; }
+}
+
+@keyframes shimmer-vertical {
+  0% { background-position: center 0%; }
+  100% { background-position: center 200%; }
 }
 
 .game-screen--paused .arena,
