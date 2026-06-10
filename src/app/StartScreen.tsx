@@ -1,4 +1,6 @@
 import { MATCH_DURATION_MS } from '../domain/constants';
+import { useI18n } from '../i18n';
+import { LanguageSwitcher } from './LanguageSwitcher';
 
 interface Props {
   bestScore: number;
@@ -19,32 +21,35 @@ export function StartScreen({
   onCreateRoom,
   onJoinRoom,
 }: Props) {
+  const { t } = useI18n();
+
   return (
     <div className="screen start-screen">
       <div className="start-content">
-        <div className="start-badge">TAP LETTERS · SPELL TURKISH WORDS</div>
-        <h1 className="game-title">WORD RUSH</h1>
-        <p className="game-subtitle">{MATCH_MINUTES} minutes · how many words can you spell?</p>
+        <LanguageSwitcher />
+        <div className="start-badge">{t.startBadge}</div>
+        <h1 className="game-title">{t.gameTitle}</h1>
+        <p className="game-subtitle">{t.gameSubtitle(MATCH_MINUTES)}</p>
         {bestScore > 0 && (
-          <div className="best-score-chip">BEST {bestScore}</div>
+          <div className="best-score-chip">{t.best} {bestScore}</div>
         )}
 
         <div className="mode-buttons">
           <button className="play-btn" onClick={onPlaySolo}>
-            SOLO
+            {t.solo}
           </button>
 
           {multiplayerAvailable && (
             <>
               <button className="play-btn play-btn--vs" onClick={onQuickMatch}>
-                QUICK MATCH
+                {t.quickMatch}
               </button>
               <div className="friend-buttons">
                 <button className="play-btn play-btn--secondary" onClick={onCreateRoom}>
-                  CREATE ROOM
+                  {t.createRoom}
                 </button>
                 <button className="play-btn play-btn--secondary" onClick={onJoinRoom}>
-                  JOIN ROOM
+                  {t.joinRoom}
                 </button>
               </div>
             </>
@@ -52,10 +57,12 @@ export function StartScreen({
         </div>
 
         <div className="start-hint">
-          Tap a falling letter to add it to your word.<br />
-          Tap a buffered letter to remove it.<br />
-          Spell a valid Turkish word → hit SUBMIT to score!<br />
-          Longer words earn more points.
+          {t.startHint.split('\n').map((line, i) => (
+            <span key={i}>
+              {line}
+              {i < t.startHint.split('\n').length - 1 && <br />}
+            </span>
+          ))}
         </div>
       </div>
     </div>

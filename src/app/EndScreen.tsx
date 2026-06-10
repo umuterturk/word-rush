@@ -1,4 +1,5 @@
 import type { MatchResult } from '../multiplayer/types';
+import { useI18n } from '../i18n';
 
 interface Props {
   score: number;
@@ -12,18 +13,6 @@ interface Props {
   result?: MatchResult | null;
 }
 
-const RESULT_LABELS: Record<MatchResult, string> = {
-  win: 'YOU WIN!',
-  lose: 'YOU LOSE',
-  tie: 'TIE GAME',
-};
-
-const RESULT_CLASSES: Record<MatchResult, string> = {
-  win: 'result-win',
-  lose: 'result-lose',
-  tie: 'result-tie',
-};
-
 export function EndScreen({
   score,
   bestScore,
@@ -35,7 +24,20 @@ export function EndScreen({
   opponentWantsRematch = false,
   result = null,
 }: Props) {
+  const { t } = useI18n();
   const isNewBest = !isMultiplayer && score > 0 && score >= bestScore;
+
+  const RESULT_LABELS: Record<MatchResult, string> = {
+    win: t.youWin,
+    lose: t.youLose,
+    tie: t.tieGame,
+  };
+
+  const RESULT_CLASSES: Record<MatchResult, string> = {
+    win: 'result-win',
+    lose: 'result-lose',
+    tie: 'result-tie',
+  };
 
   return (
     <div className="screen end-screen">
@@ -47,43 +49,43 @@ export function EndScreen({
             </h2>
             <div className="end-vs-scores">
               <div className="end-vs-player">
-                <span className="end-vs-label">YOU</span>
+                <span className="end-vs-label">{t.you}</span>
                 <span className="end-score">{score}</span>
               </div>
-              <span className="end-vs-divider">VS</span>
+              <span className="end-vs-divider">{t.vs}</span>
               <div className="end-vs-player">
-                <span className="end-vs-label">THEM</span>
+                <span className="end-vs-label">{t.them}</span>
                 <span className="end-score end-score--opp">{opponentScore}</span>
               </div>
             </div>
           </>
         ) : (
           <>
-            <h2 className="end-title">TIME'S UP</h2>
-            {isNewBest && <div className="new-best-badge">NEW BEST!</div>}
+            <h2 className="end-title">{t.timesUp}</h2>
+            {isNewBest && <div className="new-best-badge">{t.newBest}</div>}
             <div className="end-score">{score}</div>
             <div className="end-score-label">
-              {score === 1 ? 'point' : 'points'}
+              {score === 1 ? t.point : t.points}
             </div>
             {!isNewBest && bestScore > 0 && (
-              <div className="best-score-chip">BEST {bestScore}</div>
+              <div className="best-score-chip">{t.best} {bestScore}</div>
             )}
           </>
         )}
 
         {opponentWantsRematch && (
           <div className="rematch-nudge">
-            OPPONENT WANTS A REMATCH!
+            {t.opponentWantsRematch}
           </div>
         )}
 
         <div className="end-buttons">
           <button className="play-btn" onClick={onPlayAgain}>
-            {isMultiplayer ? 'REMATCH' : 'PLAY AGAIN'}
+            {isMultiplayer ? t.rematch : t.playAgain}
           </button>
           {onBackToMenu && (
             <button className="play-btn play-btn--secondary" onClick={onBackToMenu}>
-              MENU
+              {t.menu}
             </button>
           )}
         </div>

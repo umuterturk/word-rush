@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useI18n } from '../i18n';
 
 type LobbyMode = 'quick' | 'create' | 'join';
 
@@ -18,21 +19,6 @@ function getInviteUrl(code: string): string {
   return `${base}?join=${code}`;
 }
 
-async function shareInvite(code: string): Promise<void> {
-  const url = getInviteUrl(code);
-  const shareData = {
-    title: 'Word Rush 1v1',
-    text: 'Join my game!',
-    url,
-  };
-
-  if (navigator.share && navigator.canShare?.(shareData)) {
-    await navigator.share(shareData);
-  } else {
-    await navigator.clipboard.writeText(url);
-  }
-}
-
 export function MultiplayerLobbyScreen({
   mode,
   inviteCode,
@@ -45,33 +31,49 @@ export function MultiplayerLobbyScreen({
 }: Props) {
   const [joinCode, setJoinCode] = useState('');
   const [copied, setCopied] = useState(false);
+  const { t } = useI18n();
 
   const isWaiting = mode === 'quick' || mode === 'create';
   const opponentFound = Boolean(opponentName);
+
+  async function shareInvite(code: string): Promise<void> {
+    const url = getInviteUrl(code);
+    const shareData = {
+      title: t.shareTitle,
+      text: t.shareText,
+      url,
+    };
+
+    if (navigator.share && navigator.canShare?.(shareData)) {
+      await navigator.share(shareData);
+    } else {
+      await navigator.clipboard.writeText(url);
+    }
+  }
 
   return (
     <div className="screen lobby-screen">
       <div className="lobby-content">
         {isRematch && (
           <>
-            <div className="lobby-rematch-badge">REMATCH</div>
+            <div className="lobby-rematch-badge">{t.rematchBadge}</div>
             <div className="lobby-spinner" aria-hidden="true" />
-            <h2 className="lobby-title">WAITING FOR OPPONENT</h2>
-            <p className="lobby-subtitle">Challenging your rival again...</p>
+            <h2 className="lobby-title">{t.waitingForOpponent}</h2>
+            <p className="lobby-subtitle">{t.challengingAgain}</p>
           </>
         )}
 
         {!isRematch && mode === 'quick' && (
           <>
             <div className="lobby-spinner" aria-hidden="true" />
-            <h2 className="lobby-title">FINDING OPPONENT</h2>
-            <p className="lobby-subtitle">Searching for a rival...</p>
+            <h2 className="lobby-title">{t.findingOpponent}</h2>
+            <p className="lobby-subtitle">{t.searchingForRival}</p>
           </>
         )}
 
         {!isRematch && mode === 'create' && (
           <>
-            <h2 className="lobby-title">YOUR ROOM</h2>
+            <h2 className="lobby-title">{t.yourRoom}</h2>
             {inviteCode ? (
               <>
                 <div className="room-code">{inviteCode}</div>
@@ -84,7 +86,7 @@ export function MultiplayerLobbyScreen({
                     });
                   }}
                 >
-                  {copied ? 'LINK COPIED!' : 'SHARE INVITE LINK'}
+                  {copied ? t.linkCopied : t.shareInviteLink}
                 </button>
               </>
             ) : (
@@ -95,13 +97,13 @@ export function MultiplayerLobbyScreen({
 
         {!isRematch && mode === 'join' && !isSearching && (
           <>
-            <h2 className="lobby-title">JOIN ROOM</h2>
+            <h2 className="lobby-title">{t.joinRoomTitle}</h2>
             <input
               className="room-code-input"
               type="text"
               value={joinCode}
               onChange={e => setJoinCode(e.target.value.toUpperCase())}
-              placeholder="ENTER CODE"
+              placeholder={t.enterCode}
               maxLength={6}
               autoCapitalize="characters"
               autoComplete="off"
@@ -111,7 +113,7 @@ export function MultiplayerLobbyScreen({
               disabled={joinCode.trim().length < 4}
               onClick={() => onJoin(joinCode.trim())}
             >
-              JOIN
+              {t.join}
             </button>
           </>
         )}
@@ -119,25 +121,25 @@ export function MultiplayerLobbyScreen({
         {!isRematch && mode === 'join' && isSearching && (
           <>
             <div className="lobby-spinner" aria-hidden="true" />
-            <h2 className="lobby-title">JOINING ROOM</h2>
-            <p className="lobby-subtitle">Connecting...</p>
+            <h2 className="lobby-title">{t.joiningRoom}</h2>
+            <p className="lobby-subtitle">{t.connecting}</p>
           </>
         )}
 
         {!isRematch && isWaiting && opponentFound && (
           <div className="opponent-found">
-            <span className="opponent-found-name">OPPONENT FOUND</span>
+            <span className="opponent-found-name">{t.opponentFound}</span>
           </div>
         )}
 
         {isWaiting && !opponentFound && mode !== 'quick' && inviteCode && (
-          <p className="lobby-waiting">Waiting for opponent to join...</p>
+          <p className="lobby-waiting">{t.waitingToJoin}</p>
         )}
 
         {error && <p className="lobby-error">{error}</p>}
 
         <button className="cancel-btn" onClick={onCancel}>
-          CANCEL
+          {t.cancel}
         </button>
       </div>
     </div>

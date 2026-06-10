@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useI18n } from '../i18n';
 
 interface Props {
   onComplete: () => void;
@@ -10,6 +11,7 @@ const STEP_DURATION_MS = 667;
 
 export function CountdownScreen({ onComplete, opponentName }: Props) {
   const [step, setStep] = useState(0);
+  const { t } = useI18n();
 
   useEffect(() => {
     if (step >= COUNTDOWN_VALUES.length) {
@@ -31,11 +33,11 @@ export function CountdownScreen({ onComplete, opponentName }: Props) {
       <div className="countdown-content">
         {opponentName && (
           <div className="countdown-vs">
-            <span className="countdown-opponent">1 VS 1</span>
+            <span className="countdown-opponent">{t.countdown1v1}</span>
           </div>
         )}
-        <div className="countdown-target-label">WORD RUSH</div>
-        <div className="countdown-subtitle">spell Turkish words · longer = more points</div>
+        <div className="countdown-target-label">{t.gameTitle}</div>
+        <div className="countdown-subtitle">{t.countdownSubtitle}</div>
         {countdownValue !== undefined && (
           <div key={countdownValue} className="countdown-number">
             {countdownValue}

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { GameAction, GameState } from '../domain/types';
 import { WORD_SCORE, GRID_COLS, GRID_ROWS, SKIP_PENALTY } from '../domain/constants';
 import type { ClockPort } from '../ports';
+import { useI18n } from '../i18n';
 
 interface Props {
   gameState: GameState;
@@ -56,6 +57,7 @@ export function GameScreen({
   opponentName: _opponentName,
   onScoreChange,
 }: Props) {
+  const { t } = useI18n();
   const player = gameState.players['local'];
   const timeLeft = gameState.matchDuration - logicalTime;
   const isUrgent = timeLeft < 30_000;
@@ -145,8 +147,8 @@ export function GameScreen({
     >
       {isPaused && (
         <div className="pause-overlay" aria-hidden="true">
-          <span className="pause-label">PAUSED</span>
-          <span className="pause-hint">SPACE to resume</span>
+          <span className="pause-label">{t.paused}</span>
+          <span className="pause-hint">{t.pauseHint}</span>
         </div>
       )}
 
@@ -156,44 +158,44 @@ export function GameScreen({
           <div
             className={`vs-card vs-card--you${isLeading ? ' vs-card--leading' : ''}${isBehind ? ' vs-card--behind' : ''}`}
           >
-            <span className="vs-card-label">YOU</span>
+            <span className="vs-card-label">{t.you}</span>
             <span key={localScore} className="vs-card-score">
               {localScore}
             </span>
-            {isLeading && <span className="vs-lead-badge">WINNING</span>}
+            {isLeading && <span className="vs-lead-badge">{t.winning}</span>}
           </div>
           <div className="vs-center">
             <span className={`vs-time${isUrgent ? ' vs-time--urgent' : ''}`}>
               {formatTime(timeLeft)}
             </span>
-            <span className="vs-versus">VS</span>
+            <span className="vs-versus">{t.vs}</span>
           </div>
           <div
             className={`vs-card vs-card--opp${!isLeading && !isBehind ? '' : isLeading ? ' vs-card--behind' : ' vs-card--leading'}`}
           >
-            <span className="vs-card-label">THEM</span>
+            <span className="vs-card-label">{t.them}</span>
             <span key={opponentScore} className="vs-card-score vs-card-score--opp">
               {opponentScore}
             </span>
-            {isBehind && <span className="vs-lead-badge vs-lead-badge--danger">WINNING</span>}
+            {isBehind && <span className="vs-lead-badge vs-lead-badge--danger">{t.winning}</span>}
           </div>
         </div>
       ) : (
         <div className="hud">
           <div className="hud-item">
-            <span className="hud-label">SCORE</span>
+            <span className="hud-label">{t.score}</span>
             <span key={localScore} className="hud-value hud-score">
               {localScore}
             </span>
           </div>
           <div className="hud-item">
-            <span className="hud-label">TIME</span>
+            <span className="hud-label">{t.time}</span>
             <span className={`hud-value${isUrgent ? ' hud-urgent' : ''}`}>
               {formatTime(timeLeft)}
             </span>
           </div>
           <div className="hud-item">
-            <span className="hud-label">BEST</span>
+            <span className="hud-label">{t.best}</span>
             <span className="hud-value">{bestScore}</span>
           </div>
         </div>
@@ -201,7 +203,7 @@ export function GameScreen({
 
       {/* Target word banner */}
       <div className="target-word-banner">
-        <span className="target-word-label">FIND</span>
+        <span className="target-word-label">{t.find}</span>
         <span className="target-word-text">
           {Array.from(targetWord).map(turkishUpper).join('')}
         </span>
@@ -266,7 +268,7 @@ export function GameScreen({
       >
         <div className={`formed-word-row${wordMatchesTarget ? ' formed-word-row--match' : ''}`}>
           {selectedIds.length === 0 ? (
-            <span className="formed-word-placeholder">tap letters to spell the word</span>
+            <span className="formed-word-placeholder">{t.tapToSpell}</span>
           ) : (
             selectedIds.map((id, i) => {
               const letter = letterMap.get(id) ?? '';
@@ -292,14 +294,14 @@ export function GameScreen({
             onClick={handleClear}
             disabled={selectedIds.length === 0}
           >
-            CLEAR
+            {t.clear}
           </button>
           <button
             className="skip-btn"
             onClick={handleSkip}
             title={`Skip word (-${SKIP_PENALTY} points)`}
           >
-            SKIP (-{SKIP_PENALTY})
+            {t.skip(SKIP_PENALTY)}
           </button>
         </div>
       </div>
