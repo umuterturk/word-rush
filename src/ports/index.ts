@@ -33,6 +33,8 @@ export interface MultiplayerPort {
   cancel(): Promise<void>;
   subscribe(handler: (snapshot: MatchSnapshot | null) => void): () => void;
   publishScore(score: number): Promise<void>;
+  /** Send a one-time "shuffle attack" at the opponent's board. */
+  sendShuffle(): Promise<void>;
   requestRematch(): Promise<void>;
   leave(): Promise<void>;
 }

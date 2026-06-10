@@ -200,47 +200,54 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       };
     }
 
-    case 'SHUFFLE_OPPONENT': {
-      const attacker = state.players[action.playerId];
-      const target = state.players[action.targetPlayerId];
-      
-      // Can only shuffle once and only if both players exist
-      if (!attacker || !target || attacker.shuffleUsed) return state;
-      
-      // Collect all cells from target's board
+    case 'MARK_SHUFFLE_USED': {
+      // Sender side: record that this player has spent their one-time shuffle.
+      const player = state.players[action.playerId];
+      if (!player || player.shuffleUsed) return state;
+      return {
+        ...state,
+        players: {
+          ...state.players,
+          [action.playerId]: { ...player, shuffleUsed: true },
+        },
+      };
+    }
+
+    case 'SHUFFLE_BOARD': {
+      // Receiver side: the opponent attacked us — scramble our own board.
+      const player = state.players[action.playerId];
+      if (!player) return state;
+
+      // Collect all cells currently on the board
       const allCells: LandedCell[] = [];
-      for (const col of target.columns) {
+      for (const col of player.columns) {
         allCells.push(...col);
       }
-      
-      // Shuffle using seeded RNG for determinism
-      const rng = createSeededRng(state.seed + '-shuffle-' + Date.now());
+      if (allCells.length === 0) return state;
+
+      // Shuffle (Fisher–Yates). Non-deterministic is fine: this only mutates the
+      // receiver's local board, which is never compared against the opponent's.
+      const rng = createSeededRng(state.seed + '-shuffle-' + Date.now() + '-' + allCells.length);
       for (let i = allCells.length - 1; i > 0; i--) {
         const j = Math.floor(rng() * (i + 1));
         [allCells[i], allCells[j]] = [allCells[j], allCells[i]];
       }
-      
-      // Redistribute cells across columns (keep similar distribution)
-      const colCount = target.columns.length;
+
+      // Redistribute evenly across the same number of columns
+      const colCount = player.columns.length || allCells.length;
       const newColumns: LandedCell[][] = Array.from({ length: colCount }, () => []);
-      
       allCells.forEach((cell, idx) => {
-        const colIdx = idx % colCount;
-        newColumns[colIdx].push(cell);
+        newColumns[idx % colCount].push(cell);
       });
-      
+
       return {
         ...state,
         players: {
           ...state.players,
           [action.playerId]: {
-            ...attacker,
-            shuffleUsed: true,
-          },
-          [action.targetPlayerId]: {
-            ...target,
+            ...player,
             columns: newColumns,
-            selectedIds: [], // Clear selection since letters moved
+            selectedIds: [], // letters moved — drop any in-progress selection
           },
         },
       };

@@ -42,6 +42,8 @@ export interface MatchSnapshot {
   opponentName: string;
   opponentScore: number;
   opponentWantsRematch: boolean;
+  /** Nonce of the latest shuffle attack the opponent sent at us (0 = none). */
+  incomingShuffleNonce: number;
 }
 
 export interface MatchDoc {
@@ -55,4 +57,6 @@ export interface MatchDoc {
   createdAt: unknown;
   players: Record<string, MatchPlayer>;
   rematchReady?: Record<string, boolean>;
+  /** Map of attacker uid -> nonce. The target reads the entry NOT keyed by itself. */
+  shuffleAttacks?: Record<string, number>;
 }

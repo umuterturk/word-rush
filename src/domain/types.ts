@@ -43,4 +43,5 @@ export type GameAction =
   | { type: 'SUBMIT_WORD'; playerId: string }
   | { type: 'SKIP_WORD'; playerId: string }
   | { type: 'WORD_TIMEOUT'; playerId: string; at: number }
-  | { type: 'SHUFFLE_OPPONENT'; playerId: string; targetPlayerId: string };
+  | { type: 'SHUFFLE_BOARD'; playerId: string }
+  | { type: 'MARK_SHUFFLE_USED'; playerId: string };

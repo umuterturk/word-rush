@@ -15,6 +15,10 @@ interface Props {
   opponentScore?: number;
   opponentName?: string;
   onScoreChange?: (score: number) => void;
+  /** Called when the local player fires their one-time shuffle attack. */
+  onShuffle?: () => void;
+  /** Increments whenever our own board was shuffled by the opponent (triggers animation). */
+  shuffleSignal?: number;
 }
 
 function formatTime(ms: number): string {
@@ -55,6 +59,8 @@ export function GameScreen({
   opponentScore = 0,
   opponentName: _opponentName,
   onScoreChange,
+  onShuffle,
+  shuffleSignal = 0,
 }: Props) {
   const { t, language } = useI18n();
   const player = gameState.players['local'];
@@ -116,6 +122,17 @@ export function GameScreen({
     }
   }, [localScore, onScoreChange]);
 
+  // When the opponent shuffles OUR board, play the spin animation.
+  const prevShuffleSignalRef = useRef(shuffleSignal);
+  useEffect(() => {
+    if (shuffleSignal !== prevShuffleSignalRef.current) {
+      prevShuffleSignalRef.current = shuffleSignal;
+      setIsShuffling(true);
+      const id = setTimeout(() => setIsShuffling(false), 1000);
+      return () => clearTimeout(id);
+    }
+  }, [shuffleSignal]);
+
   const isLeading = isMultiplayer && localScore > opponentScore;
   const isBehind = isMultiplayer && localScore < opponentScore;
 
@@ -137,15 +154,7 @@ export function GameScreen({
 
   function handleShuffle() {
     if (!isMultiplayer || player?.shuffleUsed) return;
-    
-    // Find opponent player ID (not 'local')
-    const opponentId = Object.keys(gameState.players).find(id => id !== 'local');
-    if (!opponentId) return;
-    
-    setIsShuffling(true);
-    onDispatch({ type: 'SHUFFLE_OPPONENT', playerId: 'local', targetPlayerId: opponentId });
-    
-    setTimeout(() => setIsShuffling(false), 1000);
+    onShuffle?.();
   }
 
   // Pre-compute which columns the clock doesn't need — just render grid cells
@@ -349,10 +358,10 @@ export function GameScreen({
             <button
               className="shuffle-btn"
               onClick={handleShuffle}
-              disabled={player?.shuffleUsed || isShuffling}
-              title={player?.shuffleUsed ? language === 'tr' ? 'Kullanıldı' : 'Used' : language === 'tr' ? 'Rakibin tahtasını karıştır!' : 'Shuffle opponent board!'}
+              disabled={player?.shuffleUsed}
+              title={player?.shuffleUsed ? (language === 'tr' ? 'Kullanıldı' : 'Used') : (language === 'tr' ? 'Rakibin tahtasını karıştır!' : 'Shuffle opponent board!')}
             >
-              {isShuffling ? '🌪️' : '🎲'}
+              🎲
             </button>
           )}
         </div>

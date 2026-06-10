@@ -55,6 +55,7 @@ function parseSnapshot(matchId: string, data: MatchDoc, localUid: string): Match
       opponentName: '',
       opponentScore: 0,
       opponentWantsRematch: false,
+      incomingShuffleNonce: 0,
     };
   }
 
@@ -71,6 +72,8 @@ function parseSnapshot(matchId: string, data: MatchDoc, localUid: string): Match
     opponentName: opponent.name,
     opponentScore: opponent.score,
     opponentWantsRematch: Boolean(data.rematchReady && data.rematchReady[opponentUid]),
+    // An attack TARGETING us is one the opponent sent, i.e. keyed by their uid.
+    incomingShuffleNonce: data.shuffleAttacks?.[opponentUid] ?? 0,
   };
   console.log('[MP:parseSnapshot] returning', result);
   return result;
@@ -297,6 +300,14 @@ export class FirebaseMultiplayerAdapter implements MultiplayerPort {
     });
   }
 
+  async sendShuffle(): Promise<void> {
+    if (!this.matchId || !this.localUid) return;
+    // Key the attack by our own uid; the opponent reads the entry not keyed by them.
+    await updateDoc(this.matchRef, {
+      [`shuffleAttacks.${this.localUid}`]: Date.now(),
+    });
+  }
+
   async requestRematch(): Promise<void> {
     if (!this.matchId || !this.localUid) return;
     const uid = this.localUid;
@@ -322,6 +333,7 @@ export class FirebaseMultiplayerAdapter implements MultiplayerPort {
           status: 'ready',
           round: (data.round ?? 1) + 1,
           rematchReady: {},
+          shuffleAttacks: {},
         };
         for (const p of playerUids) {
           update[`players.${p}.score`] = 0;

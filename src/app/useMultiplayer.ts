@@ -13,11 +13,14 @@ interface MultiplayerSession {
   inviteCode: string | null;
   error: string | null;
   isAvailable: boolean;
+  /** Latest shuffle attack nonce aimed at us (0 = none). Increases on each attack. */
+  incomingShuffleNonce: number;
   quickMatch: () => Promise<void>;
   createRoom: () => Promise<void>;
   joinRoom: (code: string) => Promise<void>;
   cancel: () => Promise<void>;
   publishScore: (score: number) => Promise<void>;
+  sendShuffle: () => Promise<void>;
   requestRematch: () => Promise<void>;
   markPlaying: () => void;
   markEnded: () => void;
@@ -49,6 +52,7 @@ export function useMultiplayer(multiplayer: MultiplayerPort, available: boolean)
   const [round, setRound] = useState(0);
   const [inviteCode, setInviteCode] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [incomingShuffleNonce, setIncomingShuffleNonce] = useState(0);
 
   useEffect(() => {
     console.log('[useMultiplayer] subscribing');
@@ -69,6 +73,7 @@ export function useMultiplayer(multiplayer: MultiplayerPort, available: boolean)
       setOpponentWantsRematch(snapshot.opponentWantsRematch);
       setOpponentPresent(Boolean(snapshot.opponentUid));
       setRound(snapshot.round);
+      setIncomingShuffleNonce(snapshot.incomingShuffleNonce);
       if (snapshot.inviteCode) setInviteCode(snapshot.inviteCode);
 
       const matchReady = snapshot.status === 'ready' && Boolean(snapshot.opponentUid);
@@ -134,10 +139,16 @@ export function useMultiplayer(multiplayer: MultiplayerPort, available: boolean)
     setRound(0);
     setInviteCode(null);
     setError(null);
+    setIncomingShuffleNonce(0);
   }, [multiplayer]);
 
   const publishScore = useCallback(
     (score: number) => multiplayer.publishScore(score),
+    [multiplayer],
+  );
+
+  const sendShuffle = useCallback(
+    () => multiplayer.sendShuffle(),
     [multiplayer],
   );
 
@@ -176,6 +187,7 @@ export function useMultiplayer(multiplayer: MultiplayerPort, available: boolean)
     setRound(0);
     setInviteCode(null);
     setError(null);
+    setIncomingShuffleNonce(0);
   }, [multiplayer]);
 
   return useMemo(
@@ -190,11 +202,13 @@ export function useMultiplayer(multiplayer: MultiplayerPort, available: boolean)
       inviteCode,
       error,
       isAvailable: available,
+      incomingShuffleNonce,
       quickMatch,
       createRoom,
       joinRoom,
       cancel,
       publishScore,
+      sendShuffle,
       requestRematch,
       markPlaying,
       markEnded,
@@ -212,11 +226,13 @@ export function useMultiplayer(multiplayer: MultiplayerPort, available: boolean)
       inviteCode,
       error,
       available,
+      incomingShuffleNonce,
       quickMatch,
       createRoom,
       joinRoom,
       cancel,
       publishScore,
+      sendShuffle,
       requestRematch,
       markPlaying,
       markEnded,

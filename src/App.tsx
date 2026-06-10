@@ -31,9 +31,11 @@ export default function App() {
   const [lobbyMode, setLobbyMode] = useState<LobbyMode>('quick');
   const [showCountdown, setShowCountdown] = useState(false);
   const [isRematching, setIsRematching] = useState(false);
+  const [shuffleSignal, setShuffleSignal] = useState(0);
   const prevScoreRef = useRef(0);
   const matchStartedRef = useRef(false);
   const roundRef = useRef(0);
+  const lastShuffleNonceRef = useRef(0);
 
   const deepLinkHandled = useRef(false);
   useEffect(() => {
@@ -69,6 +71,7 @@ export default function App() {
       }
       matchStartedRef.current = true;
       prevScoreRef.current = 0;
+      lastShuffleNonceRef.current = 0;
     },
     [dispatchAction, isMultiplayer, mp],
   );
@@ -129,6 +132,15 @@ export default function App() {
     [isMultiplayer, mp],
   );
 
+  const handleShuffleAttack = useCallback(() => {
+    if (!isMultiplayer) return;
+    const player = gameState.players['local'];
+    if (!player || player.shuffleUsed) return;
+    dispatchAction({ type: 'MARK_SHUFFLE_USED', playerId: 'local' });
+    void mp.sendShuffle();
+    analytics.track('mp_shuffle_sent');
+  }, [isMultiplayer, gameState.players, dispatchAction, mp]);
+
   const handlePlayAgain = useCallback(() => {
     if (isMultiplayer) {
       // Rematch reuses the SAME match doc. Just mark ourselves ready; when both
@@ -173,6 +185,18 @@ export default function App() {
 
     matchStartedRef.current = false;
   }, [gameState.matchStatus, gameState.players, isMultiplayer, mp]);
+
+  // Apply an incoming shuffle attack: the opponent scrambled our board.
+  useEffect(() => {
+    if (!isMultiplayer || gameState.matchStatus !== 'playing') return;
+    const nonce = mp.incomingShuffleNonce;
+    if (nonce > lastShuffleNonceRef.current) {
+      lastShuffleNonceRef.current = nonce;
+      dispatchAction({ type: 'SHUFFLE_BOARD', playerId: 'local' });
+      setShuffleSignal(s => s + 1);
+      analytics.track('mp_shuffle_received');
+    }
+  }, [isMultiplayer, mp.incomingShuffleNonce, gameState.matchStatus, dispatchAction]);
 
   // Start countdown when multiplayer match is ready
   useEffect(() => {
@@ -276,6 +300,8 @@ export default function App() {
         opponentScore={mp.opponentScore}
         opponentName={mp.opponentName}
         onScoreChange={handleScoreChange}
+        onShuffle={handleShuffleAttack}
+        shuffleSignal={shuffleSignal}
       />
     );
   }
