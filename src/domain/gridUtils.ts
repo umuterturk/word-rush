@@ -205,6 +205,9 @@ export function calculateWordDuration(
   const maxCells = GRID_COLS * GRID_ROWS;
   const currentLetters = columns.reduce((sum, col) => sum + col.length, 0);
   const boardDensity = currentLetters / maxCells;
-  
-  return wordLength * secondsPerLetter * (1 + boardDensity) * 1000;
+
+  // Scale more aggressively: full board = 1.5x, half = 1.0x, empty = 0.5x
+  const densityMultiplier = 0.5 + boardDensity;
+
+  return wordLength * secondsPerLetter * densityMultiplier * 1000;
 }

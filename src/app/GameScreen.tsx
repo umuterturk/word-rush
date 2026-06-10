@@ -352,7 +352,7 @@ export function GameScreen({
             disabled={!targetWord}
             title={`Skip word (-${SKIP_PENALTY} points)`}
           >
-            {t.skip(SKIP_PENALTY)}
+            {t.skip}
           </button>
           {isMultiplayer && (
             <button

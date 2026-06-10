@@ -25,7 +25,7 @@ export interface Translations {
   vs: string;
   find: string;
   clear: string;
-  skip: (penalty: number) => string;
+  skip: string;
   tapToSpell: string;
   paused: string;
   pauseHint: string;
@@ -92,7 +92,7 @@ export const translations: Record<Language, Translations> = {
     vs: 'VS',
     find: 'FIND',
     clear: 'CLEAR',
-    skip: (penalty) => `SKIP (-${penalty})`,
+    skip: 'SKIP',
     tapToSpell: 'tap letters to spell the word',
     paused: 'PAUSED',
     pauseHint: 'SPACE to resume',
@@ -157,7 +157,7 @@ export const translations: Record<Language, Translations> = {
     vs: 'VS',
     find: 'BUL',
     clear: 'TEMİZLE',
-    skip: (penalty) => `ATLA (-${penalty})`,
+    skip: 'ATLA',
     tapToSpell: 'kelimeyi yazmak için harflere dokun',
     paused: 'DURAKLATILDI',
     pauseHint: 'Devam etmek için SPACE',

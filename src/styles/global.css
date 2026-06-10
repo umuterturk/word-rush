@@ -927,7 +927,7 @@ button {
 }
 
 .grid-arena--shuffling {
-  animation: earthquake 0.8s ease-in-out;
+  animation: earthquake 0.3s ease-in-out;
 }
 
 @keyframes earthquake {
