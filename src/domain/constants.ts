@@ -17,4 +17,4 @@ export const WORD_SCORE: Readonly<Record<number, number>> = {
 
 // ─── Grid layout ──────────────────────────────────────────────────────────────
 export const GRID_COLS = 7;
-export const GRID_ROWS = 11;
+export const GRID_ROWS = 9;

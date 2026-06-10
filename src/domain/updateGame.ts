@@ -14,12 +14,8 @@ export function updateGame(
   wallClockTime: number,
   actions: GameAction[],
 ): GameState {
-  if (state.matchStatus === 'idle') {
+  if (state.matchStatus === 'idle' || state.matchStatus === 'ended') {
     return actions.reduce(gameReducer, state);
-  }
-
-  if (state.matchStatus === 'ended') {
-    return state;
   }
 
   const logicalTime = wallClockTime - state.matchStartedAt;
