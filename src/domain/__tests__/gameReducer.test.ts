@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { gameReducer, INITIAL_GAME_STATE } from '../gameReducer';
 import type { GameState } from '../types';
-import { GRID_COLS, GRID_ROWS } from '../constants';
+import { GRID_COLS } from '../constants';
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 

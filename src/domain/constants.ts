@@ -19,7 +19,7 @@ export const WORD_SCORE: Readonly<Record<number, number>> = {
 export const SKIP_PENALTY = 2;
 
 /** Maximum number of empty cells allowed during gameplay. */
-export const MAX_EMPTY_CELLS = 3;
+export const MAX_EMPTY_CELLS = 0;
 
 // ─── Grid layout ──────────────────────────────────────────────────────────────
 export const GRID_COLS = 7;

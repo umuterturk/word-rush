@@ -8,7 +8,6 @@ interface Props {
   gameState: GameState;
   logicalTime: number;
   bestScore: number;
-  isPaused?: boolean;
   onDispatch: (action: GameAction) => void;
   clock: ClockPort;
   isMultiplayer?: boolean;
@@ -49,7 +48,6 @@ export function GameScreen({
   gameState,
   logicalTime,
   bestScore,
-  isPaused = false,
   onDispatch,
   clock: _clock,
   isMultiplayer = false,
@@ -143,15 +141,8 @@ export function GameScreen({
 
   return (
     <div
-      className={`screen game-screen${isMultiplayer ? ' game-screen--vs' : ''}${isPaused ? ' game-screen--paused' : ''}`}
+      className={`screen game-screen${isMultiplayer ? ' game-screen--vs' : ''}`}
     >
-      {isPaused && (
-        <div className="pause-overlay" aria-hidden="true">
-          <span className="pause-label">{t.paused}</span>
-          <span className="pause-hint">{t.pauseHint}</span>
-        </div>
-      )}
-
       {/* HUD */}
       {isMultiplayer ? (
         <div className="vs-hud">
