@@ -16,6 +16,8 @@ export interface PlayerState {
   selectedIds: string[];
   /** The word the player must find and spell right now. */
   targetWord: string;
+  /** Number of words successfully completed (used for difficulty scaling). */
+  wordsCompleted: number;
 }
 
 export interface GameState {
@@ -32,4 +34,5 @@ export type GameAction =
   | { type: 'RESET' }
   | { type: 'SELECT_LETTER'; playerId: string; letterId: string }
   | { type: 'CLEAR_SELECTION'; playerId: string }
-  | { type: 'SUBMIT_WORD'; playerId: string };
+  | { type: 'SUBMIT_WORD'; playerId: string }
+  | { type: 'SKIP_WORD'; playerId: string };

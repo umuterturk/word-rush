@@ -1,5 +1,5 @@
 import type { GameAction, GameState, PlayerState } from './types';
-import { MAX_BUFFER_SIZE, MATCH_DURATION_MS, WORD_SCORE } from './constants';
+import { MAX_BUFFER_SIZE, MATCH_DURATION_MS, WORD_SCORE, SKIP_PENALTY } from './constants';
 import { createSeededRng } from './seededRng';
 import { fillGrid, pickTargetWord } from './gridUtils';
 
@@ -9,6 +9,7 @@ export function createInitialPlayerState(): PlayerState {
     columns: [],
     selectedIds: [],
     targetWord: '',
+    wordsCompleted: 0,
   };
 }
 
@@ -29,7 +30,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     case 'START_MATCH': {
       const rng = createSeededRng(action.seed);
       const columns = fillGrid(rng);
-      const targetWord = pickTargetWord(rng, columns) ?? '';
+      const targetWord = pickTargetWord(rng, columns, 0) ?? '';
       return {
         matchStatus: 'playing',
         matchStartedAt: action.at,
@@ -41,6 +42,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
             columns,
             selectedIds: [],
             targetWord,
+            wordsCompleted: 0,
           },
         },
       };
@@ -125,11 +127,12 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       const clearSet = new Set(selectedIds);
       const newColumns = columns.map(col => col.filter(cell => !clearSet.has(cell.id)));
       const points = WORD_SCORE[targetWord.length] ?? 1;
+      const newWordsCompleted = player.wordsCompleted + 1;
 
       // Pick a new target word from the remaining letters
       // Use a deterministic seed derived from current score + word to stay reproducible
       const rng = createSeededRng(state.seed + '-' + (player.score + points));
-      const nextWord = pickTargetWord(rng, newColumns);
+      const nextWord = pickTargetWord(rng, newColumns, newWordsCompleted);
 
       if (nextWord === null) {
         // No more words can be formed — end the match
@@ -144,6 +147,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
               columns: newColumns,
               selectedIds: [],
               targetWord: '',
+              wordsCompleted: newWordsCompleted,
             },
           },
         };
@@ -159,6 +163,52 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
             columns: newColumns,
             selectedIds: [],
             targetWord: nextWord,
+            wordsCompleted: newWordsCompleted,
+          },
+        },
+      };
+    }
+
+    case 'SKIP_WORD': {
+      const player = state.players[action.playerId];
+      if (!player) return state;
+
+      // Apply penalty (can go negative)
+      const newScore = player.score - SKIP_PENALTY;
+      const newWordsCompleted = player.wordsCompleted + 1;
+
+      // Pick a new target word (same grid, just different word)
+      const rng = createSeededRng(state.seed + '-skip-' + newWordsCompleted);
+      const nextWord = pickTargetWord(rng, player.columns, newWordsCompleted);
+
+      if (nextWord === null) {
+        // No more words available — end the match
+        return {
+          ...state,
+          matchStatus: 'ended',
+          players: {
+            ...state.players,
+            [action.playerId]: {
+              ...player,
+              score: newScore,
+              selectedIds: [],
+              targetWord: '',
+              wordsCompleted: newWordsCompleted,
+            },
+          },
+        };
+      }
+
+      return {
+        ...state,
+        players: {
+          ...state.players,
+          [action.playerId]: {
+            ...player,
+            score: newScore,
+            selectedIds: [],
+            targetWord: nextWord,
+            wordsCompleted: newWordsCompleted,
           },
         },
       };

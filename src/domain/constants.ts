@@ -15,6 +15,9 @@ export const WORD_SCORE: Readonly<Record<number, number>> = {
   8: 16,
 };
 
+/** Penalty for skipping a word. */
+export const SKIP_PENALTY = 2;
+
 // ─── Grid layout ──────────────────────────────────────────────────────────────
 export const GRID_COLS = 7;
 export const GRID_ROWS = 9;

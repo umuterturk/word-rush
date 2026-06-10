@@ -75,26 +75,62 @@ function canSpell(word: string, freq: Map<string, number>): boolean {
  * Picks a random valid word from the word list that can be spelled from the
  * letters currently in the grid. Returns `null` if no such word exists.
  *
- * Strategy: shuffle a random sample of candidate words (filtered by length),
- * then return the first one that passes the multiset check.
+ * @param rng Random number generator
+ * @param columns Current grid state
+ * @param wordsCompleted Number of words completed (for difficulty scaling)
+ *
+ * Strategy: Early game (first 5 words) heavily favors 3-letter words.
+ * After that, probability gradually evens out across all lengths.
  */
-export function pickTargetWord(rng: RngFn, columns: LandedCell[][]): string | null {
+export function pickTargetWord(
+  rng: RngFn,
+  columns: LandedCell[][],
+  wordsCompleted = 0,
+): string | null {
   const freq = buildLetterFreqMap(columns);
 
-  // Filter to words of the desired length range
-  const candidates = WORD_LIST.filter(
-    w => w.length >= MIN_WORD_LENGTH && w.length <= MAX_WORD_LENGTH,
-  );
-
-  if (candidates.length === 0) return null;
-
-  // Fisher-Yates shuffle a copy, then pick the first valid word
-  const shuffled = [...candidates];
-  for (let i = shuffled.length - 1; i > 0; i--) {
-    const j = Math.floor(rng() * (i + 1));
-    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  // Calculate bias: first 5 words strongly favor length 3, then gradually flatten
+  const shortBias = Math.max(0, 5 - wordsCompleted);
+  
+  // Filter and weight candidates by length
+  const weightedCandidates: Array<{ word: string; weight: number }> = [];
+  
+  for (const word of WORD_LIST) {
+    if (word.length < MIN_WORD_LENGTH || word.length > MAX_WORD_LENGTH) continue;
+    
+    // Base weight = 1, but 3-letter words get bonus during early game
+    let weight = 1;
+    if (word.length === 3) {
+      weight += shortBias * 3; // 3-letter words 3x more likely per remaining bias point
+    }
+    
+    weightedCandidates.push({ word, weight });
   }
 
+  if (weightedCandidates.length === 0) return null;
+
+  // Weighted shuffle: pick items proportional to their weight
+  const shuffled: string[] = [];
+  
+  const remaining = [...weightedCandidates];
+  while (remaining.length > 0 && shuffled.length < 100) {
+    const r = rng() * remaining.reduce((sum, c) => sum + c.weight, 0);
+    let cumulative = 0;
+    let picked = 0;
+    
+    for (let i = 0; i < remaining.length; i++) {
+      cumulative += remaining[i].weight;
+      if (r < cumulative) {
+        picked = i;
+        break;
+      }
+    }
+    
+    shuffled.push(remaining[picked].word);
+    remaining.splice(picked, 1);
+  }
+
+  // Return first word that can be spelled
   for (const word of shuffled) {
     if (canSpell(word, freq)) return word;
   }

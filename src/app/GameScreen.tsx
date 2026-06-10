@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { GameAction, GameState } from '../domain/types';
-import { WORD_SCORE, GRID_COLS, GRID_ROWS } from '../domain/constants';
+import { WORD_SCORE, GRID_COLS, GRID_ROWS, SKIP_PENALTY } from '../domain/constants';
 import type { ClockPort } from '../ports';
 
 interface Props {
@@ -118,6 +118,10 @@ export function GameScreen({
 
   function handleClear() {
     onDispatch({ type: 'CLEAR_SELECTION', playerId: 'local' });
+  }
+
+  function handleSkip() {
+    onDispatch({ type: 'SKIP_WORD', playerId: 'local' });
   }
 
   // Pre-compute which columns the clock doesn't need — just render grid cells
@@ -289,6 +293,13 @@ export function GameScreen({
             disabled={selectedIds.length === 0}
           >
             CLEAR
+          </button>
+          <button
+            className="skip-btn"
+            onClick={handleSkip}
+            title={`Skip word (-${SKIP_PENALTY} points)`}
+          >
+            SKIP (-{SKIP_PENALTY})
           </button>
         </div>
       </div>
