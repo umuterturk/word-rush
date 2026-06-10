@@ -393,6 +393,52 @@ button {
   position: relative;
 }
 
+/* ─── Word Timer Bar ─────────────────────────────────────────────────────── */
+
+.word-timer-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.05);
+  z-index: 1000;
+  overflow: hidden;
+}
+
+.word-timer-bar__fill {
+  height: 100%;
+  background: linear-gradient(90deg, 
+    #ff6b6b 0%, 
+    #ffd93d 20%, 
+    #6bcf7f 40%, 
+    #4d9cff 60%, 
+    #c44dff 80%, 
+    #ff6b6b 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 2s linear infinite;
+  box-shadow: 0 0 10px rgba(255, 107, 107, 0.5);
+  transition: width 0.1s linear;
+}
+
+.word-timer-bar__text {
+  position: absolute;
+  top: 8px;
+  right: 12px;
+  font-size: 11px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.7);
+  text-shadow: 0 0 4px rgba(0, 0, 0, 0.5);
+  pointer-events: none;
+  z-index: 1001;
+}
+
+@keyframes shimmer {
+  0% { background-position: 0% center; }
+  100% { background-position: 200% center; }
+}
+
 .game-screen--paused .arena,
 .game-screen--paused .stack-panel {
   filter: brightness(0.55);

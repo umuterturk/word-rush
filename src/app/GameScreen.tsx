@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { GameAction, GameState } from '../domain/types';
-import { WORD_SCORE, GRID_COLS, GRID_ROWS, SKIP_PENALTY } from '../domain/constants';
+import { WORD_SCORE, GRID_COLS, GRID_ROWS, SKIP_PENALTY, SECONDS_PER_LETTER } from '../domain/constants';
 import type { ClockPort } from '../ports';
 import { useI18n } from '../i18n';
 
@@ -64,6 +64,13 @@ export function GameScreen({
   const selectedIds = player?.selectedIds ?? [];
   const selectedSet = new Set(selectedIds);
   const targetWord = player?.targetWord ?? '';
+  
+  // Word timer calculations
+  const wordStartedAt = player?.wordStartedAt ?? 0;
+  const wordDuration = targetWord.length * SECONDS_PER_LETTER * 1000;
+  const wordElapsed = wordStartedAt > 0 ? (Date.now() - wordStartedAt) : 0;
+  const wordTimeLeft = Math.max(0, wordDuration - wordElapsed);
+  const wordTimerPercent = wordDuration > 0 ? (wordTimeLeft / wordDuration) * 100 : 100;
 
   // Build letter map for the current word display
   const letterMap = new Map<string, string>();
@@ -143,6 +150,22 @@ export function GameScreen({
     <div
       className={`screen game-screen${isMultiplayer ? ' game-screen--vs' : ''}`}
     >
+      {/* Word timer bar */}
+      {targetWord && (
+        <div className="word-timer-bar">
+          <div
+            className="word-timer-bar__fill"
+            style={{
+              width: `${wordTimerPercent}%`,
+              transition: 'width 0.1s linear',
+            }}
+          />
+          <div className="word-timer-bar__text">
+            {Math.ceil(wordTimeLeft / 1000)}s
+          </div>
+        </div>
+      )}
+      
       {/* HUD */}
       {isMultiplayer ? (
         <div className="vs-hud">

@@ -3,6 +3,7 @@ import type { GameAction, GameState } from '../domain/types';
 import { INITIAL_GAME_STATE } from '../domain/gameReducer';
 import { updateGame } from '../domain/updateGame';
 import type { ClockPort, StoragePort } from '../ports';
+import { SECONDS_PER_LETTER, AUTO_SKIP_ON_TIMEOUT } from '../domain/constants';
 
 interface GameSession {
   gameState: GameState;
@@ -86,6 +87,23 @@ export function useGameSession(clock: ClockPort, storage: StoragePort): GameSess
       const now = clock.now();
       const pending = actionQueueRef.current.splice(0);
       const prev = stateRef.current;
+      
+      // Check if word timer has expired (before processing pending actions)
+      if (
+        prev.matchStatus === 'playing' &&
+        AUTO_SKIP_ON_TIMEOUT &&
+        prev.players['local']
+      ) {
+        const player = prev.players['local'];
+        if (player.targetWord && player.wordStartedAt > 0) {
+          const wordDuration = player.targetWord.length * SECONDS_PER_LETTER * 1000;
+          const elapsed = now - player.wordStartedAt;
+          if (elapsed >= wordDuration) {
+            pending.push({ type: 'WORD_TIMEOUT', playerId: 'local', at: now });
+          }
+        }
+      }
+      
       const next = updateGame(prev, now, pending);
 
       if (next !== prev) {

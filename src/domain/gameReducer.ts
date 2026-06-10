@@ -11,6 +11,7 @@ export function createInitialPlayerState(): PlayerState {
     targetWord: '',
     wordsCompleted: 0,
     wordPool: [],
+    wordStartedAt: 0,
   };
 }
 
@@ -45,6 +46,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
             targetWord,
             wordsCompleted: 0,
             wordPool,
+            wordStartedAt: action.at,
           },
         },
       };
@@ -152,12 +154,14 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
             targetWord: nextWord ?? '', // Empty if no more words
             wordsCompleted: newWordsCompleted,
             wordPool: newWordPool,
+            wordStartedAt: state.matchStartedAt + (Date.now() - state.matchStartedAt), // Current time
           },
         },
       };
     }
 
-    case 'SKIP_WORD': {
+    case 'SKIP_WORD':
+    case 'WORD_TIMEOUT': {
       const player = state.players[action.playerId];
       if (!player) return state;
 
@@ -180,6 +184,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
             selectedIds: [],
             targetWord: nextWord ?? '', // Empty if no more words
             wordsCompleted: newWordsCompleted,
+            wordStartedAt: action.type === 'WORD_TIMEOUT' ? action.at : state.matchStartedAt + (Date.now() - state.matchStartedAt),
           },
         },
       };

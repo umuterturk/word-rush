@@ -20,6 +20,8 @@ export interface PlayerState {
   wordsCompleted: number;
   /** Pool of words that were used to create this grid (these are the only findable words). */
   wordPool: string[];
+  /** Timestamp when current target word was assigned (for per-word timer). */
+  wordStartedAt: number;
 }
 
 export interface GameState {
@@ -37,4 +39,5 @@ export type GameAction =
   | { type: 'SELECT_LETTER'; playerId: string; letterId: string }
   | { type: 'CLEAR_SELECTION'; playerId: string }
   | { type: 'SUBMIT_WORD'; playerId: string }
-  | { type: 'SKIP_WORD'; playerId: string };
+  | { type: 'SKIP_WORD'; playerId: string }
+  | { type: 'WORD_TIMEOUT'; playerId: string; at: number };

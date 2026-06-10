@@ -18,6 +18,12 @@ export const WORD_SCORE: Readonly<Record<number, number>> = {
 /** Penalty for skipping a word. */
 export const SKIP_PENALTY = 2;
 
+/** Seconds per letter for word timer (1 second per letter). */
+export const SECONDS_PER_LETTER = 1;
+
+/** Auto-skip word when timer expires. */
+export const AUTO_SKIP_ON_TIMEOUT = true;
+
 /** Maximum number of empty cells allowed during gameplay. */
 export const MAX_EMPTY_CELLS = 0;
 
