@@ -252,7 +252,7 @@ export function calculateWordDuration(
   const currentLetters = columns.reduce((sum, col) => sum + col.length, 0);
   const boardDensity = currentLetters / maxCells;
 
-  const densityMultiplier = 0.8 + 1.2 * boardDensity;
+  const densityMultiplier = 1.0 + 1.2 * boardDensity;
   const scarcity = calculateWordLetterScarcity(word, columns);
   const freqMultiplier = letterFrequencyMultiplier(scarcity);
   const pityMultiplier = applyPity ? pityTimeMultiplier(pityTimeouts) : 1;
