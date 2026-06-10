@@ -403,6 +403,8 @@ button {
   align-items: center;
   justify-content: center;
   position: relative;
+  overflow: hidden;
+  min-height: 0;
 }
 
 .word-timer-bar {
@@ -871,6 +873,8 @@ button {
   flex: 1;
   position: relative;
   overflow: hidden;
+  min-height: 0;
+  min-width: 0;
 }
 
 /* ─── Target Word Banner ─────────────────────────────────────────────────── */
@@ -916,7 +920,10 @@ button {
 /* ─── Grid Arena ─────────────────────────────────────────────────────────── */
 
 .grid-arena {
-  /* no extra styles needed — inherits .arena */
+  max-width: min(100%, 500px);
+  max-height: 100%;
+  aspect-ratio: 7 / 9;
+  margin: 0 auto;
 }
 
 /* Faint background slot for each possible cell position */
