@@ -17,6 +17,10 @@ const firebaseConfig = {
   measurementId: 'G-B0FFDB5ETP',
 };
 
+/** Firestore collection for multiplayer matches (separate from sum-rush's `matches`). */
+export const MATCHES_COLLECTION =
+  import.meta.env.VITE_FIREBASE_MATCHES_COLLECTION ?? 'word-rush-matches';
+
 export function isFirebaseConfigured(): boolean {
   return true;
 }

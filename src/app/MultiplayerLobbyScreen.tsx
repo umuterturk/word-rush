@@ -21,7 +21,7 @@ function getInviteUrl(code: string): string {
 async function shareInvite(code: string): Promise<void> {
   const url = getInviteUrl(code);
   const shareData = {
-    title: 'Sum Rush 1v1',
+    title: 'Word Rush 1v1',
     text: 'Join my game!',
     url,
   };

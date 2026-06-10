@@ -12,7 +12,7 @@ import {
   where,
 } from 'firebase/firestore';
 import { MATCH_DURATION_MS } from '../domain/constants';
-import { ensureAnonymousAuth, getFirebaseDb } from '../firebase/config';
+import { ensureAnonymousAuth, getFirebaseDb, MATCHES_COLLECTION } from '../firebase/config';
 import type { MatchDoc, MatchSnapshot } from '../multiplayer/types';
 import type { MultiplayerPort } from '../ports';
 
@@ -91,7 +91,7 @@ export class FirebaseMultiplayerAdapter implements MultiplayerPort {
 
   private get matchRef() {
     if (!this.matchId) throw new Error('No active match.');
-    return doc(getFirebaseDb(), 'matches', this.matchId);
+    return doc(getFirebaseDb(), MATCHES_COLLECTION, this.matchId);
   }
 
   private startListening(): void {
@@ -146,7 +146,7 @@ export class FirebaseMultiplayerAdapter implements MultiplayerPort {
     const db = getFirebaseDb();
 
     const openQuery = query(
-      collection(db, 'matches'),
+      collection(db, MATCHES_COLLECTION),
       where('status', '==', 'waiting'),
       where('mode', '==', 'quick'),
       limit(5),
@@ -186,7 +186,7 @@ export class FirebaseMultiplayerAdapter implements MultiplayerPort {
     }
 
     console.log('[MP:quickMatch] no candidates, creating new match');
-    const newRef = doc(collection(db, 'matches'));
+    const newRef = doc(collection(db, MATCHES_COLLECTION));
     await setDoc(newRef, {
       mode: 'quick',
       inviteCode: null,
@@ -213,7 +213,7 @@ export class FirebaseMultiplayerAdapter implements MultiplayerPort {
   async createRoom(): Promise<void> {
     const uid = await this.getUid();
     const db = getFirebaseDb();
-    const newRef = doc(collection(db, 'matches'));
+    const newRef = doc(collection(db, MATCHES_COLLECTION));
 
     await setDoc(newRef, {
       mode: 'private',
@@ -244,7 +244,7 @@ export class FirebaseMultiplayerAdapter implements MultiplayerPort {
     console.log('[MP:joinRoom] uid=', uid, 'code=', normalized);
 
     const roomQuery = query(
-      collection(db, 'matches'),
+      collection(db, MATCHES_COLLECTION),
       where('inviteCode', '==', normalized),
       where('status', '==', 'waiting'),
       limit(1),
@@ -349,7 +349,7 @@ export class FirebaseMultiplayerAdapter implements MultiplayerPort {
 
     const matchId = this.matchId;
     const uid = this.localUid;
-    const ref = doc(getFirebaseDb(), 'matches', matchId);
+    const ref = doc(getFirebaseDb(), MATCHES_COLLECTION, matchId);
 
     try {
       await runTransaction(getFirebaseDb(), async transaction => {

@@ -1,28 +1,27 @@
-# Sum Rush
+# Word Rush
 
-A fast, mobile-first arcade puzzle game where you tap falling numbers to build stacks that sum to exactly **21**.
+A fast, mobile-first arcade word game where you tap falling letters to spell **Turkish words** against the clock.
 
-**[Play Now](https://umuterturk.github.io/sum-rush/)**
+**[Play Now](https://umuterturk.github.io/word-rush/)**
 
 ## How to Play
 
-- Numbers (1–7) fall from the top of the screen
-- Tap a falling number to add it to your stack (max 5 numbers)
-- When your stack sums to exactly 21, you score a point and the stack clears
-- If the stack is full, the oldest number is automatically removed (sliding window)
-- Tap a stack number to remove it manually
+- Letters fall into a 7×11 grid arena
+- A target word is shown at the top — tap letters in order to spell it
+- Spell the target word and it auto-submits, scoring points and clearing tiles
+- Longer words are worth more points (3 letters = 1 pt up to 8 letters = 16 pts)
+- Tap a selected letter to deselect it, or hit **CLEAR** to start over
 - You have 2 minutes to score as many points as possible
 
 ## Features
 
 - Mobile-first, touch-optimized UI
+- Turkish word list with length-based scoring
 - **1v1 multiplayer** — quick match or private room codes
 - Live opponent score for competitive adrenaline
 - Firebase Analytics (GA4) event tracking
 - No scrolling, fits any phone screen
-- Deterministic seeded number generation (shared arena in multiplayer)
-- Parabolic speed ramp — game gets faster toward the end
-- Bell-curve number distribution (4 is most common, 1 and 7 are rare)
+- Deterministic seeded letter generation (shared arena in multiplayer)
 
 ## Tech Stack
 
@@ -68,6 +67,7 @@ Or manually paste [`firestore.rules`](firestore.rules) into the Firebase console
 | `VITE_FIREBASE_MESSAGING_SENDER_ID` | Messaging sender ID |
 | `VITE_FIREBASE_APP_ID` | Web app ID |
 | `VITE_FIREBASE_MEASUREMENT_ID` | GA4 measurement ID |
+| `VITE_FIREBASE_MATCHES_COLLECTION` | Firestore collection for matches (default `word-rush-matches`) |
 
 Without these env vars, the game runs in **solo-only** mode (multiplayer buttons are hidden).
 
@@ -75,11 +75,15 @@ Without these env vars, the game runs in **solo-only** mode (multiplayer buttons
 
 Game logic runs entirely on each client. Firestore only carries:
 
-- **Match config** — shared `seed` and `matchDuration` so both players see the same falling numbers
+- **Match config** — shared `seed` and `matchDuration` so both players see the same falling letters
 - **Live scores** — each client writes its own score; opponent score is read via `onSnapshot`
 
+This fork shares the same Firebase project as Sum Rush but uses a **separate
+Firestore collection** (`word-rush-matches`, configurable via
+`VITE_FIREBASE_MATCHES_COLLECTION`) so the two games never cross-match.
+
 ```
-matches/{matchId}
+word-rush-matches/{matchId}
   mode: 'quick' | 'private'
   inviteCode: string | null
   status: 'waiting' | 'ready' | 'ended'

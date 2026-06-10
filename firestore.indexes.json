@@ -15,6 +15,22 @@
         { "fieldPath": "inviteCode", "order": "ASCENDING" },
         { "fieldPath": "status", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "word-rush-matches",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "mode", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "word-rush-matches",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "inviteCode", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []
