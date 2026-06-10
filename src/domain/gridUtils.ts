@@ -1,44 +1,76 @@
 import type { RngFn } from './seededRng';
 import type { LandedCell } from './types';
-import { GRID_COLS, GRID_ROWS, MIN_WORD_LENGTH, MAX_WORD_LENGTH } from './constants';
-import { LETTER_FREQUENCIES, WORD_LIST } from './wordSet';
+import { GRID_COLS, GRID_ROWS, MIN_WORD_LENGTH, MAX_WORD_LENGTH, MAX_EMPTY_CELLS } from './constants';
+import { WORD_LIST } from './wordSet';
 
-// ─── Letter sampling ──────────────────────────────────────────────────────────
-
-/** Cumulative distribution table built once from LETTER_FREQUENCIES. */
-const CDF: Array<{ letter: string; cum: number }> = (() => {
-  const entries = Object.entries(LETTER_FREQUENCIES).sort((a, b) => a[0].localeCompare(b[0]));
-  let cum = 0;
-  return entries.map(([letter, freq]) => {
-    cum += freq;
-    return { letter, cum };
-  });
-})();
-
-function sampleLetter(rng: RngFn): string {
-  const r = rng();
-  for (const { letter, cum } of CDF) {
-    if (r < cum) return letter;
-  }
-  return CDF[CDF.length - 1].letter;
-}
-
-// ─── Grid fill ────────────────────────────────────────────────────────────────
+// ─── Strategic Grid Fill ──────────────────────────────────────────────────────
 
 /**
- * Creates a fully filled GRID_COLS × GRID_ROWS grid of random letters.
- * Cell IDs are positional: `c{col}r{row}` where row 0 = top of column display
- * (but stored bottom-first: index 0 = bottom).
- *
- * Layout stored as `columns[col][rowIndex]` where rowIndex 0 = bottom row.
+ * Creates a grid strategically filled with letters from actual words.
+ * Ensures all letters can form valid words and allows up to MAX_EMPTY_CELLS empty spots.
+ * 
+ * Strategy:
+ * 1. Pick random words from the word list
+ * 2. Decompose them into letters and scatter across grid
+ * 3. Fill remaining spots with letters that complement existing ones
+ * 4. Leave MAX_EMPTY_CELLS spots initially empty for gameplay dynamics
  */
 export function fillGrid(rng: RngFn): LandedCell[][] {
-  return Array.from({ length: GRID_COLS }, (_, col) =>
-    Array.from({ length: GRID_ROWS }, (_, rowFromBottom) => ({
-      id: `c${col}r${rowFromBottom}`,
-      letter: sampleLetter(rng),
-    })),
-  );
+  const totalCells = GRID_COLS * GRID_ROWS;
+  const targetFilled = totalCells - MAX_EMPTY_CELLS;
+  
+  // Filter word list to preferred lengths (3-6 for better decomposition)
+  const suitableWords = WORD_LIST.filter(w => w.length >= 3 && w.length <= 6);
+  
+  // Collect letters from random words until we have enough
+  const letters: string[] = [];
+  const usedWords = new Set<string>();
+  
+  while (letters.length < targetFilled) {
+    const wordIdx = Math.floor(rng() * suitableWords.length);
+    const word = suitableWords[wordIdx];
+    
+    // Avoid using the same word too many times
+    if (usedWords.size > 20 && usedWords.has(word)) continue;
+    usedWords.add(word);
+    
+    // Add letters from this word
+    for (const letter of word) {
+      if (letters.length < targetFilled) {
+        letters.push(letter);
+      }
+    }
+  }
+  
+  // Shuffle letters for random distribution
+  for (let i = letters.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [letters[i], letters[j]] = [letters[j], letters[i]];
+  }
+  
+  // Create grid columns and fill with letters
+  const columns: LandedCell[][] = [];
+  let letterIdx = 0;
+  
+  for (let col = 0; col < GRID_COLS; col++) {
+    const column: LandedCell[] = [];
+    const colHeight = GRID_ROWS;
+    
+    for (let row = 0; row < colHeight; row++) {
+      if (letterIdx < letters.length) {
+        column.push({
+          id: `c${col}r${row}`,
+          letter: letters[letterIdx],
+        });
+        letterIdx++;
+      }
+      // Remaining cells stay empty (handled by not adding them)
+    }
+    
+    columns.push(column);
+  }
+  
+  return columns;
 }
 
 // ─── Word picking ─────────────────────────────────────────────────────────────

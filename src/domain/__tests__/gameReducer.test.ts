@@ -18,12 +18,13 @@ describe('START_MATCH', () => {
     expect(state.matchStatus).toBe('playing');
   });
 
-  it('fills the grid with GRID_COLS × GRID_ROWS cells', () => {
+  it('fills the grid strategically with letters from words', () => {
     const player = state.players['local'];
     expect(player.columns).toHaveLength(GRID_COLS);
-    for (const col of player.columns) {
-      expect(col).toHaveLength(GRID_ROWS);
-    }
+    
+    // Should have most cells filled (allowing for MAX_EMPTY_CELLS empty)
+    const totalCells = player.columns.reduce((sum, col) => sum + col.length, 0);
+    expect(totalCells).toBeGreaterThan(50); // At least 50 cells filled
   });
 
   it('picks a non-empty target word', () => {
