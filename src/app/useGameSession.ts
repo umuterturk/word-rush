@@ -4,6 +4,7 @@ import { INITIAL_GAME_STATE } from '../domain/gameReducer';
 import { updateGame } from '../domain/updateGame';
 import type { ClockPort, StoragePort } from '../ports';
 import { SECONDS_PER_LETTER, AUTO_SKIP_ON_TIMEOUT } from '../domain/constants';
+import { calculateWordDuration } from '../domain/gridUtils';
 
 interface GameSession {
   gameState: GameState;
@@ -96,7 +97,11 @@ export function useGameSession(clock: ClockPort, storage: StoragePort): GameSess
       ) {
         const player = prev.players['local'];
         if (player.targetWord && player.wordStartedAt > 0) {
-          const wordDuration = player.targetWord.length * SECONDS_PER_LETTER * 1000;
+          const wordDuration = calculateWordDuration(
+            player.targetWord.length,
+            player.columns,
+            SECONDS_PER_LETTER
+          );
           const elapsed = now - player.wordStartedAt;
           if (elapsed >= wordDuration) {
             pending.push({ type: 'WORD_TIMEOUT', playerId: 'local', at: now });

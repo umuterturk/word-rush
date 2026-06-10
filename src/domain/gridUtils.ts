@@ -188,3 +188,23 @@ export function pickTargetWord(
   
   return weighted[weighted.length - 1].word;
 }
+
+// ─── Word Timer Calculation ───────────────────────────────────────────────────
+
+/**
+ * Calculate word duration in milliseconds based on word length and board density.
+ * Formula: wordLength × secondsPerLetter × (1 + boardDensity) × 1000
+ * 
+ * More letters on board = harder to find words = more time given.
+ */
+export function calculateWordDuration(
+  wordLength: number,
+  columns: LandedCell[][],
+  secondsPerLetter: number
+): number {
+  const maxCells = GRID_COLS * GRID_ROWS;
+  const currentLetters = columns.reduce((sum, col) => sum + col.length, 0);
+  const boardDensity = currentLetters / maxCells;
+  
+  return wordLength * secondsPerLetter * (1 + boardDensity) * 1000;
+}

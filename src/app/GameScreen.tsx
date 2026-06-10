@@ -3,6 +3,7 @@ import type { GameAction, GameState } from '../domain/types';
 import { WORD_SCORE, GRID_COLS, GRID_ROWS, SKIP_PENALTY, SECONDS_PER_LETTER } from '../domain/constants';
 import type { ClockPort } from '../ports';
 import { useI18n } from '../i18n';
+import { calculateWordDuration } from '../domain/gridUtils';
 
 interface Props {
   gameState: GameState;
@@ -65,9 +66,10 @@ export function GameScreen({
   const selectedSet = new Set(selectedIds);
   const targetWord = player?.targetWord ?? '';
   
-  // Word timer calculations
+  // Word timer calculations with board density
   const wordStartedAt = player?.wordStartedAt ?? 0;
-  const wordDuration = targetWord.length * SECONDS_PER_LETTER * 1000;
+  const columns = player?.columns ?? [];
+  const wordDuration = targetWord ? calculateWordDuration(targetWord.length, columns, SECONDS_PER_LETTER) : 0;
   const wordElapsed = wordStartedAt > 0 ? (Date.now() - wordStartedAt) : 0;
   const wordTimeLeft = Math.max(0, wordDuration - wordElapsed);
   const wordTimerPercent = wordDuration > 0 ? (wordTimeLeft / wordDuration) * 100 : 100;

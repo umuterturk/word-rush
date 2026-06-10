@@ -1,7 +1,7 @@
 import type { GameAction, GameState, PlayerState } from './types';
-import { MAX_BUFFER_SIZE, MATCH_DURATION_MS, WORD_SCORE, SKIP_PENALTY } from './constants';
+import { MAX_BUFFER_SIZE, MATCH_DURATION_MS, WORD_SCORE, SKIP_PENALTY, SECONDS_PER_LETTER } from './constants';
 import { createSeededRng } from './seededRng';
-import { fillGrid, pickTargetWord } from './gridUtils';
+import { fillGrid, pickTargetWord, calculateWordDuration } from './gridUtils';
 
 export function createInitialPlayerState(): PlayerState {
   return {
@@ -130,7 +130,15 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       // Correct! Clear selected cells and compute new score
       const clearSet = new Set(selectedIds);
       const newColumns = columns.map(col => col.filter(cell => !clearSet.has(cell.id)));
-      const points = WORD_SCORE[targetWord.length] ?? 1;
+      const basePoints = WORD_SCORE[targetWord.length] ?? 1;
+      
+      // Calculate speed bonus based on remaining time
+      const wordDuration = calculateWordDuration(targetWord.length, columns, SECONDS_PER_LETTER);
+      const elapsed = Date.now() - player.wordStartedAt;
+      const remaining = Math.max(0, wordDuration - elapsed);
+      const speedBonus = Math.floor(remaining / 1000); // Bonus = remaining seconds
+      
+      const points = basePoints + speedBonus;
       const newWordsCompleted = player.wordsCompleted + 1;
 
       // Remove the completed word from the pool

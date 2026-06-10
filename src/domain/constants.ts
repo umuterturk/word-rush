@@ -16,7 +16,7 @@ export const WORD_SCORE: Readonly<Record<number, number>> = {
 };
 
 /** Penalty for skipping a word. */
-export const SKIP_PENALTY = 2;
+export const SKIP_PENALTY = 0;
 
 /** Seconds per letter for word timer (1 second per letter). */
 export const SECONDS_PER_LETTER = 1;
