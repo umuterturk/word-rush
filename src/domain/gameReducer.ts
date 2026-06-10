@@ -13,6 +13,7 @@ export function createInitialPlayerState(): PlayerState {
     wordPool: [],
     wordStartedAt: 0,
     shuffleUsed: false,
+    pityTimeouts: 0,
   };
 }
 
@@ -49,6 +50,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
             wordPool,
             wordStartedAt: action.at,
             shuffleUsed: false,
+            pityTimeouts: 0,
           },
         },
       };
@@ -134,10 +136,16 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       const newColumns = columns.map(col => col.filter(cell => !clearSet.has(cell.id)));
       const basePoints = WORD_SCORE[targetWord.length] ?? 1;
       
-      // Calculate speed bonus based on remaining time
-      const wordDuration = calculateWordDuration(targetWord.length, columns, SECONDS_PER_LETTER);
+      // Speed bonus uses fair baseline (no pity) so extra time doesn't inflate score
+      const scoreDuration = calculateWordDuration(
+        targetWord,
+        columns,
+        SECONDS_PER_LETTER,
+        0,
+        false,
+      );
       const elapsed = Date.now() - player.wordStartedAt;
-      const remaining = Math.max(0, wordDuration - elapsed);
+      const remaining = Math.max(0, scoreDuration - elapsed);
       const speedBonus = Math.floor(remaining / 1000); // Bonus = remaining seconds
       
       const points = basePoints + speedBonus;
@@ -165,25 +173,22 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
             wordsCompleted: newWordsCompleted,
             wordPool: newWordPool,
             wordStartedAt: state.matchStartedAt + (Date.now() - state.matchStartedAt), // Current time
+            pityTimeouts: Math.max(0, player.pityTimeouts - 1),
           },
         },
       };
     }
 
-    case 'SKIP_WORD':
-    case 'WORD_TIMEOUT': {
+    case 'SKIP_WORD': {
       const player = state.players[action.playerId];
       if (!player) return state;
 
-      // Apply penalty (can go negative)
       const newScore = player.score - SKIP_PENALTY;
       const newWordsCompleted = player.wordsCompleted + 1;
 
-      // Pick a new target word (same grid, just different word from pool)
       const rng = createSeededRng(state.seed + '-skip-' + newWordsCompleted);
       const nextWord = pickTargetWord(rng, player.columns, player.wordPool, newWordsCompleted);
 
-      // Continue game even if no more words available (let timer run out naturally)
       return {
         ...state,
         players: {
@@ -192,9 +197,38 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
             ...player,
             score: newScore,
             selectedIds: [],
-            targetWord: nextWord ?? '', // Empty if no more words
+            targetWord: nextWord ?? '',
             wordsCompleted: newWordsCompleted,
-            wordStartedAt: action.type === 'WORD_TIMEOUT' ? action.at : state.matchStartedAt + (Date.now() - state.matchStartedAt),
+            wordStartedAt: state.matchStartedAt + (Date.now() - state.matchStartedAt),
+            pityTimeouts: player.pityTimeouts,
+          },
+        },
+      };
+    }
+
+    case 'WORD_TIMEOUT': {
+      const player = state.players[action.playerId];
+      if (!player) return state;
+
+      const newScore = player.score - SKIP_PENALTY;
+      const newWordsCompleted = player.wordsCompleted + 1;
+      const newPityTimeouts = player.pityTimeouts + 1;
+
+      const rng = createSeededRng(state.seed + '-skip-' + newWordsCompleted);
+      const nextWord = pickTargetWord(rng, player.columns, player.wordPool, newWordsCompleted);
+
+      return {
+        ...state,
+        players: {
+          ...state.players,
+          [action.playerId]: {
+            ...player,
+            score: newScore,
+            selectedIds: [],
+            targetWord: nextWord ?? '',
+            wordsCompleted: newWordsCompleted,
+            wordStartedAt: action.at,
+            pityTimeouts: newPityTimeouts,
           },
         },
       };

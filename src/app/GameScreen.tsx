@@ -75,7 +75,16 @@ export function GameScreen({
   // Word timer calculations with board density (use clock for real-time updates)
   const wordStartedAt = player?.wordStartedAt ?? 0;
   const columns = player?.columns ?? [];
-  const wordDuration = targetWord ? calculateWordDuration(targetWord.length, columns, SECONDS_PER_LETTER) : 0;
+  const wordDuration = targetWord
+    ? calculateWordDuration(
+        targetWord,
+        columns,
+        SECONDS_PER_LETTER,
+        player?.pityTimeouts ?? 0,
+        true,
+        player?.wordsCompleted ?? 0,
+      )
+    : 0;
   const currentTime = gameState.matchStatus === 'playing' ? gameState.matchStartedAt + logicalTime : clock.now();
   const wordElapsed = wordStartedAt > 0 ? (currentTime - wordStartedAt) : 0;
   const wordTimeLeft = Math.max(0, wordDuration - wordElapsed);

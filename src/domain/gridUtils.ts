@@ -1,6 +1,6 @@
 import type { RngFn } from './seededRng';
 import type { LandedCell } from './types';
-import { GRID_COLS, GRID_ROWS, MIN_WORD_LENGTH, MAX_EMPTY_CELLS } from './constants';
+import { GRID_COLS, GRID_ROWS, MIN_WORD_LENGTH, MAX_EMPTY_CELLS, PITY_TIME_BONUS_PER_TIMEOUT, MAX_PITY_TIMEOUTS, WARMUP_BONUS_MS } from './constants';
 import { WORD_LIST } from './wordSet';
 
 // ─── Strategic Grid Fill ──────────────────────────────────────────────────────
@@ -192,23 +192,78 @@ export function pickTargetWord(
 // ─── Word Timer Calculation ───────────────────────────────────────────────────
 
 /**
- * Calculate word duration in milliseconds based on word length and board density.
- * Formula: wordLength × secondsPerLetter × (0.8 + 1.2 × boardDensity) × 1000
+ * Average inverse board count for letters in the word.
+ * 1 copy on board → 1.0 (hard), many copies → lower (easier).
+ * Uses only the current grid, not language-wide frequencies.
+ */
+export function calculateWordLetterScarcity(word: string, columns: LandedCell[][]): number {
+  if (!word) return 1;
+  const freq = buildLetterFreqMap(columns);
+  let scarcitySum = 0;
+  for (const ch of word) {
+    const boardCount = freq.get(ch) ?? 0;
+    scarcitySum += 1 / Math.max(boardCount, 1);
+  }
+  return scarcitySum / word.length;
+}
+
+/**
+ * Maps board-relative letter scarcity to a time multiplier.
+ * Scarce letters (few copies on board) → more time, up to +15%.
+ * Abundant letters → less time, down to -10%.
+ */
+export function letterFrequencyMultiplier(scarcity: number): number {
+  // scarcity is typically 0.07 (letter appears ~14×) … 1.0 (appears once)
+  return Math.min(1.15, Math.max(0.9, 0.85 + 0.25 * scarcity));
+}
+
+/**
+ * Extra time after consecutive auto-skips. Resets when the player finds a word.
+ */
+export function pityTimeMultiplier(pityTimeouts: number): number {
+  const stacks = Math.min(Math.max(0, pityTimeouts), MAX_PITY_TIMEOUTS);
+  return 1 + stacks * PITY_TIME_BONUS_PER_TIMEOUT;
+}
+
+/** Flat bonus ms for early words (1st +2s, 2nd +1s, 3rd +0.5s). */
+export function warmupTimeBonusMs(wordsCompleted: number): number {
+  return WARMUP_BONUS_MS[wordsCompleted] ?? 0;
+}
+
+/**
+ * Calculate word duration in milliseconds based on word length, board density,
+ * and letter scarcity on the board.
  *
- * Full board → 2.0× (e.g. 5 letters @ 1.2s = 12s).
- * Empty board → 0.8× minimum (e.g. 5 letters @ 1.2s = 4.8s).
+ * @param applyPity When true (default), pity stacks and warm-up bonus extend the timer.
+ *   When false, returns the fair baseline used for speed-bonus scoring.
  */
 export function calculateWordDuration(
-  wordLength: number,
+  word: string,
   columns: LandedCell[][],
-  secondsPerLetter: number
+  secondsPerLetter: number,
+  pityTimeouts = 0,
+  applyPity = true,
+  wordsCompleted = 0,
 ): number {
+  const wordLength = word.length;
+  if (wordLength === 0) return 0;
+
   const maxCells = GRID_COLS * GRID_ROWS;
   const currentLetters = columns.reduce((sum, col) => sum + col.length, 0);
   const boardDensity = currentLetters / maxCells;
 
-  // Linear scale: 0.8× at empty board, 2.0× at full board
   const densityMultiplier = 0.8 + 1.2 * boardDensity;
+  const scarcity = calculateWordLetterScarcity(word, columns);
+  const freqMultiplier = letterFrequencyMultiplier(scarcity);
+  const pityMultiplier = applyPity ? pityTimeMultiplier(pityTimeouts) : 1;
 
-  return wordLength * secondsPerLetter * densityMultiplier * 1000;
+  const calculated =
+    wordLength * secondsPerLetter * densityMultiplier * freqMultiplier * pityMultiplier * 1000;
+  const minDuration = wordLength * 0.8 * secondsPerLetter * 1000;
+
+  let duration = Math.max(calculated, minDuration);
+  if (applyPity) {
+    duration += warmupTimeBonusMs(wordsCompleted);
+  }
+  return duration;
 }

@@ -24,6 +24,15 @@ export const SECONDS_PER_LETTER = 1.2;
 /** Auto-skip word when timer expires. */
 export const AUTO_SKIP_ON_TIMEOUT = true;
 
+/** Extra time per consecutive auto-skip (+15% each, decays by 1 on success). */
+export const PITY_TIME_BONUS_PER_TIMEOUT = 0.15;
+
+/** Cap pity stacks so bonus does not grow without bound. */
+export const MAX_PITY_TIMEOUTS = 4;
+
+/** Flat extra seconds for the first words of a match (timer only). */
+export const WARMUP_BONUS_MS = [2_500, 1_000, 500] as const;
+
 /** Maximum number of empty cells allowed during gameplay. */
 export const MAX_EMPTY_CELLS = 0;
 

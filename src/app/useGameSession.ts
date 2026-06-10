@@ -98,9 +98,12 @@ export function useGameSession(clock: ClockPort, storage: StoragePort): GameSess
         const player = prev.players['local'];
         if (player.targetWord && player.wordStartedAt > 0) {
           const wordDuration = calculateWordDuration(
-            player.targetWord.length,
+            player.targetWord,
             player.columns,
-            SECONDS_PER_LETTER
+            SECONDS_PER_LETTER,
+            player.pityTimeouts,
+            true,
+            player.wordsCompleted,
           );
           const elapsed = now - player.wordStartedAt;
           if (elapsed >= wordDuration) {

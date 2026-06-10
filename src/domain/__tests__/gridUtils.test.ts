@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { createSeededRng } from '../seededRng';
-import { fillGrid, pickTargetWord, buildLetterFreqMap, calculateWordDuration } from '../gridUtils';
-import { GRID_COLS, GRID_ROWS, SECONDS_PER_LETTER } from '../constants';
+import { fillGrid, pickTargetWord, buildLetterFreqMap, calculateWordDuration, calculateWordLetterScarcity, letterFrequencyMultiplier, pityTimeMultiplier } from '../gridUtils';
+import { GRID_COLS, GRID_ROWS, SECONDS_PER_LETTER, WARMUP_BONUS_MS } from '../constants';
 
 describe('fillGrid', () => {
   it('creates exactly GRID_COLS columns', () => {
@@ -137,14 +137,75 @@ describe('calculateWordDuration', () => {
     return columns;
   }
 
-  it('gives 12s for a 5-letter word on a full board', () => {
-    const duration = calculateWordDuration(5, fullBoardColumns(), SECONDS_PER_LETTER);
-    expect(duration).toBe(12_000);
+  it('gives ~12s on full board when letter scarcity is neutral', () => {
+    const columns = fullBoardColumns();
+    const word = 'abcde';
+    const duration = calculateWordDuration(word, columns, SECONDS_PER_LETTER, 0, true, 3);
+    const expected =
+      word.length *
+      SECONDS_PER_LETTER *
+      2.0 *
+      letterFrequencyMultiplier(calculateWordLetterScarcity(word, columns)) *
+      1000;
+    expect(duration).toBeCloseTo(expected, 0);
+    expect(duration).toBeLessThan(12_000);
+    expect(duration).toBeGreaterThan(10_000);
   });
 
-  it('floors at 0.8× word length on an empty board', () => {
+  it('floors density at 0.8× on an empty board', () => {
     const emptyColumns = Array.from({ length: GRID_COLS }, () => []);
-    const duration = calculateWordDuration(5, emptyColumns, SECONDS_PER_LETTER);
-    expect(duration).toBeCloseTo(4_800, 5);
+    const duration = calculateWordDuration('abcde', emptyColumns, SECONDS_PER_LETTER, 0, true, 3);
+    expect(duration).toBeCloseTo(5 * SECONDS_PER_LETTER * 0.8 * 1.1 * 1000, 0);
+  });
+
+  it('adds time when word letters are scarce on the board', () => {
+    const columns = [[
+      { id: '1', letter: 'a' },
+      { id: '2', letter: 'a' },
+      { id: '3', letter: 'a' },
+      { id: '4', letter: 'b' },
+      { id: '5', letter: 'c' },
+    ]];
+    const scarce = calculateWordDuration('abc', columns, SECONDS_PER_LETTER, 0, true, 3);
+    const abundant = calculateWordDuration('aaa', columns, SECONDS_PER_LETTER, 0, true, 3);
+    expect(scarce).toBeGreaterThan(abundant);
+  });
+
+  it('never drops below 0.8× word length', () => {
+    const cases = [
+      { word: 'aaa', columns: [[{ id: '1', letter: 'a' }]] },
+      { word: 'abcde', columns: fullBoardColumns() },
+    ];
+    for (const { word, columns } of cases) {
+      const duration = calculateWordDuration(word, columns, SECONDS_PER_LETTER, 0, true, 3);
+      const minDuration = word.length * 0.8 * SECONDS_PER_LETTER * 1000;
+      expect(duration).toBeGreaterThanOrEqual(minDuration);
+    }
+  });
+
+  it('adds extra time for pity after auto-skips', () => {
+    const columns = fullBoardColumns();
+    const base = calculateWordDuration('abcde', columns, SECONDS_PER_LETTER, 0, true, 3);
+    const withPity = calculateWordDuration('abcde', columns, SECONDS_PER_LETTER, 2, true, 3);
+    expect(withPity).toBeCloseTo(base * pityTimeMultiplier(2), 0);
+    expect(withPity).toBeGreaterThan(base);
+  });
+
+  it('excludes pity from scoring baseline', () => {
+    const columns = fullBoardColumns();
+    const baseline = calculateWordDuration('abcde', columns, SECONDS_PER_LETTER, 0, false, 3);
+    const withPityTimer = calculateWordDuration('abcde', columns, SECONDS_PER_LETTER, 3, true, 3);
+    expect(baseline).toBe(calculateWordDuration('abcde', columns, SECONDS_PER_LETTER, 0, true, 3));
+    expect(withPityTimer).toBeGreaterThan(baseline);
+  });
+
+  it('adds warm-up bonus for the first three words (timer only)', () => {
+    const columns = fullBoardColumns();
+    const base = calculateWordDuration('abcde', columns, SECONDS_PER_LETTER, 0, false, 0);
+    expect(calculateWordDuration('abcde', columns, SECONDS_PER_LETTER, 0, true, 0)).toBe(base + WARMUP_BONUS_MS[0]);
+    expect(calculateWordDuration('abcde', columns, SECONDS_PER_LETTER, 0, true, 1)).toBe(base + WARMUP_BONUS_MS[1]);
+    expect(calculateWordDuration('abcde', columns, SECONDS_PER_LETTER, 0, true, 2)).toBe(base + WARMUP_BONUS_MS[2]);
+    expect(calculateWordDuration('abcde', columns, SECONDS_PER_LETTER, 0, true, 3)).toBe(base);
+    expect(calculateWordDuration('abcde', columns, SECONDS_PER_LETTER, 0, false, 0)).toBe(base);
   });
 });

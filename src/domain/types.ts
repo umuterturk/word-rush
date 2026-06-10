@@ -24,6 +24,8 @@ export interface PlayerState {
   wordStartedAt: number;
   /** Whether this player has used their shuffle attack (multiplayer only). */
   shuffleUsed: boolean;
+  /** Consecutive auto-skips without finding a word; grants extra time, decays by 1 on success. */
+  pityTimeouts: number;
 }
 
 export interface GameState {

@@ -176,4 +176,74 @@ describe('SUBMIT_WORD', () => {
     // should clear selection (wrong word path since 1 char != targetWord)
     expect(next.players['local'].score).toBe(0);
   });
+
+  it('gradually reduces pity after a correct word', () => {
+    const withPity = {
+      ...stateWithManualTarget('bal'),
+      players: {
+        local: {
+          ...stateWithManualTarget('bal').players['local'],
+          pityTimeouts: 3,
+        },
+      },
+    };
+    const next = gameReducer(withPity, { type: 'SUBMIT_WORD', playerId: 'local' });
+    expect(next.players['local'].pityTimeouts).toBe(2);
+  });
 });
+
+describe('pity timer', () => {
+  it('increments pity on auto-skip and keeps it on manual skip', () => {
+    const state = startedState();
+    const afterTimeout = gameReducer(state, {
+      type: 'WORD_TIMEOUT',
+      playerId: 'local',
+      at: 5000,
+    });
+    expect(afterTimeout.players['local'].pityTimeouts).toBe(1);
+
+    const afterManualSkip = gameReducer(afterTimeout, {
+      type: 'SKIP_WORD',
+      playerId: 'local',
+    });
+    expect(afterManualSkip.players['local'].pityTimeouts).toBe(1);
+  });
+
+  it('decays pity on success and re-grows on auto-skip', () => {
+    let state = startedState();
+    for (let i = 0; i < 3; i++) {
+      state = gameReducer(state, { type: 'WORD_TIMEOUT', playerId: 'local', at: 1000 + i });
+    }
+    expect(state.players['local'].pityTimeouts).toBe(3);
+
+    const manual = stateWithManualTargetFrom(state, 'bal');
+    state = gameReducer(manual, { type: 'SUBMIT_WORD', playerId: 'local' });
+    expect(state.players['local'].pityTimeouts).toBe(2);
+
+    const manual2 = stateWithManualTargetFrom(state, 'bal');
+    state = gameReducer(manual2, { type: 'SUBMIT_WORD', playerId: 'local' });
+    expect(state.players['local'].pityTimeouts).toBe(1);
+
+    state = gameReducer(state, { type: 'WORD_TIMEOUT', playerId: 'local', at: 9000 });
+    expect(state.players['local'].pityTimeouts).toBe(2);
+  });
+});
+
+function stateWithManualTargetFrom(base: GameState, word: string): GameState {
+  const player = base.players['local'];
+  const wordCells = Array.from(word).map((letter, i) => ({ id: `w${i}`, letter }));
+  const newColumns = player.columns.map((col, colIdx) =>
+    colIdx === 0 ? wordCells : col,
+  );
+  return {
+    ...base,
+    players: {
+      local: {
+        ...player,
+        columns: newColumns,
+        targetWord: word,
+        selectedIds: wordCells.map(c => c.id),
+      },
+    },
+  };
+}
