@@ -88,6 +88,7 @@ export function GameScreen({
   const wordScore = wordMatchesTarget ? (WORD_SCORE[targetWord.length] ?? 1) : 0;
 
   const [submitFeedback, setSubmitFeedback] = useState<'valid' | 'invalid' | null>(null);
+  const [isShuffling, setIsShuffling] = useState(false);
 
   // Auto-submit when the formed word exactly matches the target
   const prevFormedRef = useRef('');
@@ -132,6 +133,19 @@ export function GameScreen({
 
   function handleSkip() {
     onDispatch({ type: 'SKIP_WORD', playerId: 'local' });
+  }
+
+  function handleShuffle() {
+    if (!isMultiplayer || player?.shuffleUsed) return;
+    
+    // Find opponent player ID (not 'local')
+    const opponentId = Object.keys(gameState.players).find(id => id !== 'local');
+    if (!opponentId) return;
+    
+    setIsShuffling(true);
+    onDispatch({ type: 'SHUFFLE_OPPONENT', playerId: 'local', targetPlayerId: opponentId });
+    
+    setTimeout(() => setIsShuffling(false), 1000);
   }
 
   // Pre-compute which columns the clock doesn't need — just render grid cells
@@ -240,7 +254,7 @@ export function GameScreen({
         
         {/* Grid arena */}
         <div
-          className="arena grid-arena"
+          className={`arena grid-arena${isShuffling ? ' grid-arena--shuffling' : ''}`}
           style={{ '--grid-cols': GRID_COLS, '--grid-rows': GRID_ROWS } as React.CSSProperties}
         >
         {/* Empty cell backgrounds */}
@@ -331,6 +345,16 @@ export function GameScreen({
           >
             {t.skip(SKIP_PENALTY)}
           </button>
+          {isMultiplayer && (
+            <button
+              className="shuffle-btn"
+              onClick={handleShuffle}
+              disabled={player?.shuffleUsed || isShuffling}
+              title={player?.shuffleUsed ? language === 'tr' ? 'Kullanıldı' : 'Used' : language === 'tr' ? 'Rakibin tahtasını karıştır!' : 'Shuffle opponent board!'}
+            >
+              {isShuffling ? '🌪️' : '🎲'}
+            </button>
+          )}
         </div>
       </div>
     </div>

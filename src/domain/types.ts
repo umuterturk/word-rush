@@ -22,6 +22,8 @@ export interface PlayerState {
   wordPool: string[];
   /** Timestamp when current target word was assigned (for per-word timer). */
   wordStartedAt: number;
+  /** Whether this player has used their shuffle attack (multiplayer only). */
+  shuffleUsed: boolean;
 }
 
 export interface GameState {
@@ -40,4 +42,5 @@ export type GameAction =
   | { type: 'CLEAR_SELECTION'; playerId: string }
   | { type: 'SUBMIT_WORD'; playerId: string }
   | { type: 'SKIP_WORD'; playerId: string }
-  | { type: 'WORD_TIMEOUT'; playerId: string; at: number };
+  | { type: 'WORD_TIMEOUT'; playerId: string; at: number }
+  | { type: 'SHUFFLE_OPPONENT'; playerId: string; targetPlayerId: string };

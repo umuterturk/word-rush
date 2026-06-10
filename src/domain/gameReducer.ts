@@ -1,4 +1,4 @@
-import type { GameAction, GameState, PlayerState } from './types';
+import type { GameAction, GameState, PlayerState, LandedCell } from './types';
 import { MAX_BUFFER_SIZE, MATCH_DURATION_MS, WORD_SCORE, SKIP_PENALTY, SECONDS_PER_LETTER } from './constants';
 import { createSeededRng } from './seededRng';
 import { fillGrid, pickTargetWord, calculateWordDuration } from './gridUtils';
@@ -12,6 +12,7 @@ export function createInitialPlayerState(): PlayerState {
     wordsCompleted: 0,
     wordPool: [],
     wordStartedAt: 0,
+    shuffleUsed: false,
   };
 }
 
@@ -47,6 +48,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
             wordsCompleted: 0,
             wordPool,
             wordStartedAt: action.at,
+            shuffleUsed: false,
           },
         },
       };
@@ -193,6 +195,52 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
             targetWord: nextWord ?? '', // Empty if no more words
             wordsCompleted: newWordsCompleted,
             wordStartedAt: action.type === 'WORD_TIMEOUT' ? action.at : state.matchStartedAt + (Date.now() - state.matchStartedAt),
+          },
+        },
+      };
+    }
+
+    case 'SHUFFLE_OPPONENT': {
+      const attacker = state.players[action.playerId];
+      const target = state.players[action.targetPlayerId];
+      
+      // Can only shuffle once and only if both players exist
+      if (!attacker || !target || attacker.shuffleUsed) return state;
+      
+      // Collect all cells from target's board
+      const allCells: LandedCell[] = [];
+      for (const col of target.columns) {
+        allCells.push(...col);
+      }
+      
+      // Shuffle using seeded RNG for determinism
+      const rng = createSeededRng(state.seed + '-shuffle-' + Date.now());
+      for (let i = allCells.length - 1; i > 0; i--) {
+        const j = Math.floor(rng() * (i + 1));
+        [allCells[i], allCells[j]] = [allCells[j], allCells[i]];
+      }
+      
+      // Redistribute cells across columns (keep similar distribution)
+      const colCount = target.columns.length;
+      const newColumns: LandedCell[][] = Array.from({ length: colCount }, () => []);
+      
+      allCells.forEach((cell, idx) => {
+        const colIdx = idx % colCount;
+        newColumns[colIdx].push(cell);
+      });
+      
+      return {
+        ...state,
+        players: {
+          ...state.players,
+          [action.playerId]: {
+            ...attacker,
+            shuffleUsed: true,
+          },
+          [action.targetPlayerId]: {
+            ...target,
+            columns: newColumns,
+            selectedIds: [], // Clear selection since letters moved
           },
         },
       };

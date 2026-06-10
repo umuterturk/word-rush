@@ -926,6 +926,18 @@ button {
   margin: 0 auto;
 }
 
+.grid-arena--shuffling {
+  animation: shuffle-spin 1s ease-in-out;
+}
+
+@keyframes shuffle-spin {
+  0% { transform: rotate(0deg) scale(1); }
+  25% { transform: rotate(-10deg) scale(0.95); }
+  50% { transform: rotate(10deg) scale(1.05); }
+  75% { transform: rotate(-10deg) scale(0.95); }
+  100% { transform: rotate(0deg) scale(1); }
+}
+
 /* Faint background slot for each possible cell position */
 .grid-cell-bg {
   position: absolute;
@@ -1078,6 +1090,45 @@ button {
 .skip-btn:active:not(:disabled) {
   opacity: 0.7;
   background: rgba(255, 140, 0, 0.25);
+}
+
+.shuffle-btn {
+  background: linear-gradient(135deg, rgba(139, 0, 255, 0.2), rgba(255, 0, 140, 0.2));
+  border: 1px solid rgba(200, 0, 255, 0.4);
+  border-radius: 100px;
+  color: #ff1aff;
+  font-size: 20px;
+  padding: 9px 16px;
+  min-height: 36px;
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+}
+
+.shuffle-btn:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.shuffle-btn:active:not(:disabled) {
+  transform: scale(0.95);
+  background: linear-gradient(135deg, rgba(139, 0, 255, 0.3), rgba(255, 0, 140, 0.3));
+}
+
+.shuffle-btn:not(:disabled)::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  transform: translateX(-100%);
+  animation: shimmer-btn 2s infinite;
+}
+
+@keyframes shimmer-btn {
+  0%, 100% { transform: translateX(-100%); }
+  50% { transform: translateX(100%); }
 }
 
 /* Paused overlay dims the arena and word panel */
