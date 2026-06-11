@@ -1,13 +1,13 @@
 import type { ClockPort } from '../ports';
 
 /**
- * Production clock backed by the browser's high-resolution timer.
- * Using `performance.timeOrigin + performance.now()` gives a stable
- * monotonic epoch that is consistent with `Date.now()` but more precise.
+ * Production clock backed by wall-clock time.
+ * Use Date.now() so timers keep advancing while the tab is hidden;
+ * performance.now() pauses in background tabs and desyncs from Date.now().
  */
 export class BrowserClockAdapter implements ClockPort {
   now(): number {
-    return performance.timeOrigin + performance.now();
+    return Date.now();
   }
 
   requestFrame(callback: (time: number) => void): number {

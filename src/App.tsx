@@ -61,7 +61,12 @@ export default function App() {
 
   const startMatch = useCallback(
     (seed: string) => {
-      dispatchAction({ type: 'START_MATCH', seed, at: clock.now() });
+      dispatchAction({
+        type: 'START_MATCH',
+        seed,
+        at: clock.now(),
+        mode: isMultiplayer ? 'multiplayer' : 'solo',
+      });
       setShowCountdown(false);
       if (isMultiplayer) {
         mp.markPlaying();

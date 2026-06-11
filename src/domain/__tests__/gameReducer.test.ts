@@ -5,8 +5,8 @@ import { GRID_COLS } from '../constants';
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
-function startedState(seed = 'test', at = 1000): GameState {
-  return gameReducer(INITIAL_GAME_STATE, { type: 'START_MATCH', seed, at });
+function startedState(seed = 'test', at = 1000, mode: 'solo' | 'multiplayer' = 'solo'): GameState {
+  return gameReducer(INITIAL_GAME_STATE, { type: 'START_MATCH', seed, at, mode });
 }
 
 // ─── START_MATCH ──────────────────────────────────────────────────────────────
@@ -125,7 +125,7 @@ describe('SUBMIT_WORD', () => {
 
   it('awards points and clears cells on correct word', () => {
     const state = stateWithManualTarget('bal');
-    const next = gameReducer(state, { type: 'SUBMIT_WORD', playerId: 'local' });
+    const next = gameReducer(state, { type: 'SUBMIT_WORD', playerId: 'local', at: 2000 });
     const player = next.players['local'];
     expect(player.score).toBeGreaterThan(0);
     expect(player.selectedIds).toEqual([]);
@@ -156,7 +156,7 @@ describe('SUBMIT_WORD', () => {
         },
       },
     };
-    const next = gameReducer(withSel, { type: 'SUBMIT_WORD', playerId: 'local' });
+    const next = gameReducer(withSel, { type: 'SUBMIT_WORD', playerId: 'local', at: 2000 });
     expect(next.players['local'].score).toBe(0);
     expect(next.players['local'].selectedIds).toEqual([]);
     // Cells should still be in the grid
@@ -172,7 +172,7 @@ describe('SUBMIT_WORD', () => {
         local: { ...player, selectedIds: [player.columns[0][0].id] },
       },
     };
-    const next = gameReducer(withSel, { type: 'SUBMIT_WORD', playerId: 'local' });
+    const next = gameReducer(withSel, { type: 'SUBMIT_WORD', playerId: 'local', at: 2000 });
     // should clear selection (wrong word path since 1 char != targetWord)
     expect(next.players['local'].score).toBe(0);
   });
@@ -187,8 +187,21 @@ describe('SUBMIT_WORD', () => {
         },
       },
     };
-    const next = gameReducer(withPity, { type: 'SUBMIT_WORD', playerId: 'local' });
+    const next = gameReducer(withPity, { type: 'SUBMIT_WORD', playerId: 'local', at: 2000 });
     expect(next.players['local'].pityTimeouts).toBe(2);
+  });
+
+  it('ends the match when the board is cleared in solo mode', () => {
+    const state = stateWithOnlyTarget('bal');
+    const next = gameReducer(state, { type: 'SUBMIT_WORD', playerId: 'local', at: 2000 });
+    expect(next.matchStatus).toBe('ended');
+    expect(next.players['local'].columns.every(col => col.length === 0)).toBe(true);
+  });
+
+  it('keeps playing when the board is cleared in multiplayer mode', () => {
+    const state = { ...stateWithOnlyTarget('bal'), matchMode: 'multiplayer' as const };
+    const next = gameReducer(state, { type: 'SUBMIT_WORD', playerId: 'local', at: 2000 });
+    expect(next.matchStatus).toBe('playing');
   });
 });
 
@@ -205,6 +218,7 @@ describe('pity timer', () => {
     const afterManualSkip = gameReducer(afterTimeout, {
       type: 'SKIP_WORD',
       playerId: 'local',
+      at: 6000,
     });
     expect(afterManualSkip.players['local'].pityTimeouts).toBe(1);
   });
@@ -217,17 +231,38 @@ describe('pity timer', () => {
     expect(state.players['local'].pityTimeouts).toBe(3);
 
     const manual = stateWithManualTargetFrom(state, 'bal');
-    state = gameReducer(manual, { type: 'SUBMIT_WORD', playerId: 'local' });
+    state = gameReducer(manual, { type: 'SUBMIT_WORD', playerId: 'local', at: 7000 });
     expect(state.players['local'].pityTimeouts).toBe(2);
 
     const manual2 = stateWithManualTargetFrom(state, 'bal');
-    state = gameReducer(manual2, { type: 'SUBMIT_WORD', playerId: 'local' });
+    state = gameReducer(manual2, { type: 'SUBMIT_WORD', playerId: 'local', at: 8000 });
     expect(state.players['local'].pityTimeouts).toBe(1);
 
     state = gameReducer(state, { type: 'WORD_TIMEOUT', playerId: 'local', at: 9000 });
     expect(state.players['local'].pityTimeouts).toBe(2);
   });
 });
+
+function stateWithOnlyTarget(word: string): GameState {
+  const base = startedState('only-' + word);
+  const player = base.players['local'];
+  const wordCells = Array.from(word).map((letter, i) => ({ id: `w${i}`, letter }));
+  const emptyColumns = player.columns.map(() => [] as typeof player.columns[number]);
+  emptyColumns[0] = wordCells;
+
+  return {
+    ...base,
+    players: {
+      local: {
+        ...player,
+        columns: emptyColumns,
+        targetWord: word,
+        selectedIds: wordCells.map(c => c.id),
+        wordPool: [word],
+      },
+    },
+  };
+}
 
 function stateWithManualTargetFrom(base: GameState, word: string): GameState {
   const player = base.players['local'];

@@ -105,7 +105,7 @@ export function useGameSession(clock: ClockPort, storage: StoragePort): GameSess
             true,
             player.wordsCompleted,
           );
-          const elapsed = now - player.wordStartedAt;
+          const elapsed = Math.max(0, now - player.wordStartedAt);
           if (elapsed >= wordDuration) {
             pending.push({ type: 'WORD_TIMEOUT', playerId: 'local', at: now });
           }

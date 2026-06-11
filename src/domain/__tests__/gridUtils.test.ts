@@ -19,18 +19,29 @@ describe('fillGrid', () => {
     expect(result.wordPool.length).toBeGreaterThan(0);
   });
 
-  it('generates grid with strategic letter placement from word pool', () => {
+  it('fills the board exactly from the word pool with no orphan letters', () => {
     const rng = createSeededRng('strategic');
     const { columns, wordPool } = fillGrid(rng);
 
-    // Count total cells
+    const targetCells = GRID_COLS * GRID_ROWS;
     const totalCells = columns.reduce((sum, col) => sum + col.length, 0);
-    
-    // Should fill all cells when MAX_EMPTY_CELLS = 0
-    expect(totalCells).toBeGreaterThan(55);
-    
-    // Word pool should not be empty
-    expect(wordPool.length).toBeGreaterThan(0);
+    const poolLetters = wordPool.join('');
+    const boardLetters = columns.flat().map(c => c.letter).join('');
+
+    expect(totalCells).toBe(targetCells);
+    expect(poolLetters.length).toBe(targetCells);
+    expect([...poolLetters].sort().join('')).toBe([...boardLetters].sort().join(''));
+  });
+
+  it('word pool sums to board size across many seeds', () => {
+    const targetCells = GRID_COLS * GRID_ROWS;
+    for (let i = 0; i < 200; i++) {
+      const { columns, wordPool } = fillGrid(createSeededRng(`fill-${i}`));
+      const poolSum = wordPool.reduce((sum, w) => sum + w.length, 0);
+      const boardCells = columns.reduce((sum, col) => sum + col.length, 0);
+      expect(poolSum).toBe(targetCells);
+      expect(boardCells).toBe(targetCells);
+    }
   });
 
   it('all cell IDs are unique', () => {
@@ -141,10 +152,11 @@ describe('calculateWordDuration', () => {
     const columns = fullBoardColumns();
     const word = 'abcde';
     const duration = calculateWordDuration(word, columns, SECONDS_PER_LETTER, 0, true, 3);
+    const boardDensity = 1;
     const expected =
       word.length *
       SECONDS_PER_LETTER *
-      2.0 *
+      (1.0 + 1.2 * boardDensity) *
       letterFrequencyMultiplier(calculateWordLetterScarcity(word, columns)) *
       1000;
     expect(duration).toBeCloseTo(expected, 0);
@@ -152,10 +164,18 @@ describe('calculateWordDuration', () => {
     expect(duration).toBeGreaterThan(10_000);
   });
 
-  it('floors density at 0.8× on an empty board', () => {
+  it('uses baseline density on an empty board with a min-duration floor', () => {
     const emptyColumns = Array.from({ length: GRID_COLS }, () => []);
-    const duration = calculateWordDuration('abcde', emptyColumns, SECONDS_PER_LETTER, 0, true, 3);
-    expect(duration).toBeCloseTo(5 * SECONDS_PER_LETTER * 0.8 * 1.1 * 1000, 0);
+    const word = 'abcde';
+    const duration = calculateWordDuration(word, emptyColumns, SECONDS_PER_LETTER, 0, true, 3);
+    const calculated =
+      word.length *
+      SECONDS_PER_LETTER *
+      (1.0 + 1.2 * 0) *
+      letterFrequencyMultiplier(calculateWordLetterScarcity(word, emptyColumns)) *
+      1000;
+    const minDuration = word.length * 0.8 * SECONDS_PER_LETTER * 1000;
+    expect(duration).toBeCloseTo(Math.max(calculated, minDuration), 0);
   });
 
   it('adds time when word letters are scarce on the board', () => {

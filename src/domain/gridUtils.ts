@@ -1,9 +1,70 @@
 import type { RngFn } from './seededRng';
 import type { LandedCell } from './types';
-import { GRID_COLS, GRID_ROWS, MIN_WORD_LENGTH, MAX_EMPTY_CELLS, PITY_TIME_BONUS_PER_TIMEOUT, MAX_PITY_TIMEOUTS, WARMUP_BONUS_MS } from './constants';
+import { GRID_COLS, GRID_ROWS, MIN_WORD_LENGTH, MAX_WORD_LENGTH, MAX_EMPTY_CELLS, PITY_TIME_BONUS_PER_TIMEOUT, MAX_PITY_TIMEOUTS, WARMUP_BONUS_MS } from './constants';
 import { WORD_LIST } from './wordSet';
 
 // ─── Strategic Grid Fill ──────────────────────────────────────────────────────
+
+const WORDS_BY_LENGTH: Record<number, string[]> = {};
+for (const word of WORD_LIST) {
+  if (word.length >= MIN_WORD_LENGTH && word.length <= MAX_WORD_LENGTH) {
+    (WORDS_BY_LENGTH[word.length] ??= []).push(word);
+  }
+}
+
+function pickWordOfLength(rng: RngFn, length: number): string {
+  const pool = WORDS_BY_LENGTH[length];
+  if (!pool?.length) {
+    throw new Error(`No words of length ${length} in word list`);
+  }
+  return pool[Math.floor(rng() * pool.length)];
+}
+
+function pickRandomFittingWord(rng: RngFn, total: number, cap: number): string {
+  const maxLen = Math.min(MAX_WORD_LENGTH, cap - total);
+  const fittingLengths: number[] = [];
+  for (let len = MIN_WORD_LENGTH; len <= maxLen; len++) {
+    if (WORDS_BY_LENGTH[len]?.length) fittingLengths.push(len);
+  }
+  const length = fittingLengths[Math.floor(rng() * fittingLengths.length)];
+  return pickWordOfLength(rng, length);
+}
+
+/**
+ * Builds a word pool whose total letter count equals `targetCells` exactly.
+ *
+ * Phase 1 — pick random words until total >= target - MAX - MIN (capped so
+ *           at least MIN letters remain for closure).
+ * Phase 2 — close the gap with one word (remainder <= MAX) or two words
+ *           (MIN + remainder - MIN).
+ */
+function buildWordPool(rng: RngFn, targetCells: number): string[] {
+  const threshold = targetCells - MAX_WORD_LENGTH - MIN_WORD_LENGTH;
+  const cap = targetCells - MIN_WORD_LENGTH;
+
+  const wordPool: string[] = [];
+  let total = 0;
+
+  while (total < threshold) {
+    const word = pickRandomFittingWord(rng, total, cap);
+    wordPool.push(word);
+    total += word.length;
+  }
+
+  if (total === targetCells) return wordPool;
+
+  const remainder = targetCells - total;
+  if (remainder <= MAX_WORD_LENGTH) {
+    wordPool.push(pickWordOfLength(rng, remainder));
+  } else {
+    wordPool.push(
+      pickWordOfLength(rng, MIN_WORD_LENGTH),
+      pickWordOfLength(rng, remainder - MIN_WORD_LENGTH),
+    );
+  }
+
+  return wordPool;
+}
 
 /**
  * Result of grid generation: the filled grid and the word pool that created it.
@@ -18,62 +79,19 @@ export interface GridGenerationResult {
  * Returns both the grid and the word pool - only these words can be found during gameplay.
  * 
  * Strategy:
- * 1. Pick random words until total letters = GRID_COLS × GRID_ROWS - MAX_EMPTY_CELLS
+ * 1. Pick random words until near-full, then close with exact-length word(s)
  * 2. Decompose words into letters and shuffle them across the grid
  * 3. Return the word pool so gameplay can only ask for these exact words
- * 
+ *
  * This ensures:
- * - No leftover letters (all letters are from the word pool)
- * - No "no more words" situation (we know exactly which words exist)
- * - Perfect consumability (all letters will be used when words are found)
+ * - No leftover letters (board multiset equals word pool multiset)
+ * - No orphan padding letters outside the word pool
+ * - Perfect consumability when every pool word is submitted
  */
 export function fillGrid(rng: RngFn): GridGenerationResult {
   const targetCells = GRID_COLS * GRID_ROWS - MAX_EMPTY_CELLS;
-  
-  // Filter word list to preferred lengths (3-6 for better variety)
-  const suitableWords = WORD_LIST.filter(w => 
-    w.length >= MIN_WORD_LENGTH && w.length <= 6
-  );
-  
-  // Pick words until we reach exactly targetCells letters
-  const wordPool: string[] = [];
-  const letters: string[] = [];
-  let attempts = 0;
-  const maxAttempts = 1000;
-  
-  while (letters.length < targetCells && attempts < maxAttempts) {
-    attempts++;
-    const wordIdx = Math.floor(rng() * suitableWords.length);
-    const word = suitableWords[wordIdx];
-    
-    // Would this word fit?
-    if (letters.length + word.length <= targetCells) {
-      wordPool.push(word);
-      for (const letter of word) {
-        letters.push(letter);
-      }
-    } else if (letters.length < targetCells) {
-      // We're close to target - try to find a word that fits exactly
-      const remaining = targetCells - letters.length;
-      const exactFit = suitableWords.find(w => w.length === remaining);
-      if (exactFit) {
-        wordPool.push(exactFit);
-        for (const letter of exactFit) {
-          letters.push(letter);
-        }
-        break;
-      }
-    }
-  }
-  
-  // If we couldn't fill exactly, pad or trim
-  while (letters.length < targetCells) {
-    // Pick a single-letter word or just add a common letter
-    letters.push(['a', 'e', 'i', 'o'][Math.floor(rng() * 4)]);
-  }
-  if (letters.length > targetCells) {
-    letters.length = targetCells;
-  }
+  const wordPool = buildWordPool(rng, targetCells);
+  const letters = wordPool.join('').split('');
   
   // Shuffle letters for random distribution
   for (let i = letters.length - 1; i > 0; i--) {
@@ -103,6 +121,11 @@ export function fillGrid(rng: RngFn): GridGenerationResult {
   }
   
   return { columns, wordPool };
+}
+
+/** True when every column on the board is empty. */
+export function isBoardEmpty(columns: LandedCell[][]): boolean {
+  return columns.every(col => col.length === 0);
 }
 
 // ─── Word picking ─────────────────────────────────────────────────────────────

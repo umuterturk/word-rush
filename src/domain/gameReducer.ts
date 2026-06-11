@@ -1,7 +1,7 @@
 import type { GameAction, GameState, PlayerState, LandedCell } from './types';
 import { MAX_BUFFER_SIZE, MATCH_DURATION_MS, WORD_SCORE, SKIP_PENALTY, SECONDS_PER_LETTER } from './constants';
 import { createSeededRng } from './seededRng';
-import { fillGrid, pickTargetWord, calculateWordDuration } from './gridUtils';
+import { fillGrid, pickTargetWord, calculateWordDuration, isBoardEmpty } from './gridUtils';
 
 export function createInitialPlayerState(): PlayerState {
   return {
@@ -19,6 +19,7 @@ export function createInitialPlayerState(): PlayerState {
 
 export const INITIAL_GAME_STATE: GameState = {
   matchStatus: 'idle',
+  matchMode: 'solo',
   matchStartedAt: 0,
   matchDuration: MATCH_DURATION_MS,
   seed: '',
@@ -37,6 +38,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       const targetWord = pickTargetWord(rng, columns, wordPool, 0) ?? '';
       return {
         matchStatus: 'playing',
+        matchMode: action.mode,
         matchStartedAt: action.at,
         matchDuration: MATCH_DURATION_MS,
         seed: action.seed,
@@ -144,7 +146,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         0,
         false,
       );
-      const elapsed = Date.now() - player.wordStartedAt;
+      const elapsed = action.at - player.wordStartedAt;
       const remaining = Math.max(0, scoreDuration - elapsed);
       const speedBonus = Math.floor(remaining / 1000); // Bonus = remaining seconds
       
@@ -159,9 +161,12 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       const rng = createSeededRng(state.seed + '-' + (player.score + points));
       const nextWord = pickTargetWord(rng, newColumns, newWordPool, newWordsCompleted);
 
-      // Continue game even if no more words available (let timer run out naturally)
+      const boardCleared = isBoardEmpty(newColumns);
+
       return {
         ...state,
+        matchStatus:
+          boardCleared && state.matchMode === 'solo' ? 'ended' : state.matchStatus,
         players: {
           ...state.players,
           [action.playerId]: {
@@ -169,10 +174,10 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
             score: player.score + points,
             columns: newColumns,
             selectedIds: [],
-            targetWord: nextWord ?? '', // Empty if no more words
+            targetWord: nextWord ?? '',
             wordsCompleted: newWordsCompleted,
             wordPool: newWordPool,
-            wordStartedAt: state.matchStartedAt + (Date.now() - state.matchStartedAt), // Current time
+            wordStartedAt: action.at,
             pityTimeouts: Math.max(0, player.pityTimeouts - 1),
           },
         },
@@ -199,7 +204,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
             selectedIds: [],
             targetWord: nextWord ?? '',
             wordsCompleted: newWordsCompleted,
-            wordStartedAt: state.matchStartedAt + (Date.now() - state.matchStartedAt),
+            wordStartedAt: action.at,
             pityTimeouts: player.pityTimeouts,
           },
         },

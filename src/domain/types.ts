@@ -1,4 +1,5 @@
 export type MatchStatus = 'idle' | 'playing' | 'ended';
+export type MatchMode = 'solo' | 'multiplayer';
 
 /** A letter cell that lives in the grid. */
 export interface LandedCell {
@@ -30,6 +31,7 @@ export interface PlayerState {
 
 export interface GameState {
   matchStatus: MatchStatus;
+  matchMode: MatchMode;
   matchStartedAt: number;
   matchDuration: number;
   seed: string;
@@ -37,13 +39,13 @@ export interface GameState {
 }
 
 export type GameAction =
-  | { type: 'START_MATCH'; seed: string; at: number }
+  | { type: 'START_MATCH'; seed: string; at: number; mode: MatchMode }
   | { type: 'END_MATCH'; at: number }
   | { type: 'RESET' }
   | { type: 'SELECT_LETTER'; playerId: string; letterId: string }
   | { type: 'CLEAR_SELECTION'; playerId: string }
-  | { type: 'SUBMIT_WORD'; playerId: string }
-  | { type: 'SKIP_WORD'; playerId: string }
+  | { type: 'SUBMIT_WORD'; playerId: string; at: number }
+  | { type: 'SKIP_WORD'; playerId: string; at: number }
   | { type: 'WORD_TIMEOUT'; playerId: string; at: number }
   | { type: 'SHUFFLE_BOARD'; playerId: string }
   | { type: 'MARK_SHUFFLE_USED'; playerId: string };

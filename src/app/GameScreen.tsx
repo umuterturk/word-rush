@@ -86,7 +86,7 @@ export function GameScreen({
       )
     : 0;
   const currentTime = gameState.matchStatus === 'playing' ? gameState.matchStartedAt + logicalTime : clock.now();
-  const wordElapsed = wordStartedAt > 0 ? (currentTime - wordStartedAt) : 0;
+  const wordElapsed = wordStartedAt > 0 ? Math.max(0, currentTime - wordStartedAt) : 0;
   const wordTimeLeft = Math.max(0, wordDuration - wordElapsed);
   const wordTimerKey = `${targetWord}-${wordStartedAt}`;
 
@@ -115,13 +115,13 @@ export function GameScreen({
     ) {
       prevFormedRef.current = formedWord;
       setSubmitFeedback('valid');
-      onDispatch({ type: 'SUBMIT_WORD', playerId: 'local' });
+      onDispatch({ type: 'SUBMIT_WORD', playerId: 'local', at: clock.now() });
       setTimeout(() => {
         setSubmitFeedback(null);
         prevFormedRef.current = '';
       }, 500);
     }
-  }, [formedWord, targetWord, onDispatch]);
+  }, [formedWord, targetWord, onDispatch, clock]);
 
   const prevScoreRef = useRef(localScore);
   useEffect(() => {
@@ -158,7 +158,7 @@ export function GameScreen({
   }
 
   function handleSkip() {
-    onDispatch({ type: 'SKIP_WORD', playerId: 'local' });
+    onDispatch({ type: 'SKIP_WORD', playerId: 'local', at: clock.now() });
   }
 
   function handleShuffle() {
