@@ -91,7 +91,7 @@ export interface GridGenerationResult {
 export function fillGrid(rng: RngFn): GridGenerationResult {
   const targetCells = GRID_COLS * GRID_ROWS - MAX_EMPTY_CELLS;
   const wordPool = buildWordPool(rng, targetCells);
-  const letters = wordPool.join('').split('');
+  const letters = Array.from(wordPool.join(''));
   
   // Shuffle letters for random distribution
   for (let i = letters.length - 1; i > 0; i--) {

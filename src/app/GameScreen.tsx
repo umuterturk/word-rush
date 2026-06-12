@@ -4,6 +4,7 @@ import { WORD_SCORE, GRID_COLS, GRID_ROWS, SKIP_PENALTY, SECONDS_PER_LETTER } fr
 import type { ClockPort } from '../ports';
 import { useI18n } from '../i18n';
 import { calculateWordDuration } from '../domain/gridUtils';
+import { turkishUpper } from '../domain/turkishText';
 
 interface Props {
   gameState: GameState;
@@ -32,19 +33,30 @@ const TURKISH_VOWELS = new Set(['a', 'e', 'ı', 'i', 'o', 'ö', 'u', 'ü']);
 const VOWEL_COLORS = ['#ffd54f', '#ffb74d', '#fff176'];
 const CONSONANT_COLORS = ['#4fc3f7', '#4dd0e1', '#81c784', '#ce93d8', '#80cbc4'];
 
-function turkishUpper(ch: string): string {
-  if (ch === 'i') return 'İ';
-  if (ch === 'ı') return 'I';
-  return ch.toUpperCase();
-}
-
 function tileColor(letter: string): string {
-  const code = letter.charCodeAt(0);
-  if (TURKISH_VOWELS.has(letter)) {
+  const ch = Array.from(letter)[0] ?? '';
+  const code = ch.charCodeAt(0);
+  if (TURKISH_VOWELS.has(ch)) {
     return VOWEL_COLORS[code % VOWEL_COLORS.length];
   }
   return CONSONANT_COLORS[code % CONSONANT_COLORS.length];
 }
+
+/** Isolated letter node — immune to WebView auto-translate rewriting İ → "ben". */
+function LetterGlyph({ letter }: { letter: string }) {
+  return (
+    <span className="letter-glyph notranslate" translate="no">
+      {turkishUpper(letter)}
+    </span>
+  );
+}
+
+const TILE_BUTTON_ATTRS = {
+  spellCheck: false,
+  autoComplete: 'off',
+  autoCorrect: 'off',
+  autoCapitalize: 'off',
+} as const;
 
 const COL_PCT = 100 / GRID_COLS;
 const ROW_PCT = 100 / GRID_ROWS;
@@ -235,12 +247,14 @@ export function GameScreen({
       )}
 
       {/* Target word banner */}
-      <div className="target-word-banner">
+      <div className="target-word-banner notranslate" lang="tr" translate="no">
         {targetWord ? (
           <>
             <span className="target-word-label">{t.find}</span>
             <span className="target-word-text">
-              {Array.from(targetWord).map(turkishUpper).join('')}
+              {Array.from(targetWord).map((ch, i) => (
+                <span key={i} className="letter-glyph" translate="no">{turkishUpper(ch)}</span>
+              ))}
             </span>
             {wordMatchesTarget && formedWord.length > 0 && (
               <span className="target-word-score">+{wordScore}</span>
@@ -273,7 +287,9 @@ export function GameScreen({
         
         {/* Grid arena */}
         <div
-          className={`arena grid-arena${isShuffling ? ' grid-arena--shuffling' : ''}`}
+          className={`arena grid-arena notranslate${isShuffling ? ' grid-arena--shuffling' : ''}`}
+          lang="tr"
+          translate="no"
           style={{ '--grid-cols': GRID_COLS, '--grid-rows': GRID_ROWS } as React.CSSProperties}
         >
         {/* Empty cell backgrounds */}
@@ -310,8 +326,9 @@ export function GameScreen({
                   background: tileColor(cell.letter),
                 }}
                 onPointerDown={e => handleTapTile(cell.id, e)}
+                {...TILE_BUTTON_ATTRS}
               >
-                {turkishUpper(cell.letter)}
+                <LetterGlyph letter={cell.letter} />
                 {isSelected && selOrder >= 0 && (
                   <span className="grid-tile__order">{selOrder + 1}</span>
                 )}
@@ -324,7 +341,9 @@ export function GameScreen({
 
       {/* Word panel */}
       <div
-        className={`word-panel${submitFeedback === 'valid' ? ' word-panel--valid' : ''}${submitFeedback === 'invalid' ? ' word-panel--invalid' : ''}`}
+        className={`word-panel notranslate${submitFeedback === 'valid' ? ' word-panel--valid' : ''}${submitFeedback === 'invalid' ? ' word-panel--invalid' : ''}`}
+        lang="tr"
+        translate="no"
       >
         <div className={`formed-word-row${wordMatchesTarget ? ' formed-word-row--match' : ''}`}>
           {selectedIds.length === 0 ? (
@@ -337,8 +356,9 @@ export function GameScreen({
                   key={id}
                   className="formed-letter"
                   onPointerDown={e => { e.preventDefault(); handleTapTile(id, e); }}
+                  {...TILE_BUTTON_ATTRS}
                 >
-                  {turkishUpper(letter)}
+                  <LetterGlyph letter={letter} />
                   {i === selectedIds.length - 1 && wordMatchesTarget && (
                     <span className="formed-letter__score">+{wordScore}</span>
                   )}
