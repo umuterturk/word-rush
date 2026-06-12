@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { GameAction, GameState } from '../domain/types';
-import { WORD_SCORE, GRID_COLS, GRID_ROWS, SKIP_PENALTY, SECONDS_PER_LETTER } from '../domain/constants';
+import { WORD_SCORE, GRID_COLS, GRID_ROWS, SKIP_PENALTY, SECONDS_PER_LETTER, LETTER_HINT_DELAY_MS } from '../domain/constants';
 import type { ClockPort } from '../ports';
 import { useI18n } from '../i18n';
-import { calculateWordDuration, getCellById, isCorrectNextLetter } from '../domain/gridUtils';
+import { calculateWordDuration, findHintCellId, getCellById, isCorrectNextLetter } from '../domain/gridUtils';
 import { turkishUpper } from '../domain/turkishText';
 
 interface Props {
@@ -118,6 +118,7 @@ export function GameScreen({
 
   const [submitFeedback, setSubmitFeedback] = useState<'valid' | 'invalid' | null>(null);
   const [errorTileId, setErrorTileId] = useState<string | null>(null);
+  const [hintCellId, setHintCellId] = useState<string | null>(null);
   const [isShuffling, setIsShuffling] = useState(false);
   const [showResignConfirm, setShowResignConfirm] = useState(false);
 
@@ -157,6 +158,20 @@ export function GameScreen({
       return () => clearTimeout(id);
     }
   }, [shuffleSignal]);
+
+  const hintTimerKey = `${targetWord}-${wordStartedAt}-${selectedIds.length}`;
+
+  useEffect(() => {
+    setHintCellId(null);
+    if (!targetWord || !player || selectedIds.length >= targetWord.length) return;
+
+    const timeoutId = window.setTimeout(() => {
+      const id = findHintCellId(player.columns, targetWord, selectedIds);
+      setHintCellId(id);
+    }, LETTER_HINT_DELAY_MS);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [hintTimerKey, targetWord, player, selectedIds]);
 
   const isLeading = isMultiplayer && localScore > opponentScore;
   const isBehind = isMultiplayer && localScore < opponentScore;
@@ -374,7 +389,7 @@ export function GameScreen({
             return (
               <button
                 key={cell.id}
-                className={`grid-tile grid-tile--landed${isSelected ? ' grid-tile--selected' : ''}${errorTileId === cell.id ? ' grid-tile--error' : ''}`}
+                className={`grid-tile grid-tile--landed${isSelected ? ' grid-tile--selected' : ''}${errorTileId === cell.id ? ' grid-tile--error' : ''}${hintCellId === cell.id ? ' grid-tile--hint' : ''}`}
                 style={{
                   left: `${colIdx * COL_PCT}%`,
                   top: `${rowFromTop * ROW_PCT}%`,

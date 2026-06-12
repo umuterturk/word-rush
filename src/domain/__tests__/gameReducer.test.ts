@@ -237,6 +237,16 @@ describe('SUBMIT_WORD', () => {
 });
 
 describe('pity timer', () => {
+  it('resets wordStartedAt on manual skip', () => {
+    const state = startedState();
+    const skipped = gameReducer(state, {
+      type: 'SKIP_WORD',
+      playerId: 'local',
+      at: 9000,
+    });
+    expect(skipped.players['local'].wordStartedAt).toBe(9000);
+  });
+
   it('increments pity on auto-skip and keeps it on manual skip', () => {
     const state = startedState();
     const afterTimeout = gameReducer(state, {

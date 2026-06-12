@@ -1191,6 +1191,29 @@ button {
   80% { transform: translateX(3px); }
 }
 
+.grid-tile--hint {
+  animation: hint-pulse 1.1s ease-in-out infinite;
+  outline: 2.5px solid #fff176;
+  outline-offset: 1px;
+  box-shadow:
+    0 0 0 3px rgba(255, 241, 118, 0.45),
+    0 0 20px rgba(255, 241, 118, 0.55);
+  z-index: 3;
+}
+
+@keyframes hint-pulse {
+  0%, 100% {
+    box-shadow:
+      0 0 0 3px rgba(255, 241, 118, 0.35),
+      0 0 16px rgba(255, 241, 118, 0.45);
+  }
+  50% {
+    box-shadow:
+      0 0 0 4px rgba(255, 241, 118, 0.55),
+      0 0 28px rgba(255, 241, 118, 0.85);
+  }
+}
+
 /* Order badge shown inside selected tile */
 .grid-tile__order {
   position: absolute;

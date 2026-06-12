@@ -1,6 +1,6 @@
 import type { RngFn } from './seededRng';
 import type { LandedCell } from './types';
-import { GRID_COLS, GRID_ROWS, MIN_WORD_LENGTH, MAX_WORD_LENGTH, MAX_EMPTY_CELLS, PITY_TIME_BONUS_PER_TIMEOUT, MAX_PITY_TIMEOUTS, WARMUP_BONUS_MS } from './constants';
+import { GRID_COLS, GRID_ROWS, MIN_WORD_LENGTH, MAX_WORD_LENGTH, MAX_EMPTY_CELLS, PITY_TIME_BONUS_PER_TIMEOUT, MAX_PITY_TIMEOUTS, WARMUP_BONUS_MS, TARGET_WORD_LENGTH_RAMP } from './constants';
 import { WORD_LIST } from './wordSet';
 
 // ─── Strategic Grid Fill ──────────────────────────────────────────────────────
@@ -148,6 +148,26 @@ export function isCorrectNextLetter(
   return letter === expected;
 }
 
+/** First unselected cell on the board matching the next letter in `targetWord`. */
+export function findHintCellId(
+  columns: LandedCell[][],
+  targetWord: string,
+  selectedIds: string[],
+): string | null {
+  const expected = Array.from(targetWord)[selectedIds.length];
+  if (!expected) return null;
+
+  const selectedSet = new Set(selectedIds);
+  for (const col of columns) {
+    for (const cell of col) {
+      if (!selectedSet.has(cell.id) && cell.letter === expected) {
+        return cell.id;
+      }
+    }
+  }
+  return null;
+}
+
 // ─── Word picking ─────────────────────────────────────────────────────────────
 
 /**
@@ -179,16 +199,28 @@ function canSpell(word: string, freq: Map<string, number>): boolean {
 }
 
 /**
+ * Weight for picking a spellable target word. Shorter lengths are strongly favored
+ * early in the match; bias fades linearly over TARGET_WORD_LENGTH_RAMP words.
+ */
+export function targetWordSelectionWeight(wordLength: number, wordsCompleted: number): number {
+  const progress = Math.min(1, wordsCompleted / TARGET_WORD_LENGTH_RAMP);
+  const shortStrength = 1 - progress;
+  const shorterRank = MAX_WORD_LENGTH - wordLength + 1;
+  const lengthFactor = Math.pow(2, shorterRank - 1);
+  return 1 + shortStrength * lengthFactor;
+}
+
+/**
  * Picks a random valid word from the word pool that can be spelled from the
  * letters currently in the grid. Returns `null` if no such word exists.
  *
  * @param rng Random number generator
  * @param columns Current grid state
  * @param wordPool Pool of words that were used to create this grid
- * @param wordsCompleted Number of words completed (for difficulty scaling)
+ * @param wordsCompleted Number of words completed (ramps from short → long targets)
  *
  * Strategy: Only select from the pre-determined word pool (words used to create grid).
- * Early game (first 5 words) favors shorter words from the pool.
+ * Early game strongly favors shorter spellable words; bias fades over the match.
  */
 export function pickTargetWord(
   rng: RngFn,
@@ -197,38 +229,28 @@ export function pickTargetWord(
   wordsCompleted = 0,
 ): string | null {
   if (wordPool.length === 0) return null;
-  
-  const freq = buildLetterFreqMap(columns);
 
-  // Calculate bias: first 5 words strongly favor length 3, then gradually flatten
-  const shortBias = Math.max(0, 5 - wordsCompleted);
-  
-  // Filter word pool to only words that can be spelled
+  const freq = buildLetterFreqMap(columns);
   const spellableWords = wordPool.filter(word => canSpell(word, freq));
-  
+
   if (spellableWords.length === 0) return null;
-  
-  // Weight by length preference
-  const weighted: Array<{ word: string; weight: number }> = spellableWords.map(word => {
-    let weight = 1;
-    if (word.length === 3) {
-      weight += shortBias * 3;
-    }
-    return { word, weight };
-  });
-  
-  // Weighted random selection
+
+  const weighted = spellableWords.map(word => ({
+    word,
+    weight: targetWordSelectionWeight(word.length, wordsCompleted),
+  }));
+
   const totalWeight = weighted.reduce((sum, w) => sum + w.weight, 0);
   const r = rng() * totalWeight;
   let cumulative = 0;
-  
+
   for (const { word, weight } of weighted) {
     cumulative += weight;
     if (r < cumulative) {
       return word;
     }
   }
-  
+
   return weighted[weighted.length - 1].word;
 }
 

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { createSeededRng } from '../seededRng';
-import { fillGrid, pickTargetWord, buildLetterFreqMap, calculateWordDuration, calculateWordLetterScarcity, letterFrequencyMultiplier, pityTimeMultiplier } from '../gridUtils';
-import { GRID_COLS, GRID_ROWS, SECONDS_PER_LETTER, WARMUP_BONUS_MS } from '../constants';
+import { fillGrid, pickTargetWord, buildLetterFreqMap, calculateWordDuration, calculateWordLetterScarcity, letterFrequencyMultiplier, pityTimeMultiplier, findHintCellId, targetWordSelectionWeight } from '../gridUtils';
+import { GRID_COLS, GRID_ROWS, SECONDS_PER_LETTER, WARMUP_BONUS_MS, TARGET_WORD_LENGTH_RAMP } from '../constants';
 
 describe('fillGrid', () => {
   it('creates exactly GRID_COLS columns', () => {
@@ -136,6 +136,34 @@ describe('pickTargetWord', () => {
       }
     }
   });
+
+  it('strongly favors shorter spellable words early in the match', () => {
+    const columns = [[
+      { id: 'a', letter: 'a' },
+      { id: 'b', letter: 'b' },
+      { id: 'c', letter: 'c' },
+      { id: 'd', letter: 'd' },
+      { id: 'e', letter: 'e' },
+    ]];
+    const wordPool = ['abc', 'abcd', 'abcde'];
+    const counts = { abc: 0, abcd: 0, abcde: 0 };
+
+    for (let i = 0; i < 500; i++) {
+      const word = pickTargetWord(createSeededRng(`short-bias-${i}`), columns, wordPool, 0);
+      if (word) counts[word as keyof typeof counts]++;
+    }
+
+    expect(counts.abc).toBeGreaterThan(counts.abcd);
+    expect(counts.abcd).toBeGreaterThan(counts.abcde);
+    expect(counts.abc).toBeGreaterThan(200);
+  });
+
+  it('evens out target length weights after the ramp', () => {
+    expect(targetWordSelectionWeight(3, 0)).toBeGreaterThan(targetWordSelectionWeight(8, 0));
+    expect(targetWordSelectionWeight(3, TARGET_WORD_LENGTH_RAMP)).toBe(
+      targetWordSelectionWeight(8, TARGET_WORD_LENGTH_RAMP),
+    );
+  });
 });
 
 describe('calculateWordDuration', () => {
@@ -227,5 +255,22 @@ describe('calculateWordDuration', () => {
     expect(calculateWordDuration('abcde', columns, SECONDS_PER_LETTER, 0, true, 2)).toBe(base + WARMUP_BONUS_MS[2]);
     expect(calculateWordDuration('abcde', columns, SECONDS_PER_LETTER, 0, true, 3)).toBe(base);
     expect(calculateWordDuration('abcde', columns, SECONDS_PER_LETTER, 0, false, 0)).toBe(base);
+  });
+});
+
+describe('findHintCellId', () => {
+  it('returns an unselected cell matching the next target letter', () => {
+    const columns = [
+      [{ id: 'a1', letter: 'b' }, { id: 'a2', letter: 'a' }],
+      [{ id: 'b1', letter: 'l' }],
+    ];
+    const hintId = findHintCellId(columns, 'bal', []);
+    expect(hintId).toBe('a1');
+  });
+
+  it('skips already selected cells', () => {
+    const columns = [[{ id: 'a1', letter: 'b' }], [{ id: 'b1', letter: 'a' }]];
+    const hintId = findHintCellId(columns, 'ba', ['a1']);
+    expect(hintId).toBe('b1');
   });
 });

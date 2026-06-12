@@ -24,6 +24,9 @@ export const SECONDS_PER_LETTER = 1.2;
 /** Auto-skip word when timer expires. */
 export const AUTO_SKIP_ON_TIMEOUT = true;
 
+/** Delay before highlighting the next correct letter on the board. */
+export const LETTER_HINT_DELAY_MS = 5_000;
+
 /** Extra time per consecutive auto-skip (+15% each, decays by 1 on success). */
 export const PITY_TIME_BONUS_PER_TIMEOUT = 0.2;
 
@@ -32,6 +35,12 @@ export const MAX_PITY_TIMEOUTS = 4;
 
 /** Flat extra seconds for the first words of a match (timer only). */
 export const WARMUP_BONUS_MS = [3_500, 2_500, 1_500] as const;
+
+/**
+ * Words completed before target-word length bias fully fades (gameplay only).
+ * Shorter words stay much more likely early; weights equalize after this many finds/skips.
+ */
+export const TARGET_WORD_LENGTH_RAMP = 12;
 
 /** Maximum number of empty cells allowed during gameplay. */
 export const MAX_EMPTY_CELLS = 0;
