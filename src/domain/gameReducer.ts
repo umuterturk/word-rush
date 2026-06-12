@@ -1,7 +1,7 @@
 import type { GameAction, GameState, PlayerState, LandedCell } from './types';
 import { MAX_BUFFER_SIZE, MATCH_DURATION_MS, WORD_SCORE, SKIP_PENALTY, SECONDS_PER_LETTER } from './constants';
 import { createSeededRng } from './seededRng';
-import { fillGrid, pickTargetWord, calculateWordDuration, isBoardEmpty } from './gridUtils';
+import { fillGrid, pickTargetWord, calculateWordDuration, isBoardEmpty, getCellById, isCorrectNextLetter } from './gridUtils';
 
 export function createInitialPlayerState(): PlayerState {
   return {
@@ -84,6 +84,10 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         newSelectedIds = selectedIds.slice(0, selectedIds.indexOf(letterId));
       } else {
         if (selectedIds.length >= MAX_BUFFER_SIZE) return state;
+        const letter = getCellById(columns, letterId)?.letter;
+        if (!letter || !isCorrectNextLetter(player.targetWord, selectedIds.length, letter)) {
+          return state;
+        }
         newSelectedIds = [...selectedIds, letterId];
       }
 

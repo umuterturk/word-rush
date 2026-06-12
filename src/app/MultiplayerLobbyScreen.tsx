@@ -5,7 +5,6 @@ type LobbyMode = 'quick' | 'create' | 'join';
 
 interface Props {
   mode: LobbyMode;
-  inviteCode: string | null;
   opponentName: string;
   error: string | null;
   isSearching?: boolean;
@@ -14,14 +13,8 @@ interface Props {
   onJoin: (code: string) => void;
 }
 
-function getInviteUrl(code: string): string {
-  const base = window.location.origin + import.meta.env.BASE_URL;
-  return `${base}?join=${code}`;
-}
-
 export function MultiplayerLobbyScreen({
   mode,
-  inviteCode,
   opponentName,
   error,
   isSearching = false,
@@ -30,26 +23,10 @@ export function MultiplayerLobbyScreen({
   onJoin,
 }: Props) {
   const [joinCode, setJoinCode] = useState('');
-  const [copied, setCopied] = useState(false);
   const { t } = useI18n();
 
-  const isWaiting = mode === 'quick' || mode === 'create';
+  const isWaiting = mode === 'quick';
   const opponentFound = Boolean(opponentName);
-
-  async function shareInvite(code: string): Promise<void> {
-    const url = getInviteUrl(code);
-    const shareData = {
-      title: t.shareTitle,
-      text: t.shareText,
-      url,
-    };
-
-    if (navigator.share && navigator.canShare?.(shareData)) {
-      await navigator.share(shareData);
-    } else {
-      await navigator.clipboard.writeText(url);
-    }
-  }
 
   return (
     <div className="screen lobby-screen">
@@ -68,30 +45,6 @@ export function MultiplayerLobbyScreen({
             <div className="lobby-spinner" aria-hidden="true" />
             <h2 className="lobby-title">{t.findingOpponent}</h2>
             <p className="lobby-subtitle">{t.searchingForRival}</p>
-          </>
-        )}
-
-        {!isRematch && mode === 'create' && (
-          <>
-            <h2 className="lobby-title">{t.yourRoom}</h2>
-            {inviteCode ? (
-              <>
-                <div className="room-code">{inviteCode}</div>
-                <button
-                  className="share-btn"
-                  onClick={() => {
-                    void shareInvite(inviteCode).then(() => {
-                      setCopied(true);
-                      setTimeout(() => setCopied(false), 2000);
-                    });
-                  }}
-                >
-                  {copied ? t.linkCopied : t.shareInviteLink}
-                </button>
-              </>
-            ) : (
-              <div className="lobby-spinner" aria-hidden="true" />
-            )}
           </>
         )}
 
@@ -126,14 +79,10 @@ export function MultiplayerLobbyScreen({
           </>
         )}
 
-        {!isRematch && isWaiting && opponentFound && (
+        {isWaiting && opponentFound && (
           <div className="opponent-found">
             <span className="opponent-found-name">{t.opponentFound}</span>
           </div>
-        )}
-
-        {isWaiting && !opponentFound && mode !== 'quick' && inviteCode && (
-          <p className="lobby-waiting">{t.waitingToJoin}</p>
         )}
 
         {error && <p className="lobby-error">{error}</p>}

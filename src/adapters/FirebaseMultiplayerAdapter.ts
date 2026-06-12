@@ -213,14 +213,15 @@ export class FirebaseMultiplayerAdapter implements MultiplayerPort {
     this.startListening();
   }
 
-  async createRoom(): Promise<void> {
+  async createRoom(): Promise<string> {
     const uid = await this.getUid();
     const db = getFirebaseDb();
     const newRef = doc(collection(db, MATCHES_COLLECTION));
+    const inviteCode = generateInviteCode();
 
     await setDoc(newRef, {
       mode: 'private',
-      inviteCode: generateInviteCode(),
+      inviteCode,
       status: 'waiting',
       seed: String(Date.now()),
       matchDuration: MATCH_DURATION_MS,
@@ -238,6 +239,7 @@ export class FirebaseMultiplayerAdapter implements MultiplayerPort {
 
     this.matchId = newRef.id;
     this.startListening();
+    return inviteCode;
   }
 
   async joinRoom(code: string): Promise<void> {

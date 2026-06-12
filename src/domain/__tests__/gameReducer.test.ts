@@ -56,6 +56,16 @@ describe('RESET', () => {
 
 // ─── SELECT_LETTER ────────────────────────────────────────────────────────────
 
+function findCellForLetter(state: GameState, letter: string): string | null {
+  const player = state.players['local'];
+  for (const col of player.columns) {
+    for (const cell of col) {
+      if (cell.letter === letter) return cell.id;
+    }
+  }
+  return null;
+}
+
 describe('SELECT_LETTER', () => {
   it('ignores unknown cell IDs', () => {
     const state = startedState();
@@ -63,16 +73,36 @@ describe('SELECT_LETTER', () => {
     expect(next).toBe(state);
   });
 
-  it('selects a cell that exists in the grid', () => {
+  it('selects a cell when it matches the next target letter', () => {
     const state = startedState();
-    const cellId = state.players['local'].columns[0][0].id;
-    const next = gameReducer(state, { type: 'SELECT_LETTER', playerId: 'local', letterId: cellId });
+    const firstLetter = Array.from(state.players['local'].targetWord)[0];
+    const cellId = findCellForLetter(state, firstLetter);
+    expect(cellId).toBeTruthy();
+    const next = gameReducer(state, { type: 'SELECT_LETTER', playerId: 'local', letterId: cellId! });
     expect(next.players['local'].selectedIds).toContain(cellId);
+  });
+
+  it('rejects a cell when it does not match the next target letter', () => {
+    const state = startedState();
+    const targetWord = state.players['local'].targetWord;
+    const firstLetter = Array.from(targetWord)[0];
+    const wrongCell = state.players['local'].columns
+      .flat()
+      .find(cell => cell.letter !== firstLetter);
+    expect(wrongCell).toBeTruthy();
+    const next = gameReducer(state, {
+      type: 'SELECT_LETTER',
+      playerId: 'local',
+      letterId: wrongCell!.id,
+    });
+    expect(next).toBe(state);
+    expect(next.players['local'].selectedIds).toEqual([]);
   });
 
   it('deselects an already-selected cell (toggle)', () => {
     const state = startedState();
-    const cellId = state.players['local'].columns[0][0].id;
+    const firstLetter = Array.from(state.players['local'].targetWord)[0];
+    const cellId = findCellForLetter(state, firstLetter)!;
     const selected = gameReducer(state, { type: 'SELECT_LETTER', playerId: 'local', letterId: cellId });
     const deselected = gameReducer(selected, { type: 'SELECT_LETTER', playerId: 'local', letterId: cellId });
     expect(deselected.players['local'].selectedIds).not.toContain(cellId);
@@ -84,7 +114,8 @@ describe('SELECT_LETTER', () => {
 describe('CLEAR_SELECTION', () => {
   it('empties selectedIds', () => {
     const state = startedState();
-    const cellId = state.players['local'].columns[0][0].id;
+    const firstLetter = Array.from(state.players['local'].targetWord)[0];
+    const cellId = findCellForLetter(state, firstLetter)!;
     const withSelection = gameReducer(state, { type: 'SELECT_LETTER', playerId: 'local', letterId: cellId });
     const cleared = gameReducer(withSelection, { type: 'CLEAR_SELECTION', playerId: 'local' });
     expect(cleared.players['local'].selectedIds).toEqual([]);

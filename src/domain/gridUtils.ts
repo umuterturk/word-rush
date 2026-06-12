@@ -128,6 +128,26 @@ export function isBoardEmpty(columns: LandedCell[][]): boolean {
   return columns.every(col => col.length === 0);
 }
 
+export function getCellById(columns: LandedCell[][], letterId: string): LandedCell | null {
+  for (const col of columns) {
+    for (const cell of col) {
+      if (cell.id === letterId) return cell;
+    }
+  }
+  return null;
+}
+
+/** Whether `letter` is the next expected character in `targetWord`. */
+export function isCorrectNextLetter(
+  targetWord: string,
+  selectedCount: number,
+  letter: string,
+): boolean {
+  const expected = Array.from(targetWord)[selectedCount];
+  if (!expected) return false;
+  return letter === expected;
+}
+
 // ─── Word picking ─────────────────────────────────────────────────────────────
 
 /**

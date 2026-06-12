@@ -28,7 +28,7 @@ export interface StoragePort {
  */
 export interface MultiplayerPort {
   quickMatch(): Promise<void>;
-  createRoom(): Promise<void>;
+  createRoom(): Promise<string>;
   joinRoom(code: string): Promise<void>;
   cancel(): Promise<void>;
   subscribe(handler: (snapshot: MatchSnapshot | null) => void): () => void;

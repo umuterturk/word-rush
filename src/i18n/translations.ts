@@ -22,11 +22,15 @@ export interface Translations {
   winning: string;
   vs: string;
   find: string;
-  clear: string;
   skip: string;
   tapToSpell: string;
   paused: string;
   pauseHint: string;
+  resign: string;
+  resignConfirmTitle: string;
+  resignConfirmMessage: string;
+  resignConfirmYes: string;
+  resignConfirmNo: string;
 
   // End screen
   timesUp: string;
@@ -42,6 +46,8 @@ export interface Translations {
   menu: string;
 
   // Multiplayer lobby
+  creatingRoom: string;
+  sharingInvite: string;
   rematchBadge: string;
   waitingForOpponent: string;
   challengingAgain: string;
@@ -57,6 +63,7 @@ export interface Translations {
   connecting: string;
   opponentFound: string;
   waitingToJoin: string;
+  shareInviteHint: string;
   cancel: string;
 
   // Share
@@ -87,11 +94,15 @@ export const translations: Record<Language, Translations> = {
     winning: 'WINNING',
     vs: 'VS',
     find: 'FIND',
-    clear: 'CLEAR',
     skip: 'SKIP',
     tapToSpell: 'tap letters to spell the word',
     paused: 'PAUSED',
     pauseHint: 'SPACE to resume',
+    resign: 'RESIGN',
+    resignConfirmTitle: 'RESIGN?',
+    resignConfirmMessage: 'You will forfeit this game.',
+    resignConfirmYes: 'RESIGN',
+    resignConfirmNo: 'KEEP PLAYING',
 
     // End screen
     timesUp: 'TIME\'S UP',
@@ -107,6 +118,8 @@ export const translations: Record<Language, Translations> = {
     menu: 'MENU',
 
     // Multiplayer lobby
+    creatingRoom: 'CREATING ROOM...',
+    sharingInvite: 'OPENING SHARE...',
     rematchBadge: 'REMATCH',
     waitingForOpponent: 'WAITING FOR OPPONENT',
     challengingAgain: 'Challenging your rival again...',
@@ -122,6 +135,7 @@ export const translations: Record<Language, Translations> = {
     connecting: 'Connecting...',
     opponentFound: 'OPPONENT FOUND',
     waitingToJoin: 'Waiting for opponent to join...',
+    shareInviteHint: 'Paste the link in WhatsApp, iMessage, or any chat to invite your friend.',
     cancel: 'CANCEL',
 
     // Share
@@ -150,11 +164,15 @@ export const translations: Record<Language, Translations> = {
     winning: 'KAZANIYOR',
     vs: 'VS',
     find: 'BUL',
-    clear: 'TEMİZLE',
     skip: 'ATLA',
     tapToSpell: 'kelimeyi yazmak için harflere dokun',
     paused: 'DURAKLATILDI',
     pauseHint: 'Devam etmek için SPACE',
+    resign: 'PES ET',
+    resignConfirmTitle: 'PES ET?',
+    resignConfirmMessage: 'Bu oyunu bırakacaksın.',
+    resignConfirmYes: 'PES ET',
+    resignConfirmNo: 'DEVAM ET',
 
     // End screen
     timesUp: 'SÜRE BİTTİ',
@@ -170,6 +188,8 @@ export const translations: Record<Language, Translations> = {
     menu: 'MENÜ',
 
     // Multiplayer lobby
+    creatingRoom: 'ODA OLUŞTURULUYOR...',
+    sharingInvite: 'PAYLAŞIM AÇILIYOR...',
     rematchBadge: 'RÖVANŞ',
     waitingForOpponent: 'RAKİP BEKLENİYOR',
     challengingAgain: 'Rakibine yeniden meydan okuyorsun...',
@@ -185,6 +205,7 @@ export const translations: Record<Language, Translations> = {
     connecting: 'Bağlanıyor...',
     opponentFound: 'RAKİP BULUNDU',
     waitingToJoin: 'Rakip katılması bekleniyor...',
+    shareInviteHint: 'Linki WhatsApp, mesaj veya sohbet uygulamanıza yapıştırarak arkadaşınızı davet edin.',
     cancel: 'İPTAL',
 
     // Share

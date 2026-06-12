@@ -16,7 +16,7 @@ interface MultiplayerSession {
   /** Latest shuffle attack nonce aimed at us (0 = none). Increases on each attack. */
   incomingShuffleNonce: number;
   quickMatch: () => Promise<void>;
-  createRoom: () => Promise<void>;
+  createRoom: () => Promise<string | null>;
   joinRoom: (code: string) => Promise<void>;
   cancel: () => Promise<void>;
   publishScore: (score: number) => Promise<void>;
@@ -118,10 +118,21 @@ export function useMultiplayer(multiplayer: MultiplayerPort, available: boolean)
     [multiplayer, runAction],
   );
 
-  const createRoom = useCallback(
-    () => runAction(() => multiplayer.createRoom(), 'waiting'),
-    [multiplayer, runAction],
-  );
+  const createRoom = useCallback(async (): Promise<string | null> => {
+    setError(null);
+    setPhase('waiting');
+    try {
+      const code = await multiplayer.createRoom();
+      setInviteCode(code);
+      return code;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Something went wrong.');
+      setPhase('idle');
+      setMatchConfig(null);
+      setInviteCode(null);
+      return null;
+    }
+  }, [multiplayer]);
 
   const joinRoom = useCallback(
     (code: string) => runAction(() => multiplayer.joinRoom(code), 'searching'),

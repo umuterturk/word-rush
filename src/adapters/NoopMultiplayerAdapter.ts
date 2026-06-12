@@ -6,7 +6,7 @@ export class NoopMultiplayerAdapter implements MultiplayerPort {
     throw new Error('Multiplayer is not available.');
   }
 
-  async createRoom(): Promise<void> {
+  async createRoom(): Promise<string> {
     throw new Error('Multiplayer is not available.');
   }
 

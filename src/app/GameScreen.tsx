@@ -3,7 +3,7 @@ import type { GameAction, GameState } from '../domain/types';
 import { WORD_SCORE, GRID_COLS, GRID_ROWS, SKIP_PENALTY, SECONDS_PER_LETTER } from '../domain/constants';
 import type { ClockPort } from '../ports';
 import { useI18n } from '../i18n';
-import { calculateWordDuration } from '../domain/gridUtils';
+import { calculateWordDuration, getCellById, isCorrectNextLetter } from '../domain/gridUtils';
 import { turkishUpper } from '../domain/turkishText';
 
 interface Props {
@@ -20,6 +20,7 @@ interface Props {
   onShuffle?: () => void;
   /** Increments whenever our own board was shuffled by the opponent (triggers animation). */
   shuffleSignal?: number;
+  onQuit?: () => void;
 }
 
 function formatTime(ms: number): string {
@@ -73,6 +74,7 @@ export function GameScreen({
   onScoreChange,
   onShuffle,
   shuffleSignal = 0,
+  onQuit,
 }: Props) {
   const { t, language } = useI18n();
   const player = gameState.players['local'];
@@ -115,7 +117,9 @@ export function GameScreen({
   const wordScore = wordMatchesTarget ? (WORD_SCORE[targetWord.length] ?? 1) : 0;
 
   const [submitFeedback, setSubmitFeedback] = useState<'valid' | 'invalid' | null>(null);
+  const [errorTileId, setErrorTileId] = useState<string | null>(null);
   const [isShuffling, setIsShuffling] = useState(false);
+  const [showResignConfirm, setShowResignConfirm] = useState(false);
 
   // Auto-submit when the formed word exactly matches the target
   const prevFormedRef = useRef('');
@@ -160,14 +164,31 @@ export function GameScreen({
   const handleTapTile = useCallback(
     (id: string, e: React.PointerEvent) => {
       e.preventDefault();
+      if (!player) return;
+
+      if (selectedIds.includes(id)) {
+        onDispatch({ type: 'SELECT_LETTER', playerId: 'local', letterId: id });
+        return;
+      }
+
+      const cell = getCellById(player.columns, id);
+      if (!cell) return;
+
+      if (!isCorrectNextLetter(targetWord, selectedIds.length, cell.letter)) {
+        setSubmitFeedback('invalid');
+        setErrorTileId(id);
+        navigator.vibrate?.(80);
+        window.setTimeout(() => {
+          setSubmitFeedback(null);
+          setErrorTileId(null);
+        }, 400);
+        return;
+      }
+
       onDispatch({ type: 'SELECT_LETTER', playerId: 'local', letterId: id });
     },
-    [onDispatch],
+    [onDispatch, player, selectedIds, targetWord],
   );
-
-  function handleClear() {
-    onDispatch({ type: 'CLEAR_SELECTION', playerId: 'local' });
-  }
 
   function handleSkip() {
     onDispatch({ type: 'SKIP_WORD', playerId: 'local', at: clock.now() });
@@ -197,6 +218,42 @@ export function GameScreen({
     <div
       className={`screen game-screen${isMultiplayer ? ' game-screen--vs' : ''}`}
     >
+      {showResignConfirm && onQuit && (
+        <div className="confirm-overlay" onClick={() => setShowResignConfirm(false)}>
+          <div
+            className="confirm-popup"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="resign-confirm-title"
+            onClick={e => e.stopPropagation()}
+          >
+            <h2 id="resign-confirm-title" className="confirm-title">
+              {t.resignConfirmTitle}
+            </h2>
+            <p className="confirm-message">{t.resignConfirmMessage}</p>
+            <div className="confirm-actions">
+              <button
+                type="button"
+                className="confirm-btn confirm-btn--danger"
+                onClick={() => {
+                  setShowResignConfirm(false);
+                  onQuit();
+                }}
+              >
+                {t.resignConfirmYes}
+              </button>
+              <button
+                type="button"
+                className="confirm-btn confirm-btn--secondary"
+                onClick={() => setShowResignConfirm(false)}
+              >
+                {t.resignConfirmNo}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* HUD */}
       {isMultiplayer ? (
         <div className="vs-hud">
@@ -317,7 +374,7 @@ export function GameScreen({
             return (
               <button
                 key={cell.id}
-                className={`grid-tile grid-tile--landed${isSelected ? ' grid-tile--selected' : ''}`}
+                className={`grid-tile grid-tile--landed${isSelected ? ' grid-tile--selected' : ''}${errorTileId === cell.id ? ' grid-tile--error' : ''}`}
                 style={{
                   left: `${colIdx * COL_PCT}%`,
                   top: `${rowFromTop * ROW_PCT}%`,
@@ -369,13 +426,15 @@ export function GameScreen({
         </div>
 
         <div className="word-panel-actions">
-          <button
-            className="clear-btn"
-            onClick={handleClear}
-            disabled={selectedIds.length === 0}
-          >
-            {t.clear}
-          </button>
+          {onQuit && (
+            <button
+              type="button"
+              className="resign-btn"
+              onClick={() => setShowResignConfirm(true)}
+            >
+              {t.resign}
+            </button>
+          )}
           <button
             className="skip-btn"
             onClick={handleSkip}

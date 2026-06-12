@@ -8,11 +8,14 @@ import { NoopAnalyticsAdapter } from './adapters/NoopAnalyticsAdapter';
 import { isFirebaseConfigured } from './firebase/config';
 import { useGameSession } from './app/useGameSession';
 import { useMultiplayer } from './app/useMultiplayer';
+import { shareInviteLink } from './app/shareInvite';
+import { useI18n } from './i18n';
 import { StartScreen } from './app/StartScreen';
 import { CountdownScreen } from './app/CountdownScreen';
 import { GameScreen } from './app/GameScreen';
 import { EndScreen } from './app/EndScreen';
 import { MultiplayerLobbyScreen } from './app/MultiplayerLobbyScreen';
+import { FriendMatchOverlay } from './app/FriendMatchOverlay';
 
 const clock = new BrowserClockAdapter();
 const storage = new LocalStorageAdapter();
@@ -22,13 +25,17 @@ const analytics = firebaseReady ? new FirebaseAnalyticsAdapter() : new NoopAnaly
 
 type AppMode = 'solo' | 'multiplayer';
 type LobbyMode = 'quick' | 'create' | 'join';
+type FriendMatchPhase = 'creating' | 'sharing' | 'waiting' | 'found';
 
 export default function App() {
+  const { t } = useI18n();
   const { gameState, logicalTime, bestScore, dispatchAction } = useGameSession(clock, storage);
   const mp = useMultiplayer(multiplayer, firebaseReady);
 
   const [appMode, setAppMode] = useState<AppMode>('solo');
   const [lobbyMode, setLobbyMode] = useState<LobbyMode>('quick');
+  const [friendMatchPhase, setFriendMatchPhase] = useState<FriendMatchPhase | null>(null);
+  const [inviteCopied, setInviteCopied] = useState(false);
   const [showCountdown, setShowCountdown] = useState(false);
   const [isRematching, setIsRematching] = useState(false);
   const [shuffleSignal, setShuffleSignal] = useState(0);
@@ -87,14 +94,23 @@ export default function App() {
     setShowCountdown(true);
   }, []);
 
-  const handleCreateRoom = useCallback(() => {
+  const handleCreateRoom = useCallback(async () => {
     analytics.track('mode_selected', { mode: 'create_room' });
     roundRef.current = 0;
     setAppMode('multiplayer');
     setLobbyMode('create');
+    setFriendMatchPhase('creating');
+    setInviteCopied(false);
     analytics.track('mp_room_created');
-    void mp.createRoom();
-  }, [mp]);
+
+    const code = await mp.createRoom();
+    if (!code) return;
+
+    setFriendMatchPhase('sharing');
+    const shareResult = await shareInviteLink(code, t.shareTitle, t.shareText);
+    setInviteCopied(shareResult === 'copied');
+    setFriendMatchPhase('waiting');
+  }, [mp, t]);
 
   const handleJoinRoom = useCallback(
     (code: string) => {
@@ -106,6 +122,8 @@ export default function App() {
 
   const handleCancelLobby = useCallback(() => {
     void mp.cancel();
+    setFriendMatchPhase(null);
+    setInviteCopied(false);
     setAppMode('solo');
   }, [mp]);
 
@@ -147,10 +165,26 @@ export default function App() {
   const handleBackToMenu = useCallback(() => {
     roundRef.current = 0;
     setIsRematching(false);
+    setFriendMatchPhase(null);
+    setInviteCopied(false);
     void mp.reset();
     setAppMode('solo');
     dispatchAction({ type: 'RESET' });
   }, [mp, dispatchAction]);
+
+  const handleQuitGame = useCallback(() => {
+    matchStartedRef.current = false;
+    if (isMultiplayer) {
+      void mp.reset();
+    }
+    roundRef.current = 0;
+    setIsRematching(false);
+    setFriendMatchPhase(null);
+    setInviteCopied(false);
+    setShowCountdown(false);
+    setAppMode('solo');
+    dispatchAction({ type: 'RESET' });
+  }, [isMultiplayer, mp, dispatchAction]);
 
   // When match ends, track analytics and publish final score
   useEffect(() => {
@@ -196,6 +230,18 @@ export default function App() {
     }
   }, [isMultiplayer, mp.phase, showCountdown, gameState.matchStatus]);
 
+  useEffect(() => {
+    if (friendMatchPhase === 'waiting' && mp.opponentName) {
+      setFriendMatchPhase('found');
+    }
+  }, [friendMatchPhase, mp.opponentName]);
+
+  useEffect(() => {
+    if (showCountdown) {
+      setFriendMatchPhase(null);
+    }
+  }, [showCountdown]);
+
   // Detect a rematch: the SAME match doc bumped its round (new seed, scores 0).
   // Both clients react here and start the new game from the shared seed.
   useEffect(() => {
@@ -227,11 +273,14 @@ export default function App() {
     return String(clock.now());
   }, [isMultiplayer, mp.matchConfig?.seed]);
 
-  if (isMultiplayer && (isRematching || mp.phase === 'searching' || mp.phase === 'waiting')) {
+  if (
+    isMultiplayer &&
+    (isRematching ||
+      (lobbyMode !== 'create' && (mp.phase === 'searching' || mp.phase === 'waiting')))
+  ) {
     return (
       <MultiplayerLobbyScreen
         mode={lobbyMode}
-        inviteCode={mp.inviteCode}
         opponentName={mp.opponentName}
         error={mp.error}
         isSearching={isRematching || mp.phase === 'searching'}
@@ -246,7 +295,6 @@ export default function App() {
     return (
       <MultiplayerLobbyScreen
         mode="join"
-        inviteCode={null}
         opponentName=""
         error={mp.error}
         onCancel={handleCancelLobby}
@@ -265,13 +313,29 @@ export default function App() {
   }
 
   if (gameState.matchStatus === 'idle') {
+    const showFriendMatchOverlay =
+      isMultiplayer &&
+      lobbyMode === 'create' &&
+      !showCountdown &&
+      friendMatchPhase !== null;
+
     return (
-      <StartScreen
-        bestScore={bestScore}
-        multiplayerAvailable={firebaseReady}
-        onPlaySolo={handlePlaySolo}
-        onPlayWithFriend={handleCreateRoom}
-      />
+      <>
+        <StartScreen
+          bestScore={bestScore}
+          multiplayerAvailable={firebaseReady}
+          onPlaySolo={handlePlaySolo}
+          onPlayWithFriend={handleCreateRoom}
+        />
+        {showFriendMatchOverlay && friendMatchPhase && (
+          <FriendMatchOverlay
+            phase={friendMatchPhase}
+            inviteCopied={inviteCopied}
+            error={mp.error}
+            onCancel={handleCancelLobby}
+          />
+        )}
+      </>
     );
   }
 
@@ -289,6 +353,7 @@ export default function App() {
         onScoreChange={handleScoreChange}
         onShuffle={handleShuffleAttack}
         shuffleSignal={shuffleSignal}
+        onQuit={handleQuitGame}
       />
     );
   }
