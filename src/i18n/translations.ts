@@ -6,10 +6,8 @@ export interface Translations {
   gameTitle: string;
   gameSubtitle: (minutes: number) => string;
   best: string;
-  solo: string;
-  quickMatch: string;
-  createRoom: string;
-  joinRoom: string;
+  play: string;
+  playWithFriend: string;
   startHint: string;
 
   // Countdown
@@ -73,15 +71,13 @@ export const translations: Record<Language, Translations> = {
     gameTitle: 'WORD RUSH',
     gameSubtitle: (minutes) => `${minutes} minutes · how many words can you spell?`,
     best: 'BEST',
-    solo: 'SOLO',
-    quickMatch: 'QUICK MATCH',
-    createRoom: 'CREATE ROOM',
-    joinRoom: 'JOIN ROOM',
-    startHint: 'Tap a falling letter to add it to your word.\nTap a buffered letter to remove it.\nSpell a valid Turkish word → hit SUBMIT to score!\nLonger words earn more points.',
+    play: 'PLAY',
+    playWithFriend: 'PLAY WITH FRIEND',
+    startHint: '',
 
     // Countdown
     countdown1v1: '1 VS 1',
-    countdownSubtitle: 'spell Turkish words · longer = more points',
+    countdownSubtitle: 'spell Turkish words · faster wins',
 
     // Game screen
     score: 'SCORE',
@@ -138,15 +134,13 @@ export const translations: Record<Language, Translations> = {
     gameTitle: 'WORD RUSH',
     gameSubtitle: (minutes) => `${minutes} dakika · kaç kelime yazabilirsin?`,
     best: 'EN İYİ',
-    solo: 'TEK',
-    quickMatch: 'HIZLI EŞLEŞTİRME',
-    createRoom: 'ODA OLUŞTUR',
-    joinRoom: 'ODAYA KATIL',
-    startHint: 'Düşen harfe dokun, kelimene ekle.\nEklenen harfe dokun, çıkar.\nGeçerli Türkçe kelime yaz → GÖNDER\'e bas!\nUzun kelimeler daha çok puan.',
+    play: 'OYNA',
+    playWithFriend: 'ARKADAŞINLA OYNA',
+    startHint: '',
 
     // Countdown
     countdown1v1: '1\'E 1',
-    countdownSubtitle: 'türkçe kelime yaz · uzun = çok puan',
+    countdownSubtitle: 'türkçe kelime yaz · hızlı olan kazanır',
 
     // Game screen
     score: 'PUAN',
@@ -170,13 +164,13 @@ export const translations: Record<Language, Translations> = {
     youWin: 'KAZANDIN!',
     youLose: 'KAYBETTİN',
     tieGame: 'BERABERE',
-    opponentWantsRematch: 'RAKİP REVANŞİ İSTİYOR!',
-    rematch: 'REVANŞ',
+    opponentWantsRematch: 'RAKİP RÖVANŞ İSTİYOR!',
+    rematch: 'RÖVANŞ',
     playAgain: 'TEKRAR OYNA',
     menu: 'MENÜ',
 
     // Multiplayer lobby
-    rematchBadge: 'REVANŞ',
+    rematchBadge: 'RÖVANŞ',
     waitingForOpponent: 'RAKİP BEKLENİYOR',
     challengingAgain: 'Rakibine yeniden meydan okuyorsun...',
     findingOpponent: 'RAKİP ARANIYOR',

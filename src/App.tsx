@@ -87,15 +87,6 @@ export default function App() {
     setShowCountdown(true);
   }, []);
 
-  const handleQuickMatch = useCallback(() => {
-    analytics.track('mode_selected', { mode: 'quick' });
-    roundRef.current = 0;
-    setAppMode('multiplayer');
-    setLobbyMode('quick');
-    analytics.track('mp_search_started');
-    void mp.quickMatch();
-  }, [mp]);
-
   const handleCreateRoom = useCallback(() => {
     analytics.track('mode_selected', { mode: 'create_room' });
     roundRef.current = 0;
@@ -104,13 +95,6 @@ export default function App() {
     analytics.track('mp_room_created');
     void mp.createRoom();
   }, [mp]);
-
-  const handleJoinRoomLobby = useCallback(() => {
-    analytics.track('mode_selected', { mode: 'join_room' });
-    roundRef.current = 0;
-    setAppMode('multiplayer');
-    setLobbyMode('join');
-  }, []);
 
   const handleJoinRoom = useCallback(
     (code: string) => {
@@ -286,9 +270,7 @@ export default function App() {
         bestScore={bestScore}
         multiplayerAvailable={firebaseReady}
         onPlaySolo={handlePlaySolo}
-        onQuickMatch={handleQuickMatch}
-        onCreateRoom={handleCreateRoom}
-        onJoinRoom={handleJoinRoomLobby}
+        onPlayWithFriend={handleCreateRoom}
       />
     );
   }

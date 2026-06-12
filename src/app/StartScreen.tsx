@@ -6,9 +6,7 @@ interface Props {
   bestScore: number;
   multiplayerAvailable: boolean;
   onPlaySolo: () => void;
-  onQuickMatch: () => void;
-  onCreateRoom: () => void;
-  onJoinRoom: () => void;
+  onPlayWithFriend: () => void;
 }
 
 const MATCH_MINUTES = Math.round(MATCH_DURATION_MS / 60_000);
@@ -17,9 +15,7 @@ export function StartScreen({
   bestScore,
   multiplayerAvailable,
   onPlaySolo,
-  onQuickMatch,
-  onCreateRoom,
-  onJoinRoom,
+  onPlayWithFriend,
 }: Props) {
   const { t } = useI18n();
 
@@ -36,23 +32,13 @@ export function StartScreen({
 
         <div className="mode-buttons">
           <button className="play-btn" onClick={onPlaySolo}>
-            {t.solo}
+            {t.play}
           </button>
 
           {multiplayerAvailable && (
-            <>
-              <button className="play-btn play-btn--vs" onClick={onQuickMatch}>
-                {t.quickMatch}
-              </button>
-              <div className="friend-buttons">
-                <button className="play-btn play-btn--secondary" onClick={onCreateRoom}>
-                  {t.createRoom}
-                </button>
-                <button className="play-btn play-btn--secondary" onClick={onJoinRoom}>
-                  {t.joinRoom}
-                </button>
-              </div>
-            </>
+            <button className="play-btn play-btn--vs" onClick={onPlayWithFriend}>
+              {t.playWithFriend}
+            </button>
           )}
         </div>
 

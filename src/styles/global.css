@@ -176,6 +176,17 @@ button {
   max-width: 280px;
 }
 
+.mode-buttons .play-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  letter-spacing: 2px;
+  padding: 18px 24px;
+  line-height: 1.25;
+}
+
 .friend-buttons {
   display: flex;
   gap: 10px;
