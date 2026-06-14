@@ -3,7 +3,34 @@ export const MAX_WORD_LENGTH = 8;
 /** Selection cap = max word length. */
 export const MAX_BUFFER_SIZE = MAX_WORD_LENGTH;
 
+import type { SoloDifficulty } from './types';
+
 export const MATCH_DURATION_MS = 120_000;
+
+/** Solo: board refills allowed after correct words. */
+export const SOLO_REFILL_LIMIT = 5;
+
+/** Solo per-word timer multiplier by difficulty. */
+export const SOLO_TIME_MULTIPLIER: Readonly<Record<SoloDifficulty, number>> = {
+  easy: 4,
+  normal: 2,
+  hard: 1,
+};
+
+/** Multiplayer uses normal-mode per-word timer. */
+export const MULTIPLAYER_TIME_MULTIPLIER = SOLO_TIME_MULTIPLIER.normal;
+
+/** Multiplayer 2× power-up: halves per-word timer. */
+export const DOUBLE_BONUS_TIME_MULTIPLIER = 0.5;
+
+/** Multiplayer 2× power-up: doubles points on the activated word. */
+export const DOUBLE_BONUS_SCORE_MULTIPLIER = 2;
+
+/** 2× mode: per consecutive find while active, timer shrinks 10% (compound). */
+export const MULTIPLAYER_STREAK_TIME_FACTOR = 0.9;
+
+/** 2× mode: per consecutive find while active, score grows 10% (compound). */
+export const MULTIPLAYER_STREAK_SCORE_FACTOR = 1.1;
 
 /** Points awarded per word length. */
 export const WORD_SCORE: Readonly<Record<number, number>> = {
@@ -46,5 +73,5 @@ export const TARGET_WORD_LENGTH_RAMP = 12;
 export const MAX_EMPTY_CELLS = 0;
 
 // ─── Grid layout ──────────────────────────────────────────────────────────────
-export const GRID_COLS = 7;
-export const GRID_ROWS = 9;
+export const GRID_COLS = 5;
+export const GRID_ROWS = 7;

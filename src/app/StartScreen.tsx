@@ -1,15 +1,19 @@
-import { MATCH_DURATION_MS } from '../domain/constants';
+import type { SoloDifficulty } from '../domain/types';
 import { useI18n } from '../i18n';
 import { LanguageSwitcher } from './LanguageSwitcher';
 
 interface Props {
   bestScore: number;
   multiplayerAvailable: boolean;
-  onPlaySolo: () => void;
+  onPlaySolo: (difficulty: SoloDifficulty) => void;
   onPlayWithFriend: () => void;
 }
 
-const MATCH_MINUTES = Math.round(MATCH_DURATION_MS / 60_000);
+const DIFFICULTIES: { id: SoloDifficulty; labelKey: 'easy' | 'normal' | 'hard'; className: string }[] = [
+  { id: 'easy', labelKey: 'easy', className: 'play-btn--easy' },
+  { id: 'normal', labelKey: 'normal', className: 'play-btn--normal' },
+  { id: 'hard', labelKey: 'hard', className: 'play-btn--hard' },
+];
 
 export function StartScreen({
   bestScore,
@@ -25,15 +29,21 @@ export function StartScreen({
         <LanguageSwitcher />
         <div className="start-badge">{t.startBadge}</div>
         <h1 className="game-title">{t.gameTitle}</h1>
-        <p className="game-subtitle">{t.gameSubtitle(MATCH_MINUTES)}</p>
+        <p className="game-subtitle">{t.gameSubtitle}</p>
         {bestScore > 0 && (
           <div className="best-score-chip">{t.best} {bestScore}</div>
         )}
 
         <div className="mode-buttons">
-          <button className="play-btn" onClick={onPlaySolo}>
-            {t.play}
-          </button>
+          {DIFFICULTIES.map(({ id, labelKey, className }) => (
+            <button
+              key={id}
+              className={`play-btn ${className}`}
+              onClick={() => onPlaySolo(id)}
+            >
+              {t[labelKey]}
+            </button>
+          ))}
 
           {multiplayerAvailable && (
             <button className="play-btn play-btn--vs" onClick={onPlayWithFriend}>

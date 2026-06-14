@@ -1,6 +1,6 @@
 import type { RngFn } from './seededRng';
-import type { LandedCell } from './types';
-import { GRID_COLS, GRID_ROWS, MIN_WORD_LENGTH, MAX_WORD_LENGTH, MAX_EMPTY_CELLS, PITY_TIME_BONUS_PER_TIMEOUT, MAX_PITY_TIMEOUTS, WARMUP_BONUS_MS, TARGET_WORD_LENGTH_RAMP } from './constants';
+import type { LandedCell, MatchMode, PlayerState, SoloDifficulty } from './types';
+import { GRID_COLS, GRID_ROWS, MIN_WORD_LENGTH, MAX_WORD_LENGTH, MAX_EMPTY_CELLS, PITY_TIME_BONUS_PER_TIMEOUT, MAX_PITY_TIMEOUTS, WARMUP_BONUS_MS, TARGET_WORD_LENGTH_RAMP, SECONDS_PER_LETTER, SOLO_TIME_MULTIPLIER, MULTIPLAYER_TIME_MULTIPLIER, DOUBLE_BONUS_TIME_MULTIPLIER, DOUBLE_BONUS_SCORE_MULTIPLIER, MULTIPLAYER_STREAK_TIME_FACTOR, MULTIPLAYER_STREAK_SCORE_FACTOR } from './constants';
 import { WORD_LIST } from './wordSet';
 
 // ─── Strategic Grid Fill ──────────────────────────────────────────────────────
@@ -126,6 +126,52 @@ export function fillGrid(rng: RngFn): GridGenerationResult {
 /** True when every column on the board is empty. */
 export function isBoardEmpty(columns: LandedCell[][]): boolean {
   return columns.every(col => col.length === 0);
+}
+
+function columnCapacity(): number {
+  return GRID_ROWS - Math.floor(MAX_EMPTY_CELLS / GRID_COLS);
+}
+
+/**
+ * After cleared letters collapse, fill every empty slot with letters from new
+ * words and return those words for the question pool.
+ */
+export function refillEmptySlots(
+  rng: RngFn,
+  columns: LandedCell[][],
+  idSeed: string,
+): { columns: LandedCell[][]; words: string[] } | null {
+  const colHeight = columnCapacity();
+  const totalEmpty = columns.reduce((sum, col) => sum + (colHeight - col.length), 0);
+  if (totalEmpty < MIN_WORD_LENGTH) return null;
+
+  const words = buildWordPool(rng, totalEmpty);
+  const letters = Array.from(words.join(''));
+
+  for (let i = letters.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [letters[i], letters[j]] = [letters[j], letters[i]];
+  }
+
+  const newColumns = columns.map(col => [...col]);
+  let placed = 0;
+
+  while (placed < letters.length) {
+    const available = newColumns
+      .map((col, idx) => ({ idx, space: colHeight - col.length }))
+      .filter(c => c.space > 0);
+    if (available.length === 0) return null;
+
+    const pick = available[Math.floor(rng() * available.length)];
+    const row = newColumns[pick.idx].length;
+    newColumns[pick.idx].push({
+      id: `${idSeed}-c${pick.idx}r${row}`,
+      letter: letters[placed],
+    });
+    placed++;
+  }
+
+  return { columns: newColumns, words };
 }
 
 export function getCellById(columns: LandedCell[][], letterId: string): LandedCell | null {
@@ -309,6 +355,7 @@ export function calculateWordDuration(
   pityTimeouts = 0,
   applyPity = true,
   wordsCompleted = 0,
+  timeMultiplier = 1,
 ): number {
   const wordLength = word.length;
   if (wordLength === 0) return 0;
@@ -329,6 +376,60 @@ export function calculateWordDuration(
   let duration = Math.max(calculated, minDuration);
   if (applyPity) {
     duration += warmupTimeBonusMs(wordsCompleted);
+    duration *= timeMultiplier;
   }
+  return duration;
+}
+
+/** Compound 2× timer shrink from consecutive finds while active (0.9^streak). */
+export function doubleBonusStreakTimeMultiplier(streak: number): number {
+  return Math.pow(MULTIPLAYER_STREAK_TIME_FACTOR, streak);
+}
+
+/** Compound 2× score growth from consecutive finds while active (1.1^streak). */
+export function doubleBonusStreakScoreMultiplier(streak: number): number {
+  return Math.pow(MULTIPLAYER_STREAK_SCORE_FACTOR, streak);
+}
+
+/** Score multiplier for the current word (1× normally, 2× mode + streak when active). */
+export function getMultiplayerScoreMultiplier(player: PlayerState): number {
+  if (!player.doubleBonusActive) return 1;
+  return DOUBLE_BONUS_SCORE_MULTIPLIER * doubleBonusStreakScoreMultiplier(player.doubleBonusStreak);
+}
+
+/** Label for the 2× button while active, e.g. "2.0×", "2.2×". */
+export function formatDoubleBonusMultiplierLabel(streak: number): string {
+  const value = DOUBLE_BONUS_SCORE_MULTIPLIER * doubleBonusStreakScoreMultiplier(streak);
+  return `${value.toFixed(1)}×`;
+}
+
+/** Per-word timer for gameplay, including multiplayer streak and 2× when active. */
+export function getPlayerWordDuration(
+  player: PlayerState,
+  matchMode: MatchMode,
+  soloDifficulty?: SoloDifficulty,
+): number {
+  if (!player.targetWord) return 0;
+
+  const timeMultiplier =
+    matchMode === 'solo'
+      ? SOLO_TIME_MULTIPLIER[soloDifficulty ?? 'hard']
+      : MULTIPLAYER_TIME_MULTIPLIER;
+
+  let duration = calculateWordDuration(
+    player.targetWord,
+    player.columns,
+    SECONDS_PER_LETTER,
+    player.pityTimeouts,
+    true,
+    player.wordsCompleted,
+    timeMultiplier,
+  );
+
+  if (player.doubleBonusActive) {
+    duration *= DOUBLE_BONUS_TIME_MULTIPLIER;
+    duration *= doubleBonusStreakTimeMultiplier(player.doubleBonusStreak);
+  }
+
   return duration;
 }

@@ -6,6 +6,7 @@ import { NoopMultiplayerAdapter } from './adapters/NoopMultiplayerAdapter';
 import { FirebaseAnalyticsAdapter } from './adapters/FirebaseAnalyticsAdapter';
 import { NoopAnalyticsAdapter } from './adapters/NoopAnalyticsAdapter';
 import { isFirebaseConfigured } from './firebase/config';
+import type { SoloDifficulty } from './domain/types';
 import { useGameSession } from './app/useGameSession';
 import { useMultiplayer } from './app/useMultiplayer';
 import { shareInviteLink } from './app/shareInvite';
@@ -37,6 +38,7 @@ export default function App() {
   const [friendMatchPhase, setFriendMatchPhase] = useState<FriendMatchPhase | null>(null);
   const [inviteCopied, setInviteCopied] = useState(false);
   const [showCountdown, setShowCountdown] = useState(false);
+  const [soloDifficulty, setSoloDifficulty] = useState<SoloDifficulty>('normal');
   const [isRematching, setIsRematching] = useState(false);
   const [shuffleSignal, setShuffleSignal] = useState(0);
   const prevScoreRef = useRef(0);
@@ -73,24 +75,26 @@ export default function App() {
         seed,
         at: clock.now(),
         mode: isMultiplayer ? 'multiplayer' : 'solo',
+        difficulty: isMultiplayer ? undefined : soloDifficulty,
       });
       setShowCountdown(false);
       if (isMultiplayer) {
         mp.markPlaying();
         analytics.track('match_started', { mode: 'multiplayer' });
       } else {
-        analytics.track('match_started', { mode: 'solo' });
+        analytics.track('match_started', { mode: 'solo', difficulty: soloDifficulty });
       }
       matchStartedRef.current = true;
       prevScoreRef.current = 0;
       lastShuffleNonceRef.current = 0;
     },
-    [dispatchAction, isMultiplayer, mp],
+    [dispatchAction, isMultiplayer, mp, soloDifficulty],
   );
 
-  const handlePlaySolo = useCallback(() => {
-    analytics.track('mode_selected', { mode: 'solo' });
+  const handlePlaySolo = useCallback((difficulty: SoloDifficulty) => {
+    analytics.track('mode_selected', { mode: 'solo', difficulty });
     setAppMode('solo');
+    setSoloDifficulty(difficulty);
     setShowCountdown(true);
   }, []);
 

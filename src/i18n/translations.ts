@@ -4,9 +4,11 @@ export interface Translations {
   // Start screen
   startBadge: string;
   gameTitle: string;
-  gameSubtitle: (minutes: number) => string;
+  gameSubtitle: string;
   best: string;
-  play: string;
+  easy: string;
+  normal: string;
+  hard: string;
   playWithFriend: string;
   startHint: string;
 
@@ -17,12 +19,17 @@ export interface Translations {
   // Game screen
   score: string;
   time: string;
+  elapsed: string;
   you: string;
   them: string;
   winning: string;
   vs: string;
   find: string;
   skip: string;
+  doubleBonus: string;
+  doubleBonusUsed: string;
+  doubleBonusActive: string;
+  hintBadge: string;
   tapToSpell: string;
   paused: string;
   pauseHint: string;
@@ -34,6 +41,7 @@ export interface Translations {
 
   // End screen
   timesUp: string;
+  soloComplete: string;
   newBest: string;
   point: string;
   points: string;
@@ -76,9 +84,11 @@ export const translations: Record<Language, Translations> = {
     // Start screen
     startBadge: 'TAP LETTERS · SPELL TURKISH WORDS',
     gameTitle: 'WORD RUSH',
-    gameSubtitle: (minutes) => `${minutes} minutes · how many words can you spell?`,
+    gameSubtitle: 'clear the board · 5 refills',
     best: 'BEST',
-    play: 'PLAY',
+    easy: 'EASY',
+    normal: 'NORMAL',
+    hard: 'HARD',
     playWithFriend: 'PLAY WITH FRIEND',
     startHint: '',
 
@@ -89,12 +99,17 @@ export const translations: Record<Language, Translations> = {
     // Game screen
     score: 'SCORE',
     time: 'TIME',
+    elapsed: 'ELAPSED',
     you: 'YOU',
     them: 'THEM',
     winning: 'WINNING',
     vs: 'VS',
     find: 'FIND',
     skip: 'SKIP',
+    doubleBonus: 'Half time, double score until you miss!',
+    doubleBonusUsed: 'Used',
+    doubleBonusActive: '2× active',
+    hintBadge: 'TAP',
     tapToSpell: 'tap letters to spell the word',
     paused: 'PAUSED',
     pauseHint: 'SPACE to resume',
@@ -106,6 +121,7 @@ export const translations: Record<Language, Translations> = {
 
     // End screen
     timesUp: 'TIME\'S UP',
+    soloComplete: 'COMPLETE',
     newBest: 'NEW BEST!',
     point: 'point',
     points: 'points',
@@ -146,9 +162,11 @@ export const translations: Record<Language, Translations> = {
     // Start screen
     startBadge: 'HARFLERİ DOKUN · TÜRKÇE KELİME YAZ',
     gameTitle: 'WORD RUSH',
-    gameSubtitle: (minutes) => `${minutes} dakika · kaç kelime yazabilirsin?`,
+    gameSubtitle: 'tahtayı temizle · 5 yenileme',
     best: 'EN İYİ',
-    play: 'OYNA',
+    easy: 'KOLAY',
+    normal: 'NORMAL',
+    hard: 'ZOR',
     playWithFriend: 'ARKADAŞINLA OYNA',
     startHint: '',
 
@@ -159,12 +177,17 @@ export const translations: Record<Language, Translations> = {
     // Game screen
     score: 'PUAN',
     time: 'SÜRE',
+    elapsed: 'GEÇEN',
     you: 'SEN',
     them: 'RAKIP',
     winning: 'KAZANIYOR',
     vs: 'VS',
     find: 'BUL',
     skip: 'ATLA',
+    doubleBonus: 'Kaçırana kadar yarı süre, çift puan!',
+    doubleBonusUsed: 'Kullanıldı',
+    doubleBonusActive: '2× aktif',
+    hintBadge: 'DOKUN',
     tapToSpell: 'kelimeyi yazmak için harflere dokun',
     paused: 'DURAKLATILDI',
     pauseHint: 'Devam etmek için SPACE',
@@ -176,6 +199,7 @@ export const translations: Record<Language, Translations> = {
 
     // End screen
     timesUp: 'SÜRE BİTTİ',
+    soloComplete: 'TAMAMLANDI',
     newBest: 'YENİ REKOR!',
     point: 'puan',
     points: 'puan',

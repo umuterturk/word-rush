@@ -1,12 +1,17 @@
 import { describe, it, expect } from 'vitest';
 import { gameReducer, INITIAL_GAME_STATE } from '../gameReducer';
 import type { GameState } from '../types';
-import { GRID_COLS } from '../constants';
+import { GRID_COLS, GRID_ROWS, SOLO_REFILL_LIMIT } from '../constants';
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
-function startedState(seed = 'test', at = 1000, mode: 'solo' | 'multiplayer' = 'solo'): GameState {
-  return gameReducer(INITIAL_GAME_STATE, { type: 'START_MATCH', seed, at, mode });
+function startedState(
+  seed = 'test',
+  at = 1000,
+  mode: 'solo' | 'multiplayer' = 'solo',
+  difficulty: 'easy' | 'normal' | 'hard' = 'hard',
+): GameState {
+  return gameReducer(INITIAL_GAME_STATE, { type: 'START_MATCH', seed, at, mode, difficulty });
 }
 
 // ─── START_MATCH ──────────────────────────────────────────────────────────────
@@ -24,7 +29,7 @@ describe('START_MATCH', () => {
     
     // Should have most cells filled (allowing for MAX_EMPTY_CELLS empty)
     const totalCells = player.columns.reduce((sum, col) => sum + col.length, 0);
-    expect(totalCells).toBeGreaterThan(50); // At least 50 cells filled
+    expect(totalCells).toBe(GRID_COLS * GRID_ROWS);
   });
 
   it('picks a non-empty target word', () => {
@@ -42,6 +47,18 @@ describe('START_MATCH', () => {
     const b = startedState('same', 0);
     expect(a.players['local'].targetWord).toBe(b.players['local'].targetWord);
     expect(a.players['local'].columns).toEqual(b.players['local'].columns);
+  });
+
+  it('initializes solo refills and difficulty', () => {
+    const easy = startedState('solo-init', 0, 'solo', 'easy');
+    expect(easy.soloDifficulty).toBe('easy');
+    expect(easy.players['local'].refillsRemaining).toBe(SOLO_REFILL_LIMIT);
+  });
+
+  it('does not set refills for multiplayer', () => {
+    const mp = startedState('mp-init', 0, 'multiplayer');
+    expect(mp.soloDifficulty).toBeUndefined();
+    expect(mp.players['local'].refillsRemaining).toBe(0);
   });
 });
 
@@ -222,17 +239,229 @@ describe('SUBMIT_WORD', () => {
     expect(next.players['local'].pityTimeouts).toBe(2);
   });
 
-  it('ends the match when the board is cleared in solo mode', () => {
+  it('injects a new word and keeps playing when the board is cleared in solo mode', () => {
     const state = stateWithOnlyTarget('bal');
+    const next = gameReducer(state, { type: 'SUBMIT_WORD', playerId: 'local', at: 2000 });
+    expect(next.matchStatus).toBe('playing');
+    const player = next.players['local'];
+    const totalCells = player.columns.reduce((sum, col) => sum + col.length, 0);
+    expect(totalCells).toBe(GRID_COLS * GRID_ROWS);
+    expect(player.wordPool.length).toBeGreaterThan(0);
+    expect(player.targetWord.length).toBeGreaterThan(0);
+    expect(player.refillsRemaining).toBe(SOLO_REFILL_LIMIT - 1);
+  });
+
+  it('decrements refills on each correct solo word', () => {
+    const state = stateWithManualTarget('bal');
+    const next = gameReducer(state, { type: 'SUBMIT_WORD', playerId: 'local', at: 2000 });
+    expect(next.players['local'].refillsRemaining).toBe(SOLO_REFILL_LIMIT - 1);
+  });
+
+  it('ends solo when board is empty and refills are exhausted', () => {
+    const state = {
+      ...stateWithOnlyTarget('bal'),
+      players: {
+        local: {
+          ...stateWithOnlyTarget('bal').players['local'],
+          refillsRemaining: 0,
+        },
+      },
+    };
     const next = gameReducer(state, { type: 'SUBMIT_WORD', playerId: 'local', at: 2000 });
     expect(next.matchStatus).toBe('ended');
     expect(next.players['local'].columns.every(col => col.length === 0)).toBe(true);
+    expect(next.players['local'].refillsRemaining).toBe(0);
+  });
+
+  it('does not refill solo when refills are exhausted', () => {
+    const state = {
+      ...stateWithManualTarget('bal'),
+      players: {
+        local: {
+          ...stateWithManualTarget('bal').players['local'],
+          refillsRemaining: 0,
+        },
+      },
+    };
+    const before = state.players['local'].columns.reduce((sum, col) => sum + col.length, 0);
+    const next = gameReducer(state, { type: 'SUBMIT_WORD', playerId: 'local', at: 2000 });
+    const after = next.players['local'].columns.reduce((sum, col) => sum + col.length, 0);
+    expect(after).toBe(before - 3);
+    expect(next.players['local'].refillsRemaining).toBe(0);
+  });
+
+  it('keeps the board full after a correct word', () => {
+    const state = stateWithManualTarget('bal');
+    const before = state.players['local'].columns.reduce((sum, col) => sum + col.length, 0);
+    const next = gameReducer(state, { type: 'SUBMIT_WORD', playerId: 'local', at: 2000 });
+    const after = next.players['local'].columns.reduce((sum, col) => sum + col.length, 0);
+    expect(after).toBe(GRID_COLS * GRID_ROWS);
+    expect(after).toBeGreaterThanOrEqual(before - 3);
   });
 
   it('keeps playing when the board is cleared in multiplayer mode', () => {
     const state = { ...stateWithOnlyTarget('bal'), matchMode: 'multiplayer' as const };
     const next = gameReducer(state, { type: 'SUBMIT_WORD', playerId: 'local', at: 2000 });
     expect(next.matchStatus).toBe('playing');
+  });
+});
+
+describe('double bonus (multiplayer)', () => {
+  it('activates 2× and halves elapsed time on the current word', () => {
+    const state = startedState('double', 1000, 'multiplayer');
+    const player = state.players['local'];
+    const at = 5000;
+    const next = gameReducer(state, { type: 'ACTIVATE_DOUBLE', playerId: 'local', at });
+    expect(next.players['local'].doubleBonusActive).toBe(true);
+    expect(next.players['local'].doubleBonusUsed).toBe(false);
+    expect(next.players['local'].wordStartedAt).toBe(at - (at - player.wordStartedAt) / 2);
+  });
+
+  it('ignores activation when already used or not multiplayer', () => {
+    const mp = startedState('double-used', 1000, 'multiplayer');
+    const used = {
+      ...mp,
+      players: {
+        local: { ...mp.players['local'], doubleBonusUsed: true },
+      },
+    };
+    expect(gameReducer(used, { type: 'ACTIVATE_DOUBLE', playerId: 'local', at: 2000 })).toBe(used);
+
+    const solo = startedState('double-solo', 1000, 'solo');
+    expect(gameReducer(solo, { type: 'ACTIVATE_DOUBLE', playerId: 'local', at: 2000 })).toBe(solo);
+  });
+
+  it('doubles score on success and keeps 2× active', () => {
+    const base = startedState('double-score', 1000, 'multiplayer');
+    const manual = stateWithManualTargetFrom(base, 'bal');
+    const withoutDouble = gameReducer(manual, { type: 'SUBMIT_WORD', playerId: 'local', at: 3000 });
+    const withDouble = {
+      ...manual,
+      players: {
+        local: { ...manual.players['local'], doubleBonusActive: true },
+      },
+    };
+    const withDoubleResult = gameReducer(withDouble, { type: 'SUBMIT_WORD', playerId: 'local', at: 3000 });
+    expect(withDoubleResult.players['local'].doubleBonusUsed).toBe(false);
+    expect(withDoubleResult.players['local'].doubleBonusActive).toBe(true);
+    expect(withDoubleResult.players['local'].score).toBe(withoutDouble.players['local'].score * 2);
+  });
+
+  it('keeps 2× active across multiple successful words', () => {
+    const base = startedState('double-streak', 1000, 'multiplayer');
+    const activated = gameReducer(base, { type: 'ACTIVATE_DOUBLE', playerId: 'local', at: 2000 });
+    const first = stateWithManualTargetFrom(activated, 'bal');
+    const afterFirst = gameReducer(
+      { ...first, players: { local: { ...first.players['local'], doubleBonusActive: true } } },
+      { type: 'SUBMIT_WORD', playerId: 'local', at: 3000 },
+    );
+    expect(afterFirst.players['local'].doubleBonusActive).toBe(true);
+    expect(afterFirst.players['local'].doubleBonusUsed).toBe(false);
+
+    const second = stateWithManualTargetFrom(afterFirst, 'bal');
+    const afterSecond = gameReducer(
+      { ...second, players: { local: { ...second.players['local'], doubleBonusActive: true } } },
+      { type: 'SUBMIT_WORD', playerId: 'local', at: 4000 },
+    );
+    expect(afterSecond.players['local'].doubleBonusActive).toBe(true);
+    expect(afterSecond.players['local'].doubleBonusUsed).toBe(false);
+  });
+
+  it('disables 2× only after failing while active', () => {
+    const base = startedState('double-fail', 1000, 'multiplayer');
+    const activated = gameReducer(base, { type: 'ACTIVATE_DOUBLE', playerId: 'local', at: 2000 });
+    const next = gameReducer(activated, { type: 'WORD_TIMEOUT', playerId: 'local', at: 9000 });
+    expect(next.players['local'].doubleBonusUsed).toBe(true);
+    expect(next.players['local'].doubleBonusActive).toBe(false);
+  });
+
+  it('does not disable 2× after skip when it was never activated', () => {
+    const base = startedState('double-skip', 1000, 'multiplayer');
+    const next = gameReducer(base, { type: 'SKIP_WORD', playerId: 'local', at: 5000 });
+    expect(next.players['local'].doubleBonusUsed).toBe(false);
+    expect(next.players['local'].doubleBonusActive).toBe(false);
+  });
+
+  it('leaves 2× available after finding a word without activating it', () => {
+    const base = startedState('double-save', 1000, 'multiplayer');
+    const manual = stateWithManualTargetFrom(base, 'bal');
+    const next = gameReducer(manual, { type: 'SUBMIT_WORD', playerId: 'local', at: 3000 });
+    expect(next.players['local'].doubleBonusUsed).toBe(false);
+  });
+});
+
+describe('2× mode streak', () => {
+  it('increments streak on success while 2× is active and resets on miss', () => {
+    const base = startedState('streak', 1000, 'multiplayer');
+    const withDouble = {
+      ...stateWithManualTargetFrom(base, 'bal'),
+      players: {
+        local: { ...stateWithManualTargetFrom(base, 'bal').players['local'], doubleBonusActive: true },
+      },
+    };
+    const afterFind = gameReducer(withDouble, { type: 'SUBMIT_WORD', playerId: 'local', at: 3000 });
+    expect(afterFind.players['local'].doubleBonusStreak).toBe(1);
+
+    const afterSkip = gameReducer(afterFind, { type: 'SKIP_WORD', playerId: 'local', at: 4000 });
+    expect(afterSkip.players['local'].doubleBonusStreak).toBe(0);
+  });
+
+  it('does not increment streak without 2× active', () => {
+    const base = startedState('streak-none', 1000, 'multiplayer');
+    const manual = stateWithManualTargetFrom(base, 'bal');
+    const afterFind = gameReducer(manual, { type: 'SUBMIT_WORD', playerId: 'local', at: 3000 });
+    expect(afterFind.players['local'].doubleBonusStreak).toBe(0);
+  });
+
+  it('always awards whole-number points', () => {
+    const base = startedState('round-score', 1000, 'multiplayer');
+    const withDouble = {
+      ...stateWithManualTargetFrom(base, 'bal'),
+      players: {
+        local: {
+          ...stateWithManualTargetFrom(base, 'bal').players['local'],
+          doubleBonusActive: true,
+          doubleBonusStreak: 2,
+        },
+      },
+    };
+    const next = gameReducer(withDouble, { type: 'SUBMIT_WORD', playerId: 'local', at: 3000 });
+    expect(Number.isInteger(next.players['local'].score)).toBe(true);
+  });
+
+  it('compounds score by 10% per consecutive find while 2× is active', () => {
+    const base = startedState('streak-score', 1000, 'multiplayer');
+    const first = {
+      ...stateWithManualTargetFrom(base, 'bal'),
+      players: {
+        local: { ...stateWithManualTargetFrom(base, 'bal').players['local'], doubleBonusActive: true },
+      },
+    };
+    const afterFirst = gameReducer(first, { type: 'SUBMIT_WORD', playerId: 'local', at: 3000 });
+    const second = stateWithManualTargetFrom(
+      {
+        ...afterFirst,
+        players: {
+          local: {
+            ...afterFirst.players['local'],
+            doubleBonusActive: true,
+            wordStartedAt: 3000,
+          },
+        },
+      },
+      'bal',
+    );
+    const afterSecond = gameReducer(second, { type: 'SUBMIT_WORD', playerId: 'local', at: 5000 });
+    const firstScore = afterFirst.players['local'].score;
+    const secondGain = afterSecond.players['local'].score - firstScore;
+    expect(secondGain).toBeCloseTo(firstScore * 1.1, 0);
+  });
+
+  it('does not track streak in solo', () => {
+    const base = startedState('solo-streak', 1000, 'solo');
+    const manual = stateWithManualTargetFrom(base, 'bal');
+    const afterFind = gameReducer(manual, { type: 'SUBMIT_WORD', playerId: 'local', at: 3000 });
+    expect(afterFind.players['local'].doubleBonusStreak).toBe(0);
   });
 });
 

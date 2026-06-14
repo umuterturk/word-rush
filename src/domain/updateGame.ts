@@ -20,7 +20,7 @@ export function updateGame(
 
   const logicalTime = wallClockTime - state.matchStartedAt;
 
-  if (logicalTime >= state.matchDuration) {
+  if (logicalTime >= state.matchDuration && state.matchMode !== 'solo') {
     return { ...state, matchStatus: 'ended' };
   }
 

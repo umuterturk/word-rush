@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { GameAction, GameState } from '../domain/types';
-import { WORD_SCORE, GRID_COLS, GRID_ROWS, SKIP_PENALTY, SECONDS_PER_LETTER, LETTER_HINT_DELAY_MS } from '../domain/constants';
+import { WORD_SCORE, GRID_COLS, GRID_ROWS, SKIP_PENALTY, LETTER_HINT_DELAY_MS } from '../domain/constants';
 import type { ClockPort } from '../ports';
 import { useI18n } from '../i18n';
-import { calculateWordDuration, findHintCellId, getCellById, isCorrectNextLetter } from '../domain/gridUtils';
+import { getPlayerWordDuration, getMultiplayerScoreMultiplier, formatDoubleBonusMultiplierLabel, findHintCellId, getCellById, isCorrectNextLetter } from '../domain/gridUtils';
 import { turkishUpper } from '../domain/turkishText';
 
 interface Props {
@@ -79,7 +79,8 @@ export function GameScreen({
   const { t, language } = useI18n();
   const player = gameState.players['local'];
   const timeLeft = gameState.matchDuration - logicalTime;
-  const isUrgent = timeLeft < 30_000;
+  const isUrgent = isMultiplayer && timeLeft < 30_000;
+  const elapsedTime = logicalTime;
   const localScore = player?.score ?? 0;
 
   const selectedIds = player?.selectedIds ?? [];
@@ -88,16 +89,8 @@ export function GameScreen({
   
   // Word timer calculations with board density (use clock for real-time updates)
   const wordStartedAt = player?.wordStartedAt ?? 0;
-  const columns = player?.columns ?? [];
-  const wordDuration = targetWord
-    ? calculateWordDuration(
-        targetWord,
-        columns,
-        SECONDS_PER_LETTER,
-        player?.pityTimeouts ?? 0,
-        true,
-        player?.wordsCompleted ?? 0,
-      )
+  const wordDuration = player && targetWord
+    ? getPlayerWordDuration(player, gameState.matchMode, gameState.soloDifficulty)
     : 0;
   const currentTime = gameState.matchStatus === 'playing' ? gameState.matchStartedAt + logicalTime : clock.now();
   const wordElapsed = wordStartedAt > 0 ? Math.max(0, currentTime - wordStartedAt) : 0;
@@ -114,7 +107,12 @@ export function GameScreen({
 
   const formedWord = selectedIds.map(id => letterMap.get(id) ?? '').join('');
   const wordMatchesTarget = formedWord === targetWord && formedWord.length >= 3;
-  const wordScore = wordMatchesTarget ? (WORD_SCORE[targetWord.length] ?? 1) : 0;
+  const wordScore = wordMatchesTarget
+    ? Math.round(
+        (WORD_SCORE[targetWord.length] ?? 1) *
+          (isMultiplayer && player ? getMultiplayerScoreMultiplier(player) : 1),
+      )
+    : 0;
 
   const [submitFeedback, setSubmitFeedback] = useState<'valid' | 'invalid' | null>(null);
   const [errorTileId, setErrorTileId] = useState<string | null>(null);
@@ -214,6 +212,13 @@ export function GameScreen({
     onShuffle?.();
   }
 
+  function handleDoubleBonus() {
+    if (!isMultiplayer || !player || player.doubleBonusUsed || player.doubleBonusActive || !targetWord) {
+      return;
+    }
+    onDispatch({ type: 'ACTIVATE_DOUBLE', playerId: 'local', at: clock.now() });
+  }
+
   // Pre-compute which columns the clock doesn't need — just render grid cells
   // columns[col][rowIndex], rowIndex 0 = bottom → visual row = GRID_ROWS - 1 - rowIndex
   const cellsByPosition = new Map<string, { id: string; letter: string }>();
@@ -306,9 +311,9 @@ export function GameScreen({
             </span>
           </div>
           <div className="hud-item">
-            <span className="hud-label">{t.time}</span>
-            <span className={`hud-value${isUrgent ? ' hud-urgent' : ''}`}>
-              {formatTime(timeLeft)}
+            <span className="hud-label">{t.elapsed}</span>
+            <span className="hud-value">
+              {formatTime(elapsedTime)}
             </span>
           </div>
           <div className="hud-item">
@@ -401,6 +406,9 @@ export function GameScreen({
                 {...TILE_BUTTON_ATTRS}
               >
                 <LetterGlyph letter={cell.letter} />
+                {hintCellId === cell.id && (
+                  <span className="grid-tile__hint-badge">{t.hintBadge}</span>
+                )}
                 {isSelected && selOrder >= 0 && (
                   <span className="grid-tile__order">{selOrder + 1}</span>
                 )}
@@ -458,6 +466,24 @@ export function GameScreen({
           >
             {t.skip}
           </button>
+          {isMultiplayer && (
+            <button
+              className={`double-btn${player?.doubleBonusActive ? ' double-btn--active' : ''}`}
+              onClick={handleDoubleBonus}
+              disabled={!targetWord || player?.doubleBonusUsed || player?.doubleBonusActive}
+              title={
+                player?.doubleBonusUsed
+                  ? t.doubleBonusUsed
+                  : player?.doubleBonusActive
+                    ? t.doubleBonusActive
+                    : t.doubleBonus
+              }
+            >
+              {player?.doubleBonusActive
+                ? formatDoubleBonusMultiplierLabel(player.doubleBonusStreak)
+                : '2×'}
+            </button>
+          )}
           {isMultiplayer && (
             <button
               className="shuffle-btn"

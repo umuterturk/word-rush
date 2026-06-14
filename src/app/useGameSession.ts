@@ -3,8 +3,8 @@ import type { GameAction, GameState } from '../domain/types';
 import { INITIAL_GAME_STATE } from '../domain/gameReducer';
 import { updateGame } from '../domain/updateGame';
 import type { ClockPort, StoragePort } from '../ports';
-import { SECONDS_PER_LETTER, AUTO_SKIP_ON_TIMEOUT } from '../domain/constants';
-import { calculateWordDuration } from '../domain/gridUtils';
+import { AUTO_SKIP_ON_TIMEOUT } from '../domain/constants';
+import { getPlayerWordDuration } from '../domain/gridUtils';
 
 interface GameSession {
   gameState: GameState;
@@ -97,13 +97,10 @@ export function useGameSession(clock: ClockPort, storage: StoragePort): GameSess
       ) {
         const player = prev.players['local'];
         if (player.targetWord && player.wordStartedAt > 0) {
-          const wordDuration = calculateWordDuration(
-            player.targetWord,
-            player.columns,
-            SECONDS_PER_LETTER,
-            player.pityTimeouts,
-            true,
-            player.wordsCompleted,
+          const wordDuration = getPlayerWordDuration(
+            player,
+            prev.matchMode,
+            prev.soloDifficulty,
           );
           const elapsed = Math.max(0, now - player.wordStartedAt);
           if (elapsed >= wordDuration) {
@@ -123,7 +120,9 @@ export function useGameSession(clock: ClockPort, storage: StoragePort): GameSess
       if (next.matchStatus === 'playing') {
         setLogicalTime(now - next.matchStartedAt);
       } else if (next.matchStatus === 'ended') {
-        setLogicalTime(next.matchDuration);
+        setLogicalTime(
+          next.matchMode === 'solo' ? now - next.matchStartedAt : next.matchDuration,
+        );
       } else {
         setLogicalTime(0);
       }

@@ -61,7 +61,7 @@ export function EndScreen({
           </>
         ) : (
           <>
-            <h2 className="end-title">{t.timesUp}</h2>
+            <h2 className="end-title">{t.soloComplete}</h2>
             {isNewBest && <div className="new-best-badge">{t.newBest}</div>}
             <div className="end-score">{score}</div>
             <div className="end-score-label">

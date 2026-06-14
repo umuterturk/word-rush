@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { createSeededRng } from '../seededRng';
-import { fillGrid, pickTargetWord, buildLetterFreqMap, calculateWordDuration, calculateWordLetterScarcity, letterFrequencyMultiplier, pityTimeMultiplier, findHintCellId, targetWordSelectionWeight } from '../gridUtils';
-import { GRID_COLS, GRID_ROWS, SECONDS_PER_LETTER, WARMUP_BONUS_MS, TARGET_WORD_LENGTH_RAMP } from '../constants';
+import { fillGrid, pickTargetWord, buildLetterFreqMap, calculateWordDuration, calculateWordLetterScarcity, letterFrequencyMultiplier, pityTimeMultiplier, findHintCellId, targetWordSelectionWeight, refillEmptySlots, getPlayerWordDuration, doubleBonusStreakTimeMultiplier, doubleBonusStreakScoreMultiplier, getMultiplayerScoreMultiplier, formatDoubleBonusMultiplierLabel } from '../gridUtils';
+import { GRID_COLS, GRID_ROWS, SECONDS_PER_LETTER, WARMUP_BONUS_MS, TARGET_WORD_LENGTH_RAMP, DOUBLE_BONUS_SCORE_MULTIPLIER } from '../constants';
+import { createInitialPlayerState } from '../gameReducer';
 
 describe('fillGrid', () => {
   it('creates exactly GRID_COLS columns', () => {
@@ -71,6 +72,104 @@ describe('fillGrid', () => {
       result2.columns.flat().map(c => c.letter).join('')
     );
     expect(result1.wordPool).toEqual(result2.wordPool);
+  });
+});
+
+describe('refillEmptySlots', () => {
+  it('fills every empty slot on an otherwise empty board', () => {
+    const columns = Array.from({ length: GRID_COLS }, () => [] as { id: string; letter: string }[]);
+    const result = refillEmptySlots(createSeededRng('refill-empty'), columns, 'test');
+    expect(result).not.toBeNull();
+    if (!result) return;
+
+    const totalCells = result.columns.reduce((sum, col) => sum + col.length, 0);
+    expect(totalCells).toBe(GRID_COLS * GRID_ROWS);
+    const poolLetters = result.words.join('');
+    const boardLetters = result.columns.flat().map(c => c.letter).join('');
+    expect(poolLetters.length).toBe(GRID_COLS * GRID_ROWS);
+    expect([...poolLetters].sort().join('')).toBe([...boardLetters].sort().join(''));
+  });
+
+  it('fills all gaps after partial removal', () => {
+    const columns = [
+      [{ id: 'a', letter: 'a' }],
+      [{ id: 'b', letter: 'b' }, { id: 'c', letter: 'c' }],
+      [],
+      [],
+      [],
+    ];
+    const before = columns.reduce((sum, col) => sum + col.length, 0);
+    const emptyBefore = GRID_COLS * GRID_ROWS - before;
+    const result = refillEmptySlots(createSeededRng('refill-partial'), columns, 'test');
+    expect(result).not.toBeNull();
+    if (!result) return;
+
+    const after = result.columns.reduce((sum, col) => sum + col.length, 0);
+    expect(after).toBe(GRID_COLS * GRID_ROWS);
+    expect(result.words.join('').length).toBe(emptyBefore);
+  });
+
+  it('keeps the board full across many simulated word finds', () => {
+    for (let seed = 0; seed < 20; seed++) {
+      const rng = createSeededRng(`sim-${seed}`);
+      let { columns, wordPool } = fillGrid(rng);
+      let wordsCompleted = 0;
+
+      for (let round = 0; round < 12; round++) {
+        const target = pickTargetWord(
+          createSeededRng(`pick-${seed}-${round}`),
+          columns,
+          wordPool,
+          wordsCompleted,
+        );
+        if (!target) break;
+
+        const ids: string[] = [];
+        const used = new Set<string>();
+        for (const ch of target) {
+          let found = false;
+          for (const col of columns) {
+            for (const cell of col) {
+              if (cell.letter === ch && !used.has(cell.id)) {
+                ids.push(cell.id);
+                used.add(cell.id);
+                found = true;
+                break;
+              }
+            }
+            if (found) break;
+          }
+        }
+        expect(ids).toHaveLength(target.length);
+
+        const clearSet = new Set(ids);
+        columns = columns.map(col => col.filter(c => !clearSet.has(c.id)));
+        wordPool = wordPool.filter(w => w !== target);
+        wordsCompleted++;
+
+        const refill = refillEmptySlots(
+          createSeededRng(`refill-${seed}-${wordsCompleted}`),
+          columns,
+          `inj${wordsCompleted}`,
+        );
+        expect(refill).not.toBeNull();
+        if (!refill) break;
+        columns = refill.columns;
+        wordPool.push(...refill.words);
+
+        const totalCells = columns.reduce((sum, col) => sum + col.length, 0);
+        expect(totalCells).toBe(GRID_COLS * GRID_ROWS);
+      }
+    }
+  });
+
+  it('returns null when there is not enough room for a word', () => {
+    const colHeight = GRID_ROWS;
+    const columns = Array.from({ length: GRID_COLS }, (_, col) =>
+      Array.from({ length: colHeight }, (_, row) => ({ id: `c${col}r${row}`, letter: 'a' })),
+    );
+    const result = refillEmptySlots(createSeededRng('refill-full'), columns, 'test');
+    expect(result).toBeNull();
   });
 });
 
@@ -255,6 +354,79 @@ describe('calculateWordDuration', () => {
     expect(calculateWordDuration('abcde', columns, SECONDS_PER_LETTER, 0, true, 2)).toBe(base + WARMUP_BONUS_MS[2]);
     expect(calculateWordDuration('abcde', columns, SECONDS_PER_LETTER, 0, true, 3)).toBe(base);
     expect(calculateWordDuration('abcde', columns, SECONDS_PER_LETTER, 0, false, 0)).toBe(base);
+  });
+
+  it('applies solo difficulty time multiplier when pity is enabled', () => {
+    const columns = fullBoardColumns();
+    const base = calculateWordDuration('abcde', columns, SECONDS_PER_LETTER, 0, true, 3);
+    expect(calculateWordDuration('abcde', columns, SECONDS_PER_LETTER, 0, true, 3, 2)).toBeCloseTo(base * 2, 0);
+    expect(calculateWordDuration('abcde', columns, SECONDS_PER_LETTER, 0, true, 3, 4)).toBeCloseTo(base * 4, 0);
+    expect(calculateWordDuration('abcde', columns, SECONDS_PER_LETTER, 0, false, 3, 4)).toBe(base);
+  });
+});
+
+describe('2× mode streak', () => {
+  it('compounds streak multipliers', () => {
+    expect(doubleBonusStreakTimeMultiplier(0)).toBe(1);
+    expect(doubleBonusStreakTimeMultiplier(1)).toBeCloseTo(0.9);
+    expect(doubleBonusStreakTimeMultiplier(2)).toBeCloseTo(0.81);
+    expect(doubleBonusStreakScoreMultiplier(2)).toBeCloseTo(1.21);
+  });
+
+  it('shortens timer compounding with 2× streak', () => {
+    const { columns } = fillGrid(createSeededRng('streak-timer'));
+    const player = {
+      ...createInitialPlayerState(),
+      columns,
+      targetWord: 'abcde',
+      doubleBonusActive: true,
+      doubleBonusStreak: 2,
+    };
+    const base = getPlayerWordDuration(
+      { ...player, doubleBonusStreak: 0 },
+      'multiplayer',
+    );
+    const streaked = getPlayerWordDuration(player, 'multiplayer');
+    expect(streaked).toBeCloseTo(base * 0.81, 0);
+  });
+
+  it('does not shorten timer without 2× active', () => {
+    const { columns } = fillGrid(createSeededRng('streak-off'));
+    const player = {
+      ...createInitialPlayerState(),
+      columns,
+      targetWord: 'abcde',
+      doubleBonusStreak: 3,
+    };
+    const normal = getPlayerWordDuration(player, 'multiplayer');
+    const withoutStreak = getPlayerWordDuration(
+      { ...player, doubleBonusStreak: 0 },
+      'multiplayer',
+    );
+    expect(normal).toBe(withoutStreak);
+  });
+
+  it('returns 1× score without 2× active', () => {
+    const player = {
+      ...createInitialPlayerState(),
+      doubleBonusStreak: 3,
+    };
+    expect(getMultiplayerScoreMultiplier(player)).toBe(1);
+  });
+
+  it('stacks 2× base multiplier on top of streak', () => {
+    const player = {
+      ...createInitialPlayerState(),
+      doubleBonusStreak: 2,
+      doubleBonusActive: true,
+    };
+    expect(getMultiplayerScoreMultiplier(player)).toBeCloseTo(1.21 * DOUBLE_BONUS_SCORE_MULTIPLIER);
+  });
+
+  it('formats active 2× multiplier labels to one decimal', () => {
+    expect(formatDoubleBonusMultiplierLabel(0)).toBe('2.0×');
+    expect(formatDoubleBonusMultiplierLabel(1)).toBe('2.2×');
+    expect(formatDoubleBonusMultiplierLabel(2)).toBe('2.4×');
   });
 });
 
