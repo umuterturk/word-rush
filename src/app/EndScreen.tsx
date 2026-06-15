@@ -68,7 +68,10 @@ export function EndScreen({
               {score === 1 ? t.point : t.points}
             </div>
             {!isNewBest && bestScore > 0 && (
-              <div className="best-score-chip">{t.best} {bestScore}</div>
+              <div className="best-score-chip">
+                <span className="best-score-chip__label">{t.yourBest}</span>
+                <span className="best-score-chip__value">{bestScore}</span>
+              </div>
             )}
           </>
         )}

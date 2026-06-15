@@ -20,6 +20,18 @@ export interface ClockPort {
 export interface StoragePort {
   saveBestScore(score: number): Promise<void>;
   loadBestScore(): Promise<number>;
+  saveUsername(name: string): Promise<void>;
+  loadUsername(): Promise<string>;
+}
+
+export interface LeaderboardEntry {
+  name: string;
+  score: number;
+}
+
+export interface LeaderboardPort {
+  submitScore(name: string, score: number): Promise<void>;
+  fetchTop(limit: number): Promise<LeaderboardEntry[]>;
 }
 
 /**
@@ -27,6 +39,7 @@ export interface StoragePort {
  * Game logic runs locally; Firestore carries shared config + score only.
  */
 export interface MultiplayerPort {
+  setDisplayName(name: string): void;
   quickMatch(): Promise<void>;
   createRoom(): Promise<string>;
   joinRoom(code: string): Promise<void>;

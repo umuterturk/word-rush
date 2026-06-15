@@ -1,4 +1,5 @@
-import { createContext, useContext, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import { syncPwaMetadata } from './syncPwaMetadata';
 import { translations, type Language, type Translations } from './translations';
 
 const STORAGE_KEY = 'word-rush:language';
@@ -27,6 +28,10 @@ function getStoredLanguage(): Language {
 
 export function I18nProvider({ children }: { children: ReactNode }) {
   const [language, setLanguageState] = useState<Language>(getStoredLanguage);
+
+  useEffect(() => {
+    syncPwaMetadata(translations[language], language);
+  }, [language]);
 
   const setLanguage = (lang: Language) => {
     setLanguageState(lang);

@@ -2,6 +2,8 @@ import type { MatchSnapshot } from '../multiplayer/types';
 import type { MultiplayerPort } from '../ports';
 
 export class NoopMultiplayerAdapter implements MultiplayerPort {
+  setDisplayName(_name: string): void {}
+
   async quickMatch(): Promise<void> {
     throw new Error('Multiplayer is not available.');
   }

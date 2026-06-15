@@ -21,6 +21,9 @@ const firebaseConfig = {
 export const MATCHES_COLLECTION =
   import.meta.env.VITE_FIREBASE_MATCHES_COLLECTION ?? 'word-rush-matches';
 
+export const LEADERBOARD_COLLECTION =
+  import.meta.env.VITE_FIREBASE_LEADERBOARD_COLLECTION ?? 'word-rush-leaderboard';
+
 export function isFirebaseConfigured(): boolean {
   return true;
 }

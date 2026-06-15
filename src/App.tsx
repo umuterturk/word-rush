@@ -3,6 +3,8 @@ import { BrowserClockAdapter } from './adapters/BrowserClockAdapter';
 import { LocalStorageAdapter } from './adapters/LocalStorageAdapter';
 import { FirebaseMultiplayerAdapter } from './adapters/FirebaseMultiplayerAdapter';
 import { NoopMultiplayerAdapter } from './adapters/NoopMultiplayerAdapter';
+import { FirebaseLeaderboardAdapter } from './adapters/FirebaseLeaderboardAdapter';
+import { NoopLeaderboardAdapter } from './adapters/NoopLeaderboardAdapter';
 import { FirebaseAnalyticsAdapter } from './adapters/FirebaseAnalyticsAdapter';
 import { NoopAnalyticsAdapter } from './adapters/NoopAnalyticsAdapter';
 import { isFirebaseConfigured } from './firebase/config';
@@ -17,11 +19,15 @@ import { GameScreen } from './app/GameScreen';
 import { EndScreen } from './app/EndScreen';
 import { MultiplayerLobbyScreen } from './app/MultiplayerLobbyScreen';
 import { FriendMatchOverlay } from './app/FriendMatchOverlay';
+import { useAppUpdate } from './app/useAppUpdate';
+import { usePlayerProfile } from './app/usePlayerProfile';
+import { useLeaderboard } from './app/useLeaderboard';
 
 const clock = new BrowserClockAdapter();
 const storage = new LocalStorageAdapter();
 const firebaseReady = isFirebaseConfigured();
 const multiplayer = firebaseReady ? new FirebaseMultiplayerAdapter() : new NoopMultiplayerAdapter();
+const leaderboard = firebaseReady ? new FirebaseLeaderboardAdapter() : new NoopLeaderboardAdapter();
 const analytics = firebaseReady ? new FirebaseAnalyticsAdapter() : new NoopAnalyticsAdapter();
 
 type AppMode = 'solo' | 'multiplayer';
@@ -31,6 +37,9 @@ type FriendMatchPhase = 'creating' | 'sharing' | 'waiting' | 'found';
 export default function App() {
   const { t } = useI18n();
   const { gameState, logicalTime, bestScore, dispatchAction } = useGameSession(clock, storage);
+  const { username, saveUsername } = usePlayerProfile(storage);
+  const { entries: leaderboardEntries, loading: leaderboardLoading, refresh: refreshLeaderboard } =
+    useLeaderboard(leaderboard);
   const mp = useMultiplayer(multiplayer, firebaseReady);
 
   const [appMode, setAppMode] = useState<AppMode>('solo');
@@ -45,6 +54,13 @@ export default function App() {
   const matchStartedRef = useRef(false);
   const roundRef = useRef(0);
   const lastShuffleNonceRef = useRef(0);
+
+  const isMainMenu = gameState.matchStatus === 'idle' && !showCountdown;
+  useAppUpdate(isMainMenu);
+
+  useEffect(() => {
+    multiplayer.setDisplayName(username);
+  }, [username]);
 
   const deepLinkHandled = useRef(false);
   useEffect(() => {
@@ -208,10 +224,20 @@ export default function App() {
       });
     } else {
       analytics.track('match_ended', { mode: 'solo', score: localScore });
+      if (localScore > 0) {
+        void leaderboard.submitScore(username.trim(), localScore).then(() => refreshLeaderboard());
+      }
     }
 
     matchStartedRef.current = false;
-  }, [gameState.matchStatus, gameState.players, isMultiplayer, mp]);
+  }, [
+    gameState.matchStatus,
+    gameState.players,
+    isMultiplayer,
+    mp,
+    username,
+    refreshLeaderboard,
+  ]);
 
   // Apply an incoming shuffle attack: the opponent scrambled our board.
   useEffect(() => {
@@ -327,6 +353,10 @@ export default function App() {
       <>
         <StartScreen
           bestScore={bestScore}
+          username={username}
+          onSaveUsername={saveUsername}
+          leaderboard={leaderboardEntries}
+          leaderboardLoading={leaderboardLoading}
           multiplayerAvailable={firebaseReady}
           onPlaySolo={handlePlaySolo}
           onPlayWithFriend={handleCreateRoom}
@@ -367,7 +397,7 @@ export default function App() {
       score={gameState.players['local']?.score ?? 0}
       bestScore={bestScore}
       onPlayAgain={handlePlayAgain}
-      onBackToMenu={isMultiplayer ? handleBackToMenu : undefined}
+      onBackToMenu={handleBackToMenu}
       isMultiplayer={isMultiplayer}
       opponentScore={mp.opponentScore}
       opponentName={mp.opponentName}

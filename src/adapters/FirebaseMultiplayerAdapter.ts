@@ -82,8 +82,17 @@ function parseSnapshot(matchId: string, data: MatchDoc, localUid: string): Match
 export class FirebaseMultiplayerAdapter implements MultiplayerPort {
   private matchId: string | null = null;
   private localUid: string | null = null;
+  private displayName = '';
   private unsubscribe: (() => void) | null = null;
   private handler: ((snapshot: MatchSnapshot | null) => void) | null = null;
+
+  setDisplayName(name: string): void {
+    this.displayName = name.trim();
+  }
+
+  private playerName(uid: string): string {
+    return this.displayName || generatePlayerName(uid);
+  }
 
   private async getUid(): Promise<string> {
     if (!this.localUid) {
@@ -171,7 +180,7 @@ export class FirebaseMultiplayerAdapter implements MultiplayerPort {
           const newCount = playerCount + 1;
           transaction.update(candidate.ref, {
             [`players.${uid}`]: {
-              name: generatePlayerName(uid),
+              name: this.playerName(uid),
               score: 0,
               joinedAt: Date.now(),
             },
@@ -201,7 +210,7 @@ export class FirebaseMultiplayerAdapter implements MultiplayerPort {
       createdAt: serverTimestamp(),
       players: {
         [uid]: {
-          name: generatePlayerName(uid),
+          name: this.playerName(uid),
           score: 0,
           joinedAt: Date.now(),
         },
@@ -230,7 +239,7 @@ export class FirebaseMultiplayerAdapter implements MultiplayerPort {
       createdAt: serverTimestamp(),
       players: {
         [uid]: {
-          name: generatePlayerName(uid),
+          name: this.playerName(uid),
           score: 0,
           joinedAt: Date.now(),
         },
@@ -282,7 +291,7 @@ export class FirebaseMultiplayerAdapter implements MultiplayerPort {
       console.log('[MP:joinRoom] writing player, newStatus=', newStatus);
       transaction.update(roomRef, {
         [`players.${uid}`]: {
-          name: generatePlayerName(uid),
+          name: this.playerName(uid),
           score: 0,
           joinedAt: Date.now(),
         },

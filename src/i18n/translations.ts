@@ -6,6 +6,13 @@ export interface Translations {
   gameTitle: string;
   gameSubtitle: string;
   best: string;
+  yourBest: string;
+  yourName: string;
+  namePlaceholder: string;
+  login: string;
+  save: string;
+  leaderboard: string;
+  leaderboardEmpty: string;
   easy: string;
   normal: string;
   hard: string;
@@ -77,6 +84,17 @@ export interface Translations {
   // Share
   shareTitle: string;
   shareText: string;
+
+  // Install
+  installTitle: string;
+  installHint: string;
+  installHintIos: string;
+  installAction: string;
+  installDismiss: string;
+
+  // PWA
+  pwaName: string;
+  pwaDescription: string;
 }
 
 export const translations: Record<Language, Translations> = {
@@ -86,6 +104,13 @@ export const translations: Record<Language, Translations> = {
     gameTitle: 'WORD RUSH',
     gameSubtitle: 'clear the board · 5 refills',
     best: 'BEST',
+    yourBest: 'YOUR BEST',
+    yourName: 'YOUR NAME',
+    namePlaceholder: 'Enter name',
+    login: 'LOGIN',
+    save: 'SAVE',
+    leaderboard: 'TOP 3',
+    leaderboardEmpty: 'No scores yet',
     easy: 'EASY',
     normal: 'NORMAL',
     hard: 'HARD',
@@ -157,13 +182,30 @@ export const translations: Record<Language, Translations> = {
     // Share
     shareTitle: 'Word Rush 1v1',
     shareText: 'Join my game!',
+
+    // Install
+    installTitle: 'Install Word Rush',
+    installHint: 'Add to your home screen for quick access.',
+    installHintIos: 'Tap Share, then "Add to Home Screen".',
+    installAction: 'Install',
+    installDismiss: 'Dismiss',
+
+    pwaName: 'Word Rush',
+    pwaDescription: 'Tap falling letters to spell Turkish words against the clock.',
   },
   tr: {
     // Start screen
     startBadge: 'HARFLERİ DOKUN · TÜRKÇE KELİME YAZ',
-    gameTitle: 'WORD RUSH',
+    gameTitle: 'YAZYAZ',
     gameSubtitle: 'tahtayı temizle · 5 yenileme',
     best: 'EN İYİ',
+    yourBest: 'EN İYİ SKORUN',
+    yourName: 'ADIN',
+    namePlaceholder: 'Adını yaz',
+    login: 'GİRİŞ',
+    save: 'KAYDET',
+    leaderboard: 'İLK 3',
+    leaderboardEmpty: 'Henüz skor yok',
     easy: 'KOLAY',
     normal: 'NORMAL',
     hard: 'ZOR',
@@ -233,7 +275,17 @@ export const translations: Record<Language, Translations> = {
     cancel: 'İPTAL',
 
     // Share
-    shareTitle: 'Word Rush 1\'e 1',
+    shareTitle: 'YazYaz 1\'e 1',
     shareText: 'Oyunuma katıl!',
+
+    // Install
+    installTitle: 'YazYaz\'ı Yükle',
+    installHint: 'Hızlı erişim için ana ekrana ekle.',
+    installHintIos: 'Paylaş\'a dokun, ardından "Ana Ekrana Ekle".',
+    installAction: 'Yükle',
+    installDismiss: 'Kapat',
+
+    pwaName: 'YazYaz',
+    pwaDescription: 'Harflere dokunarak süreye karşı Türkçe kelime yaz.',
   },
 };

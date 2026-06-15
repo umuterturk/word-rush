@@ -43,28 +43,178 @@ button {
 /* ─── Start Screen ───────────────────────────────────────────────────────── */
 
 .start-screen {
+  position: relative;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
+  overflow: hidden;
   background: radial-gradient(ellipse at 50% 40%, #1a1a40 0%, #0b0b18 70%);
+}
+
+.start-hero {
+  width: 100%;
+  padding: max(56px, calc(env(safe-area-inset-top, 0px) + 44px)) 20px 0;
+  text-align: center;
+  flex-shrink: 0;
 }
 
 .start-content {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 20px;
-  padding: 32px 24px;
-  padding-bottom: max(32px, env(safe-area-inset-bottom, 0px));
+  gap: 18px;
+  padding: 20px 20px 16px;
+  padding-bottom: max(16px, env(safe-area-inset-bottom, 0px));
   text-align: center;
   max-width: 400px;
   width: 100%;
   position: relative;
+  overflow: hidden;
+  flex-shrink: 1;
+  min-height: 0;
+}
+
+.start-top-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: max(16px, env(safe-area-inset-top, 0px)) 16px 0;
+}
+
+.start-top-bar .language-switcher {
+  position: static;
+  flex-shrink: 0;
+}
+
+.profile-chip {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 100px;
+  color: rgba(255, 255, 255, 0.7);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  padding: 8px 16px;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.profile-chip:active {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.profile-chip--logged-in {
+  color: #ffd54f;
+  border-color: rgba(255, 213, 79, 0.35);
+  background: rgba(255, 213, 79, 0.08);
+}
+
+.profile-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(11, 11, 24, 0.8);
+  backdrop-filter: blur(6px);
+}
+
+.profile-popup {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+  max-width: 320px;
+  padding: 28px 24px;
+  background: #12122a;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.45);
+}
+
+.profile-popup-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  color: #888;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.profile-input {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  color: #fff;
+  font-family: inherit;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  padding: 14px 16px;
+  text-align: center;
+  outline: none;
+  user-select: text;
+}
+
+.profile-input::placeholder {
+  color: rgba(255, 255, 255, 0.25);
+  font-weight: 600;
+}
+
+.profile-input:focus {
+  border-color: rgba(255, 213, 79, 0.5);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.profile-popup-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.profile-btn {
+  flex: 1;
+  border: none;
+  border-radius: 100px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  padding: 14px 16px;
+  cursor: pointer;
+  transition: opacity 0.1s ease, transform 0.1s ease;
+}
+
+.profile-btn:active {
+  transform: scale(0.97);
+  opacity: 0.85;
+}
+
+.profile-btn--ghost {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.profile-btn--primary {
+  background: linear-gradient(135deg, #ffd54f, #ffb300);
+  color: #0b0b18;
 }
 
 .language-switcher {
-  position: absolute;
-  top: 32px;
-  right: 24px;
   display: flex;
   gap: 6px;
   background: rgba(255, 255, 255, 0.05);
@@ -96,16 +246,9 @@ button {
   opacity: 0.6;
 }
 
-.start-badge {
-  font-size: 11px;
-  letter-spacing: 2px;
-  color: #555;
-  text-transform: uppercase;
-}
-
-.game-title {
+.start-screen .game-title {
   margin: 0;
-  font-size: clamp(52px, 18vw, 100px);
+  font-size: clamp(52px, 18vw, 96px);
   font-weight: 900;
   letter-spacing: 6px;
   line-height: 1;
@@ -115,13 +258,24 @@ button {
   background-clip: text;
 }
 
-.game-subtitle {
-  margin: 0;
-  font-size: 15px;
-  color: #666;
+.start-screen .best-score-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255, 241, 118, 0.12);
+  border: 1px solid rgba(255, 241, 118, 0.3);
+  color: #fff176;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  padding: 4px 12px;
+  border-radius: 100px;
 }
 
 .best-score-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
   background: rgba(255, 241, 118, 0.12);
   border: 1px solid rgba(255, 241, 118, 0.3);
   color: #fff176;
@@ -130,6 +284,76 @@ button {
   letter-spacing: 2px;
   padding: 6px 18px;
   border-radius: 100px;
+}
+
+.best-score-chip__label {
+  color: rgba(255, 241, 118, 0.85);
+}
+
+.best-score-chip__value {
+  color: #fff;
+  font-size: 1.15em;
+  font-weight: 900;
+  letter-spacing: 1px;
+}
+
+.start-screen .leaderboard {
+  width: 100%;
+  max-width: 300px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 10px 12px;
+}
+
+.leaderboard-title {
+  font-size: 10px;
+  letter-spacing: 1.5px;
+  color: #666;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+
+.leaderboard-empty {
+  font-size: 13px;
+  color: #555;
+}
+
+.start-screen .leaderboard-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.start-screen .leaderboard-row {
+  display: grid;
+  grid-template-columns: 24px 1fr auto;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.start-screen .leaderboard-rank {
+  font-size: 14px;
+  line-height: 1;
+}
+
+.leaderboard-name {
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.85);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+}
+
+.leaderboard-score {
+  font-weight: 900;
+  color: #ffd54f;
+  letter-spacing: 1px;
 }
 
 .play-btn {
@@ -186,22 +410,23 @@ button {
   min-height: 48px;
 }
 
-.mode-buttons {
+.start-screen .mode-buttons {
   display: flex;
   flex-direction: column;
   gap: 12px;
   width: 100%;
-  max-width: 280px;
+  max-width: 300px;
 }
 
-.mode-buttons .play-btn {
+.start-screen .mode-buttons .play-btn {
   width: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
   text-align: center;
-  letter-spacing: 2px;
-  padding: 18px 24px;
+  letter-spacing: 3px;
+  font-size: 18px;
+  padding: 16px 24px;
   line-height: 1.25;
   min-height: 56px;
 }
@@ -218,11 +443,90 @@ button {
   font-size: 12px;
 }
 
-.start-hint {
+.start-screen .install-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  margin-top: 4px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  text-align: left;
+}
+
+@media (max-height: 740px) {
+  .start-hero {
+    padding-top: max(48px, calc(env(safe-area-inset-top, 0px) + 36px));
+  }
+
+  .start-content {
+    gap: 14px;
+    padding-top: 14px;
+    padding-bottom: max(12px, env(safe-area-inset-bottom, 0px));
+  }
+
+  .start-screen .game-title {
+    font-size: clamp(44px, 16vw, 72px);
+  }
+
+  .start-screen .mode-buttons .play-btn {
+    min-height: 48px;
+    padding: 14px 20px;
+    font-size: 17px;
+  }
+
+  .start-screen .mode-buttons {
+    gap: 10px;
+  }
+}
+
+.install-banner__content {
+  flex: 1;
+  min-width: 0;
+}
+
+.install-banner__title {
+  margin: 0 0 4px;
   font-size: 13px;
-  line-height: 1.7;
-  color: #444;
-  max-width: 280px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: #fff;
+}
+
+.install-banner__hint {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.install-banner__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.install-banner__install {
+  border: none;
+  border-radius: 100px;
+  padding: 8px 14px;
+  background: linear-gradient(135deg, #81c784, #43a047);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.install-banner__dismiss {
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 20px;
+  line-height: 1;
+  padding: 0 2px;
 }
 
 /* ─── Countdown Screen ───────────────────────────────────────────────────── */
