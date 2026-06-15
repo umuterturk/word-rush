@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useI18n } from '../i18n';
 
 interface Props {
@@ -12,10 +12,14 @@ const STEP_DURATION_MS = 667;
 export function CountdownScreen({ onComplete, opponentName }: Props) {
   const [step, setStep] = useState(0);
   const { t } = useI18n();
+  const onCompleteRef = useRef(onComplete);
+  useEffect(() => {
+    onCompleteRef.current = onComplete;
+  }, [onComplete]);
 
   useEffect(() => {
     if (step >= COUNTDOWN_VALUES.length) {
-      onComplete();
+      onCompleteRef.current();
       return;
     }
 
@@ -24,7 +28,7 @@ export function CountdownScreen({ onComplete, opponentName }: Props) {
     }, STEP_DURATION_MS);
 
     return () => clearTimeout(timer);
-  }, [step, onComplete]);
+  }, [step]);
 
   const countdownValue = COUNTDOWN_VALUES[step];
 

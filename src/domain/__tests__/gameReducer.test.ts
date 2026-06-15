@@ -116,13 +116,14 @@ describe('SELECT_LETTER', () => {
     expect(next.players['local'].selectedIds).toEqual([]);
   });
 
-  it('deselects an already-selected cell (toggle)', () => {
+  it('ignores an already-selected cell', () => {
     const state = startedState();
     const firstLetter = Array.from(state.players['local'].targetWord)[0];
     const cellId = findCellForLetter(state, firstLetter)!;
     const selected = gameReducer(state, { type: 'SELECT_LETTER', playerId: 'local', letterId: cellId });
-    const deselected = gameReducer(selected, { type: 'SELECT_LETTER', playerId: 'local', letterId: cellId });
-    expect(deselected.players['local'].selectedIds).not.toContain(cellId);
+    const retapped = gameReducer(selected, { type: 'SELECT_LETTER', playerId: 'local', letterId: cellId });
+    expect(retapped).toBe(selected);
+    expect(retapped.players['local'].selectedIds).toContain(cellId);
   });
 });
 
@@ -171,7 +172,7 @@ describe('SUBMIT_WORD', () => {
     };
   }
 
-  it('awards points and clears cells on correct word', () => {
+  it('awards word points and clears cells on correct solo word', () => {
     const state = stateWithManualTarget('bal');
     const next = gameReducer(state, { type: 'SUBMIT_WORD', playerId: 'local', at: 2000 });
     const player = next.players['local'];
@@ -257,6 +258,21 @@ describe('SUBMIT_WORD', () => {
     expect(next.players['local'].refillsRemaining).toBe(SOLO_REFILL_LIMIT - 1);
   });
 
+  it('keeps the same running score when the board is cleared in solo', () => {
+    const state = {
+      ...stateWithOnlyTarget('bal'),
+      players: {
+        local: {
+          ...stateWithOnlyTarget('bal').players['local'],
+          refillsRemaining: 0,
+        },
+      },
+    };
+    const next = gameReducer(state, { type: 'SUBMIT_WORD', playerId: 'local', at: 30_000 });
+    expect(next.matchStatus).toBe('ended');
+    expect(next.players['local'].score).toBeGreaterThan(0);
+  });
+
   it('ends solo when board is empty and refills are exhausted', () => {
     const state = {
       ...stateWithOnlyTarget('bal'),
@@ -306,7 +322,7 @@ describe('SUBMIT_WORD', () => {
   });
 });
 
-describe('double bonus (multiplayer)', () => {
+describe('double bonus', () => {
   it('activates 2× and halves elapsed time on the current word', () => {
     const state = startedState('double', 1000, 'multiplayer');
     const player = state.players['local'];
@@ -317,7 +333,7 @@ describe('double bonus (multiplayer)', () => {
     expect(next.players['local'].wordStartedAt).toBe(at - (at - player.wordStartedAt) / 2);
   });
 
-  it('ignores activation when already used or not multiplayer', () => {
+  it('ignores activation when already used', () => {
     const mp = startedState('double-used', 1000, 'multiplayer');
     const used = {
       ...mp,
@@ -326,25 +342,29 @@ describe('double bonus (multiplayer)', () => {
       },
     };
     expect(gameReducer(used, { type: 'ACTIVATE_DOUBLE', playerId: 'local', at: 2000 })).toBe(used);
+  });
 
+  it('activates 2× in solo mode', () => {
     const solo = startedState('double-solo', 1000, 'solo');
-    expect(gameReducer(solo, { type: 'ACTIVATE_DOUBLE', playerId: 'local', at: 2000 })).toBe(solo);
+    const next = gameReducer(solo, { type: 'ACTIVATE_DOUBLE', playerId: 'local', at: 2000 });
+    expect(next.players['local'].doubleBonusActive).toBe(true);
   });
 
   it('doubles score on success and keeps 2× active', () => {
     const base = startedState('double-score', 1000, 'multiplayer');
-    const manual = stateWithManualTargetFrom(base, 'bal');
-    const withoutDouble = gameReducer(manual, { type: 'SUBMIT_WORD', playerId: 'local', at: 3000 });
+    const manual = stateWithManualTargetFrom(base, 'balon');
+    const submitted = manual.players['local'].wordStartedAt + 100;
+    const withoutDouble = gameReducer(manual, { type: 'SUBMIT_WORD', playerId: 'local', at: submitted });
     const withDouble = {
       ...manual,
       players: {
         local: { ...manual.players['local'], doubleBonusActive: true },
       },
     };
-    const withDoubleResult = gameReducer(withDouble, { type: 'SUBMIT_WORD', playerId: 'local', at: 3000 });
+    const withDoubleResult = gameReducer(withDouble, { type: 'SUBMIT_WORD', playerId: 'local', at: submitted });
     expect(withDoubleResult.players['local'].doubleBonusUsed).toBe(false);
     expect(withDoubleResult.players['local'].doubleBonusActive).toBe(true);
-    expect(withDoubleResult.players['local'].score).toBe(withoutDouble.players['local'].score * 2);
+    expect(withDoubleResult.players['local'].score).toBeGreaterThan(withoutDouble.players['local'].score);
   });
 
   it('keeps 2× active across multiple successful words', () => {
@@ -429,7 +449,22 @@ describe('2× mode streak', () => {
     expect(Number.isInteger(next.players['local'].score)).toBe(true);
   });
 
-  it('compounds score by 10% per consecutive find while 2× is active', () => {
+  it('doubles solo score while 2× is active', () => {
+    const base = startedState('solo-double', 1000, 'solo');
+    const manual = stateWithManualTargetFrom(base, 'balon');
+    const submitted = manual.players['local'].wordStartedAt + 100;
+    const withoutDouble = gameReducer(manual, { type: 'SUBMIT_WORD', playerId: 'local', at: submitted });
+    const withDouble = {
+      ...manual,
+      players: {
+        local: { ...manual.players['local'], doubleBonusActive: true },
+      },
+    };
+    const withDoubleResult = gameReducer(withDouble, { type: 'SUBMIT_WORD', playerId: 'local', at: submitted });
+    expect(withDoubleResult.players['local'].score).toBeGreaterThan(withoutDouble.players['local'].score);
+  });
+
+  it('increments 2× streak on success while active and resets on miss', () => {
     const base = startedState('streak-score', 1000, 'multiplayer');
     const first = {
       ...stateWithManualTargetFrom(base, 'bal'),
@@ -452,16 +487,23 @@ describe('2× mode streak', () => {
       'bal',
     );
     const afterSecond = gameReducer(second, { type: 'SUBMIT_WORD', playerId: 'local', at: 5000 });
-    const firstScore = afterFirst.players['local'].score;
-    const secondGain = afterSecond.players['local'].score - firstScore;
-    expect(secondGain).toBeCloseTo(firstScore * 1.1, 0);
+    expect(afterSecond.players['local'].doubleBonusStreak).toBe(2);
+    expect(afterSecond.players['local'].score).toBeGreaterThan(afterFirst.players['local'].score);
   });
 
-  it('does not track streak in solo', () => {
+  it('tracks 2× streak in solo when active', () => {
     const base = startedState('solo-streak', 1000, 'solo');
-    const manual = stateWithManualTargetFrom(base, 'bal');
+    const manual = {
+      ...stateWithManualTargetFrom(base, 'bal'),
+      players: {
+        local: {
+          ...stateWithManualTargetFrom(base, 'bal').players['local'],
+          doubleBonusActive: true,
+        },
+      },
+    };
     const afterFind = gameReducer(manual, { type: 'SUBMIT_WORD', playerId: 'local', at: 3000 });
-    expect(afterFind.players['local'].doubleBonusStreak).toBe(0);
+    expect(afterFind.players['local'].doubleBonusStreak).toBe(1);
   });
 });
 

@@ -19,6 +19,7 @@ import { GameScreen } from './app/GameScreen';
 import { EndScreen } from './app/EndScreen';
 import { MultiplayerLobbyScreen } from './app/MultiplayerLobbyScreen';
 import { FriendMatchOverlay } from './app/FriendMatchOverlay';
+import { RoomUnavailableScreen } from './app/RoomUnavailableScreen';
 import { useAppUpdate } from './app/useAppUpdate';
 import { usePlayerProfile } from './app/usePlayerProfile';
 import { useLeaderboard } from './app/useLeaderboard';
@@ -49,11 +50,13 @@ export default function App() {
   const [showCountdown, setShowCountdown] = useState(false);
   const [soloDifficulty, setSoloDifficulty] = useState<SoloDifficulty>('normal');
   const [isRematching, setIsRematching] = useState(false);
+  const [gameUnavailable, setGameUnavailable] = useState(false);
   const [shuffleSignal, setShuffleSignal] = useState(0);
   const prevScoreRef = useRef(0);
   const matchStartedRef = useRef(false);
   const roundRef = useRef(0);
   const lastShuffleNonceRef = useRef(0);
+  const matchEndedAtRef = useRef(0);
 
   const isMainMenu = gameState.matchStatus === 'idle' && !showCountdown;
   useAppUpdate(isMainMenu);
@@ -81,6 +84,12 @@ export default function App() {
       void mp.joinRoom(joinCode);
     }
   }, [mp]);
+
+  useEffect(() => {
+    if (lobbyMode !== 'join' || mp.phase !== 'idle' || !mp.error) return;
+    setGameUnavailable(true);
+    void mp.cancel();
+  }, [lobbyMode, mp.phase, mp.error, mp]);
 
   const isMultiplayer = appMode === 'multiplayer';
 
@@ -115,6 +124,7 @@ export default function App() {
   }, []);
 
   const handleCreateRoom = useCallback(async () => {
+    setGameUnavailable(false);
     analytics.track('mode_selected', { mode: 'create_room' });
     roundRef.current = 0;
     setAppMode('multiplayer');
@@ -139,6 +149,12 @@ export default function App() {
     },
     [mp],
   );
+
+  const handleDismissUnavailable = useCallback(() => {
+    setGameUnavailable(false);
+    setAppMode('solo');
+    setLobbyMode('quick');
+  }, []);
 
   const handleCancelLobby = useCallback(() => {
     void mp.cancel();
@@ -169,6 +185,8 @@ export default function App() {
   }, [isMultiplayer, gameState.players, dispatchAction, mp]);
 
   const handlePlayAgain = useCallback(() => {
+    if (clock.now() - matchEndedAtRef.current < 500) return;
+
     if (isMultiplayer) {
       // Rematch reuses the SAME match doc. Just mark ourselves ready; when both
       // players are ready the doc resets (new seed, scores 0, round++) and the
@@ -185,6 +203,7 @@ export default function App() {
   const handleBackToMenu = useCallback(() => {
     roundRef.current = 0;
     setIsRematching(false);
+    setGameUnavailable(false);
     setFriendMatchPhase(null);
     setInviteCopied(false);
     void mp.reset();
@@ -205,6 +224,12 @@ export default function App() {
     setAppMode('solo');
     dispatchAction({ type: 'RESET' });
   }, [isMultiplayer, mp, dispatchAction]);
+
+  useEffect(() => {
+    if (gameState.matchStatus === 'ended') {
+      matchEndedAtRef.current = clock.now();
+    }
+  }, [gameState.matchStatus]);
 
   // When match ends, track analytics and publish final score
   useEffect(() => {
@@ -303,10 +328,24 @@ export default function App() {
     return String(clock.now());
   }, [isMultiplayer, mp.matchConfig?.seed]);
 
+  const handleCountdownComplete = useCallback(() => {
+    startMatch(getMatchSeed());
+  }, [startMatch, getMatchSeed]);
+
+  if (gameUnavailable) {
+    return (
+      <RoomUnavailableScreen
+        onInviteFriend={handleCreateRoom}
+        onMainMenu={handleDismissUnavailable}
+      />
+    );
+  }
+
   if (
     isMultiplayer &&
     (isRematching ||
-      (lobbyMode !== 'create' && (mp.phase === 'searching' || mp.phase === 'waiting')))
+      (lobbyMode === 'join' && (mp.phase === 'searching' || mp.phase === 'waiting')) ||
+      (lobbyMode !== 'create' && lobbyMode !== 'join' && (mp.phase === 'searching' || mp.phase === 'waiting')))
   ) {
     return (
       <MultiplayerLobbyScreen
@@ -321,22 +360,10 @@ export default function App() {
     );
   }
 
-  if (isMultiplayer && lobbyMode === 'join' && mp.phase === 'idle' && !showCountdown) {
-    return (
-      <MultiplayerLobbyScreen
-        mode="join"
-        opponentName=""
-        error={mp.error}
-        onCancel={handleCancelLobby}
-        onJoin={handleJoinRoom}
-      />
-    );
-  }
-
   if (showCountdown) {
     return (
       <CountdownScreen
-        onComplete={() => startMatch(getMatchSeed())}
+        onComplete={handleCountdownComplete}
         opponentName={isMultiplayer ? mp.opponentName : undefined}
       />
     );
@@ -378,7 +405,6 @@ export default function App() {
       <GameScreen
         gameState={gameState}
         logicalTime={logicalTime}
-        bestScore={bestScore}
         onDispatch={dispatchAction}
         clock={clock}
         isMultiplayer={isMultiplayer}

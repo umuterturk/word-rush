@@ -444,16 +444,164 @@ button {
 }
 
 .start-screen .install-banner {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
+  position: relative;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: start;
+  gap: 14px;
   width: 100%;
-  margin-top: 4px;
-  padding: 10px 12px;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  margin-top: 8px;
+  padding: 16px;
+  border-radius: 18px;
+  background: linear-gradient(145deg, rgba(255, 213, 79, 0.12) 0%, rgba(79, 195, 247, 0.08) 55%, rgba(255, 255, 255, 0.04) 100%);
+  border: 1px solid rgba(255, 213, 79, 0.28);
+  box-shadow:
+    0 10px 32px rgba(0, 0, 0, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
   text-align: left;
+  overflow: hidden;
+}
+
+.install-banner__glow {
+  position: absolute;
+  inset: -40% auto auto -20%;
+  width: 180px;
+  height: 180px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 213, 79, 0.22) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.install-banner__icon {
+  position: relative;
+  z-index: 1;
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+  flex-shrink: 0;
+}
+
+.install-banner__body {
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+}
+
+.install-banner__eyebrow {
+  margin: 0 0 2px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  color: #ffd54f;
+}
+
+.install-banner__title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: 0.3px;
+  color: #fff;
+  line-height: 1.2;
+}
+
+.install-banner__subtitle {
+  margin: 4px 0 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: rgba(255, 255, 255, 0.62);
+}
+
+.install-banner__hint {
+  margin: 10px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.install-banner__steps {
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.install-banner__steps li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  line-height: 1.35;
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.install-banner__step-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.install-banner__step-icon--accent {
+  background: rgba(255, 213, 79, 0.18);
+  border-color: rgba(255, 213, 79, 0.35);
+  color: #ffd54f;
+}
+
+.install-banner__actions {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.install-banner__cta {
+  border: none;
+  border-radius: 100px;
+  padding: 10px 18px;
+  background: linear-gradient(135deg, #ffd54f, #ffb300);
+  color: #0b0b18;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  box-shadow: 0 6px 20px rgba(255, 179, 0, 0.35);
+  white-space: nowrap;
+}
+
+.install-banner__cta:active {
+  transform: scale(0.97);
+  opacity: 0.9;
+}
+
+.install-banner__dismiss {
+  border: none;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 18px;
+  line-height: 1;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.install-banner__dismiss:active {
+  background: rgba(255, 255, 255, 0.14);
 }
 
 @media (max-height: 740px) {
@@ -482,52 +630,6 @@ button {
   }
 }
 
-.install-banner__content {
-  flex: 1;
-  min-width: 0;
-}
-
-.install-banner__title {
-  margin: 0 0 4px;
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0.5px;
-  color: #fff;
-}
-
-.install-banner__hint {
-  margin: 0;
-  font-size: 12px;
-  line-height: 1.5;
-  color: rgba(255, 255, 255, 0.55);
-}
-
-.install-banner__actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
-}
-
-.install-banner__install {
-  border: none;
-  border-radius: 100px;
-  padding: 8px 14px;
-  background: linear-gradient(135deg, #81c784, #43a047);
-  color: #fff;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.5px;
-}
-
-.install-banner__dismiss {
-  border: none;
-  background: transparent;
-  color: rgba(255, 255, 255, 0.45);
-  font-size: 20px;
-  line-height: 1;
-  padding: 0 2px;
-}
 
 /* ─── Countdown Screen ───────────────────────────────────────────────────── */
 
@@ -660,6 +762,10 @@ button {
   flex-direction: column;
   gap: 12px;
   margin-top: 8px;
+}
+
+.end-buttons--locked {
+  pointer-events: none;
 }
 
 .end-result {
@@ -1086,6 +1192,52 @@ button {
 }
 
 /* Lobby */
+.room-unavailable-screen {
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(ellipse at 50% 40%, #1a1a40 0%, #0b0b18 70%);
+}
+
+.room-unavailable-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  padding: 32px 24px;
+  text-align: center;
+  max-width: 360px;
+  width: 100%;
+}
+
+.room-unavailable-title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: 3px;
+  color: #ef9a9a;
+}
+
+.room-unavailable-hint {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.5;
+  color: #888;
+}
+
+.room-unavailable-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  max-width: 300px;
+  margin-top: 8px;
+}
+
+.room-unavailable-actions .play-btn {
+  width: 100%;
+  min-height: 56px;
+}
+
 .lobby-screen {
   align-items: center;
   justify-content: center;

@@ -1,5 +1,9 @@
+import { useEffect, useState } from 'react';
 import type { MatchResult } from '../multiplayer/types';
 import { useI18n } from '../i18n';
+
+/** Ignore taps briefly after mount so a lift from the game grid/skip bar cannot hit Play Again. */
+const END_ACTION_DELAY_MS = 500;
 
 interface Props {
   score: number;
@@ -25,7 +29,13 @@ export function EndScreen({
   result = null,
 }: Props) {
   const { t } = useI18n();
+  const [actionsEnabled, setActionsEnabled] = useState(false);
   const isNewBest = !isMultiplayer && score > 0 && score >= bestScore;
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setActionsEnabled(true), END_ACTION_DELAY_MS);
+    return () => window.clearTimeout(timer);
+  }, []);
 
   const RESULT_LABELS: Record<MatchResult, string> = {
     win: t.youWin,
@@ -82,12 +92,22 @@ export function EndScreen({
           </div>
         )}
 
-        <div className="end-buttons">
-          <button className="play-btn" onClick={onPlayAgain}>
+        <div className={`end-buttons${actionsEnabled ? '' : ' end-buttons--locked'}`}>
+          <button
+            className="play-btn"
+            disabled={!actionsEnabled}
+            onPointerDown={e => e.preventDefault()}
+            onClick={onPlayAgain}
+          >
             {isMultiplayer ? t.rematch : t.playAgain}
           </button>
           {onBackToMenu && (
-            <button className="play-btn play-btn--secondary" onClick={onBackToMenu}>
+            <button
+              className="play-btn play-btn--secondary"
+              disabled={!actionsEnabled}
+              onPointerDown={e => e.preventDefault()}
+              onClick={onBackToMenu}
+            >
               {t.menu}
             </button>
           )}

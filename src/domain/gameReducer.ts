@@ -1,7 +1,7 @@
 import type { GameAction, GameState, PlayerState, LandedCell } from './types';
-import { MAX_BUFFER_SIZE, MATCH_DURATION_MS, WORD_SCORE, SKIP_PENALTY, SECONDS_PER_LETTER, SOLO_REFILL_LIMIT } from './constants';
+import { MAX_BUFFER_SIZE, MATCH_DURATION_MS, SKIP_PENALTY, SOLO_REFILL_LIMIT } from './constants';
 import { createSeededRng } from './seededRng';
-import { fillGrid, pickTargetWord, calculateWordDuration, isBoardEmpty, getCellById, isCorrectNextLetter, refillEmptySlots, getMultiplayerScoreMultiplier } from './gridUtils';
+import { fillGrid, pickTargetWord, isBoardEmpty, getCellById, isCorrectNextLetter, refillEmptySlots, computeWordPoints } from './gridUtils';
 
 export function createInitialPlayerState(): PlayerState {
   return {
@@ -88,18 +88,14 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       const exists = columns.some(col => col.some(c => c.id === letterId));
       if (!exists) return state;
 
-      let newSelectedIds: string[];
-      if (selectedIds.includes(letterId)) {
-        // Truncate: keep only letters before the tapped one
-        newSelectedIds = selectedIds.slice(0, selectedIds.indexOf(letterId));
-      } else {
-        if (selectedIds.length >= MAX_BUFFER_SIZE) return state;
-        const letter = getCellById(columns, letterId)?.letter;
-        if (!letter || !isCorrectNextLetter(player.targetWord, selectedIds.length, letter)) {
-          return state;
-        }
-        newSelectedIds = [...selectedIds, letterId];
+      if (selectedIds.includes(letterId)) return state;
+
+      if (selectedIds.length >= MAX_BUFFER_SIZE) return state;
+      const letter = getCellById(columns, letterId)?.letter;
+      if (!letter || !isCorrectNextLetter(player.targetWord, selectedIds.length, letter)) {
+        return state;
       }
+      const newSelectedIds = [...selectedIds, letterId];
 
       return {
         ...state,
@@ -150,30 +146,18 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       // Correct! Clear selected cells and compute new score
       const clearSet = new Set(selectedIds);
       const newColumns = columns.map(col => col.filter(cell => !clearSet.has(cell.id)));
-      const basePoints = WORD_SCORE[targetWord.length] ?? 1;
-      
-      // Speed bonus uses fair baseline (no pity) so extra time doesn't inflate score
-      const scoreDuration = calculateWordDuration(
-        targetWord,
-        columns,
-        SECONDS_PER_LETTER,
-        0,
-        false,
-      );
-      const elapsed = action.at - player.wordStartedAt;
-      const remaining = Math.max(0, scoreDuration - elapsed);
-      const speedBonus = Math.floor(remaining / 1000); // Bonus = remaining seconds
-      
-      const scoreMultiplier =
-        state.matchMode === 'multiplayer' && player.doubleBonusActive
-          ? getMultiplayerScoreMultiplier(player)
-          : 1;
-      const points = Math.round((basePoints + speedBonus) * scoreMultiplier);
+      const isSolo = state.matchMode === 'solo';
       const newWordsCompleted = player.wordsCompleted + 1;
-      const newDoubleBonusStreak =
-        state.matchMode === 'multiplayer' && player.doubleBonusActive
-          ? player.doubleBonusStreak + 1
-          : player.doubleBonusStreak;
+      const newDoubleBonusStreak = player.doubleBonusActive ? player.doubleBonusStreak + 1 : player.doubleBonusStreak;
+      const points = computeWordPoints({
+        word: targetWord,
+        columns,
+        submittedAt: action.at,
+        wordStartedAt: player.wordStartedAt,
+        matchMode: state.matchMode,
+        player,
+        soloDifficulty: state.soloDifficulty,
+      }).total;
 
       // Remove the completed word from the pool
       let finalColumns = newColumns;
@@ -200,11 +184,12 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
 
       // Pick a new target word from the remaining letters and word pool
       // Use a deterministic seed derived from current score + word to stay reproducible
-      const rng = createSeededRng(state.seed + '-' + (player.score + points));
+      const rng = createSeededRng(state.seed + '-' + newWordsCompleted);
       const nextWord = pickTargetWord(rng, finalColumns, finalWordPool, newWordsCompleted);
 
       const boardCleared = isBoardEmpty(finalColumns);
-      const soloComplete = state.matchMode === 'solo' && boardCleared && refillsRemaining === 0;
+      const soloComplete = isSolo && boardCleared && refillsRemaining === 0;
+      const newScore = player.score + points;
 
       return {
         ...state,
@@ -213,7 +198,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
           ...state.players,
           [action.playerId]: {
             ...player,
-            score: player.score + points,
+            score: newScore,
             columns: finalColumns,
             selectedIds: [],
             targetWord: nextWord ?? '',
@@ -248,8 +233,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
             selectedIds: [],
             targetWord: nextWord ?? '',
             wordsCompleted: newWordsCompleted,
-            doubleBonusStreak:
-              state.matchMode === 'multiplayer' && player.doubleBonusActive ? 0 : player.doubleBonusStreak,
+            doubleBonusStreak: player.doubleBonusActive ? 0 : player.doubleBonusStreak,
             wordStartedAt: action.at,
             pityTimeouts: player.pityTimeouts,
             doubleBonusActive: false,
@@ -280,8 +264,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
             selectedIds: [],
             targetWord: nextWord ?? '',
             wordsCompleted: newWordsCompleted,
-            doubleBonusStreak:
-              state.matchMode === 'multiplayer' && player.doubleBonusActive ? 0 : player.doubleBonusStreak,
+            doubleBonusStreak: player.doubleBonusActive ? 0 : player.doubleBonusStreak,
             wordStartedAt: action.at,
             pityTimeouts: newPityTimeouts,
             doubleBonusActive: false,
@@ -306,8 +289,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
 
     case 'ACTIVATE_DOUBLE': {
       const player = state.players[action.playerId];
-      if (!player || state.matchMode !== 'multiplayer') return state;
-      if (player.doubleBonusUsed || player.doubleBonusActive || !player.targetWord) return state;
+      if (!player || player.doubleBonusUsed || player.doubleBonusActive || !player.targetWord) return state;
 
       const elapsed = Math.max(0, action.at - player.wordStartedAt);
       const newStartedAt = action.at - elapsed / 2;

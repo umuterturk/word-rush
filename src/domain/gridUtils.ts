@@ -1,6 +1,6 @@
 import type { RngFn } from './seededRng';
 import type { LandedCell, MatchMode, PlayerState, SoloDifficulty } from './types';
-import { GRID_COLS, GRID_ROWS, MIN_WORD_LENGTH, MAX_WORD_LENGTH, MAX_EMPTY_CELLS, PITY_TIME_BONUS_PER_TIMEOUT, MAX_PITY_TIMEOUTS, WARMUP_BONUS_MS, TARGET_WORD_LENGTH_RAMP, SECONDS_PER_LETTER, SOLO_TIME_MULTIPLIER, MULTIPLAYER_TIME_MULTIPLIER, DOUBLE_BONUS_TIME_MULTIPLIER, DOUBLE_BONUS_SCORE_MULTIPLIER, MULTIPLAYER_STREAK_TIME_FACTOR, MULTIPLAYER_STREAK_SCORE_FACTOR } from './constants';
+import { GRID_COLS, GRID_ROWS, MIN_WORD_LENGTH, MAX_WORD_LENGTH, MAX_EMPTY_CELLS, PITY_TIME_BONUS_PER_TIMEOUT, MAX_PITY_TIMEOUTS, WARMUP_BONUS_MS, TARGET_WORD_LENGTH_RAMP, SECONDS_PER_LETTER, SOLO_TIME_MULTIPLIER, MULTIPLAYER_TIME_MULTIPLIER, DOUBLE_BONUS_TIME_MULTIPLIER, DOUBLE_BONUS_SCORE_MULTIPLIER, MULTIPLAYER_STREAK_TIME_FACTOR, MULTIPLAYER_STREAK_SCORE_FACTOR, WORD_SCORE, SPEED_BONUS_MAX } from './constants';
 import { WORD_LIST } from './wordSet';
 
 // ─── Strategic Grid Fill ──────────────────────────────────────────────────────
@@ -328,6 +328,11 @@ export function letterFrequencyMultiplier(scarcity: number): number {
   return Math.min(1.15, Math.max(0.9, 0.85 + 0.25 * scarcity));
 }
 
+/** Maps board letter scarcity to a score multiplier — rarer letters earn more. */
+export function wordScarcityScoreMultiplier(scarcity: number): number {
+  return Math.min(1.5, Math.max(1, 1 + 0.5 * scarcity));
+}
+
 /**
  * Extra time after consecutive auto-skips. Resets when the player finds a word.
  */
@@ -391,10 +396,53 @@ export function doubleBonusStreakScoreMultiplier(streak: number): number {
   return Math.pow(MULTIPLAYER_STREAK_SCORE_FACTOR, streak);
 }
 
-/** Score multiplier for the current word (1× normally, 2× mode + streak when active). */
-export function getMultiplayerScoreMultiplier(player: PlayerState): number {
+/** Score multiplier for the current word while 2× is active. */
+export function getDoubleScoreMultiplier(player: PlayerState): number {
   if (!player.doubleBonusActive) return 1;
   return DOUBLE_BONUS_SCORE_MULTIPLIER * doubleBonusStreakScoreMultiplier(player.doubleBonusStreak);
+}
+
+/** @deprecated Use getDoubleScoreMultiplier */
+export function getMultiplayerScoreMultiplier(player: PlayerState): number {
+  return getDoubleScoreMultiplier(player);
+}
+
+export interface WordScoreInput {
+  word: string;
+  columns: LandedCell[][];
+  submittedAt: number;
+  wordStartedAt: number;
+  matchMode: MatchMode;
+  player: PlayerState;
+  soloDifficulty?: SoloDifficulty;
+}
+
+export interface WordScoreBreakdown {
+  base: number;
+  scarcityMultiplier: number;
+  timerMultiplier: number;
+  total: number;
+}
+
+/**
+ * Points for one correct word — word length, letter scarcity, and the word timer.
+ * Difficulty and 2× affect score only through the timer (tighter clock = more pressure).
+ */
+export function computeWordPoints(input: WordScoreInput): WordScoreBreakdown {
+  const { word, columns, submittedAt, wordStartedAt, matchMode, player, soloDifficulty } = input;
+  const base = WORD_SCORE[word.length] ?? 1;
+
+  const scarcity = calculateWordLetterScarcity(word, columns);
+  const scarcityMultiplier = wordScarcityScoreMultiplier(scarcity);
+
+  const allowedMs = getPlayerWordDuration(player, matchMode, soloDifficulty);
+  const neutralAllowedMs = getNeutralWordDuration(word, columns, matchMode);
+  const elapsedMs = Math.max(0, submittedAt - wordStartedAt);
+  const timerMultiplier = wordTimerScoreMultiplier(allowedMs, elapsedMs, neutralAllowedMs);
+
+  const total = Math.round(base * scarcityMultiplier * timerMultiplier);
+
+  return { base, scarcityMultiplier, timerMultiplier, total };
 }
 
 /** Label for the 2× button while active, e.g. "2.0×", "2.2×". */
@@ -432,4 +480,41 @@ export function getPlayerWordDuration(
   }
 
   return duration;
+}
+
+/** Neutral reference timer for scoring — no solo difficulty shift, no 2× shrink, no pity/warmup. */
+export function getNeutralWordDuration(
+  word: string,
+  columns: LandedCell[][],
+  matchMode: MatchMode,
+): number {
+  const timeMultiplier =
+    matchMode === 'solo' ? SOLO_TIME_MULTIPLIER.normal : MULTIPLAYER_TIME_MULTIPLIER;
+
+  return calculateWordDuration(
+    word,
+    columns,
+    SECONDS_PER_LETTER,
+    0,
+    false,
+    0,
+    timeMultiplier,
+  );
+}
+
+/**
+ * Score factor from the word timer — difficulty and 2× are embedded via clock pressure.
+ * Tighter timers (hard mode, 2× active) multiply score for the same finish speed.
+ */
+export function wordTimerScoreMultiplier(
+  allowedMs: number,
+  elapsedMs: number,
+  neutralAllowedMs: number,
+): number {
+  if (allowedMs <= 0) return 1;
+
+  const remainingRatio = Math.max(0, Math.min(1, (allowedMs - elapsedMs) / allowedMs));
+  const pressure = neutralAllowedMs > 0 ? neutralAllowedMs / allowedMs : 1;
+
+  return 1 + remainingRatio * pressure * SPEED_BONUS_MAX;
 }

@@ -17,6 +17,9 @@ export interface Translations {
   normal: string;
   hard: string;
   playWithFriend: string;
+  inviteFriend: string;
+  gameUnavailable: string;
+  gameUnavailableHint: string;
   startHint: string;
 
   // Countdown
@@ -86,9 +89,16 @@ export interface Translations {
   shareText: string;
 
   // Install
+  installEyebrow: string;
   installTitle: string;
+  installSubtitle: string;
   installHint: string;
-  installHintIos: string;
+  installStepIosShare: string;
+  installStepIosAdd: string;
+  installStepFirefoxMenu: string;
+  installStepFirefoxInstall: string;
+  installStepManualMenu: string;
+  installStepManualAdd: string;
   installAction: string;
   installDismiss: string;
 
@@ -115,6 +125,9 @@ export const translations: Record<Language, Translations> = {
     normal: 'NORMAL',
     hard: 'HARD',
     playWithFriend: 'PLAY WITH FRIEND',
+    inviteFriend: 'INVITE A FRIEND',
+    gameUnavailable: 'GAME UNAVAILABLE',
+    gameUnavailableHint: 'This invite link has expired or the game has already started.',
     startHint: '',
 
     // Countdown
@@ -184,9 +197,16 @@ export const translations: Record<Language, Translations> = {
     shareText: 'Join my game!',
 
     // Install
+    installEyebrow: 'GET THE APP',
     installTitle: 'Install Word Rush',
+    installSubtitle: 'Full-screen play · one tap from your home screen',
     installHint: 'Add to your home screen for quick access.',
-    installHintIos: 'Tap Share, then "Add to Home Screen".',
+    installStepIosShare: 'Tap the Share button',
+    installStepIosAdd: 'Choose "Add to Home Screen"',
+    installStepFirefoxMenu: 'Tap the menu button ⋮',
+    installStepFirefoxInstall: 'Tap Install or Add to Home screen',
+    installStepManualMenu: 'Open the browser menu ⋮',
+    installStepManualAdd: 'Tap Add to Home screen',
     installAction: 'Install',
     installDismiss: 'Dismiss',
 
@@ -202,7 +222,7 @@ export const translations: Record<Language, Translations> = {
     yourBest: 'EN İYİ SKORUN',
     yourName: 'ADIN',
     namePlaceholder: 'Adını yaz',
-    login: 'GİRİŞ',
+    login: 'GİRİŞ YAP',
     save: 'KAYDET',
     leaderboard: 'İLK 3',
     leaderboardEmpty: 'Henüz skor yok',
@@ -210,6 +230,9 @@ export const translations: Record<Language, Translations> = {
     normal: 'NORMAL',
     hard: 'ZOR',
     playWithFriend: 'ARKADAŞINLA OYNA',
+    inviteFriend: 'ARKADAŞINI DAVET ET',
+    gameUnavailable: 'OYUN MEVCUT DEĞİL',
+    gameUnavailableHint: 'Davet linkinin süresi dolmuş veya oyun başlamış olabilir.',
     startHint: '',
 
     // Countdown
@@ -279,9 +302,16 @@ export const translations: Record<Language, Translations> = {
     shareText: 'Oyunuma katıl!',
 
     // Install
+    installEyebrow: 'UYGULAMAYI İNDİR',
     installTitle: 'YazYaz\'ı Yükle',
+    installSubtitle: 'Tam ekran · ana ekrandan tek dokunuşla',
     installHint: 'Hızlı erişim için ana ekrana ekle.',
-    installHintIos: 'Paylaş\'a dokun, ardından "Ana Ekrana Ekle".',
+    installStepIosShare: 'Paylaş düğmesine dokun',
+    installStepIosAdd: '"Ana Ekrana Ekle"yi seç',
+    installStepFirefoxMenu: 'Menü düğmesine ⋮ dokun',
+    installStepFirefoxInstall: 'Yükle veya Ana ekrana ekle\'ye dokun',
+    installStepManualMenu: 'Tarayıcı menüsünü ⋮ aç',
+    installStepManualAdd: 'Ana ekrana ekle\'ye dokun',
     installAction: 'Yükle',
     installDismiss: 'Kapat',
 

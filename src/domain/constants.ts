@@ -32,6 +32,9 @@ export const MULTIPLAYER_STREAK_TIME_FACTOR = 0.9;
 /** 2× mode: per consecutive find while active, score grows 10% (compound). */
 export const MULTIPLAYER_STREAK_SCORE_FACTOR = 1.1;
 
+/** Speed bonus ceiling when finishing with full timer remaining (1 = up to 2× from timer alone). */
+export const SPEED_BONUS_MAX = 1;
+
 /** Points awarded per word length. */
 export const WORD_SCORE: Readonly<Record<number, number>> = {
   3: 1,

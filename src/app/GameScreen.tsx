@@ -1,15 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { GameAction, GameState } from '../domain/types';
-import { WORD_SCORE, GRID_COLS, GRID_ROWS, SKIP_PENALTY, LETTER_HINT_DELAY_MS } from '../domain/constants';
+import { GRID_COLS, GRID_ROWS, SKIP_PENALTY, LETTER_HINT_DELAY_MS } from '../domain/constants';
 import type { ClockPort } from '../ports';
 import { useI18n } from '../i18n';
-import { getPlayerWordDuration, getMultiplayerScoreMultiplier, formatDoubleBonusMultiplierLabel, findHintCellId, getCellById, isCorrectNextLetter } from '../domain/gridUtils';
+import { getPlayerWordDuration, formatDoubleBonusMultiplierLabel, findHintCellId, getCellById, isCorrectNextLetter, computeWordPoints } from '../domain/gridUtils';
 import { turkishUpper } from '../domain/turkishText';
 
 interface Props {
   gameState: GameState;
   logicalTime: number;
-  bestScore: number;
   onDispatch: (action: GameAction) => void;
   clock: ClockPort;
   isMultiplayer?: boolean;
@@ -65,7 +64,6 @@ const ROW_PCT = 100 / GRID_ROWS;
 export function GameScreen({
   gameState,
   logicalTime,
-  bestScore,
   onDispatch,
   clock,
   isMultiplayer = false,
@@ -81,7 +79,7 @@ export function GameScreen({
   const timeLeft = gameState.matchDuration - logicalTime;
   const isUrgent = isMultiplayer && timeLeft < 30_000;
   const elapsedTime = logicalTime;
-  const localScore = player?.score ?? 0;
+  const displayScore = player?.score ?? 0;
 
   const selectedIds = player?.selectedIds ?? [];
   const selectedSet = new Set(selectedIds);
@@ -107,12 +105,18 @@ export function GameScreen({
 
   const formedWord = selectedIds.map(id => letterMap.get(id) ?? '').join('');
   const wordMatchesTarget = formedWord === targetWord && formedWord.length >= 3;
-  const wordScore = wordMatchesTarget
-    ? Math.round(
-        (WORD_SCORE[targetWord.length] ?? 1) *
-          (isMultiplayer && player ? getMultiplayerScoreMultiplier(player) : 1),
-      )
-    : 0;
+  const wordScore =
+    wordMatchesTarget && player && targetWord
+      ? computeWordPoints({
+          word: targetWord,
+          columns: player.columns,
+          submittedAt: currentTime,
+          wordStartedAt: player.wordStartedAt,
+          matchMode: gameState.matchMode,
+          player,
+          soloDifficulty: gameState.soloDifficulty,
+        }).total
+      : 0;
 
   const [submitFeedback, setSubmitFeedback] = useState<'valid' | 'invalid' | null>(null);
   const [errorTileId, setErrorTileId] = useState<string | null>(null);
@@ -138,13 +142,13 @@ export function GameScreen({
     }
   }, [formedWord, targetWord, onDispatch, clock]);
 
-  const prevScoreRef = useRef(localScore);
+  const prevScoreRef = useRef(displayScore);
   useEffect(() => {
-    if (onScoreChange && localScore !== prevScoreRef.current) {
-      onScoreChange(localScore);
-      prevScoreRef.current = localScore;
+    if (onScoreChange && displayScore !== prevScoreRef.current) {
+      onScoreChange(displayScore);
+      prevScoreRef.current = displayScore;
     }
-  }, [localScore, onScoreChange]);
+  }, [displayScore, onScoreChange]);
 
   // When the opponent shuffles OUR board, play the spin animation.
   const prevShuffleSignalRef = useRef(shuffleSignal);
@@ -171,8 +175,18 @@ export function GameScreen({
     return () => window.clearTimeout(timeoutId);
   }, [hintTimerKey, targetWord, player, selectedIds]);
 
-  const isLeading = isMultiplayer && localScore > opponentScore;
-  const isBehind = isMultiplayer && localScore < opponentScore;
+  const isLeading = isMultiplayer && displayScore > opponentScore;
+  const isBehind = isMultiplayer && displayScore < opponentScore;
+
+  const triggerInvalidTap = useCallback((id: string) => {
+    setSubmitFeedback('invalid');
+    setErrorTileId(id);
+    navigator.vibrate?.(80);
+    window.setTimeout(() => {
+      setSubmitFeedback(null);
+      setErrorTileId(null);
+    }, 400);
+  }, []);
 
   const handleTapTile = useCallback(
     (id: string, e: React.PointerEvent) => {
@@ -180,7 +194,7 @@ export function GameScreen({
       if (!player) return;
 
       if (selectedIds.includes(id)) {
-        onDispatch({ type: 'SELECT_LETTER', playerId: 'local', letterId: id });
+        triggerInvalidTap(id);
         return;
       }
 
@@ -188,19 +202,13 @@ export function GameScreen({
       if (!cell) return;
 
       if (!isCorrectNextLetter(targetWord, selectedIds.length, cell.letter)) {
-        setSubmitFeedback('invalid');
-        setErrorTileId(id);
-        navigator.vibrate?.(80);
-        window.setTimeout(() => {
-          setSubmitFeedback(null);
-          setErrorTileId(null);
-        }, 400);
+        triggerInvalidTap(id);
         return;
       }
 
       onDispatch({ type: 'SELECT_LETTER', playerId: 'local', letterId: id });
     },
-    [onDispatch, player, selectedIds, targetWord],
+    [onDispatch, player, selectedIds, targetWord, triggerInvalidTap],
   );
 
   function handleSkip() {
@@ -213,7 +221,7 @@ export function GameScreen({
   }
 
   function handleDoubleBonus() {
-    if (!isMultiplayer || !player || player.doubleBonusUsed || player.doubleBonusActive || !targetWord) {
+    if (!player || player.doubleBonusUsed || player.doubleBonusActive || !targetWord) {
       return;
     }
     onDispatch({ type: 'ACTIVATE_DOUBLE', playerId: 'local', at: clock.now() });
@@ -281,8 +289,8 @@ export function GameScreen({
             className={`vs-card vs-card--you${isLeading ? ' vs-card--leading' : ''}${isBehind ? ' vs-card--behind' : ''}`}
           >
             <span className="vs-card-label">{t.you}</span>
-            <span key={localScore} className="vs-card-score">
-              {localScore}
+            <span key={displayScore} className="vs-card-score">
+              {displayScore}
             </span>
             {isLeading && <span className="vs-lead-badge">{t.winning}</span>}
           </div>
@@ -306,8 +314,8 @@ export function GameScreen({
         <div className="hud">
           <div className="hud-item">
             <span className="hud-label">{t.score}</span>
-            <span key={localScore} className="hud-value hud-score">
-              {localScore}
+            <span key={displayScore} className="hud-value hud-score">
+              {displayScore}
             </span>
           </div>
           <div className="hud-item">
@@ -315,10 +323,6 @@ export function GameScreen({
             <span className="hud-value">
               {formatTime(elapsedTime)}
             </span>
-          </div>
-          <div className="hud-item">
-            <span className="hud-label">{t.best}</span>
-            <span className="hud-value">{bestScore}</span>
           </div>
         </div>
       )}
@@ -460,34 +464,41 @@ export function GameScreen({
           )}
           <button
             className="skip-btn"
-            onClick={handleSkip}
+            onPointerDown={e => {
+              e.preventDefault();
+              if (targetWord) handleSkip();
+            }}
             disabled={!targetWord}
             title={`Skip word (-${SKIP_PENALTY} points)`}
           >
             {t.skip}
           </button>
-          {isMultiplayer && (
-            <button
-              className={`double-btn${player?.doubleBonusActive ? ' double-btn--active' : ''}`}
-              onClick={handleDoubleBonus}
-              disabled={!targetWord || player?.doubleBonusUsed || player?.doubleBonusActive}
-              title={
-                player?.doubleBonusUsed
-                  ? t.doubleBonusUsed
-                  : player?.doubleBonusActive
-                    ? t.doubleBonusActive
-                    : t.doubleBonus
-              }
-            >
-              {player?.doubleBonusActive
-                ? formatDoubleBonusMultiplierLabel(player.doubleBonusStreak)
-                : '2×'}
-            </button>
-          )}
+          <button
+            className={`double-btn${player?.doubleBonusActive ? ' double-btn--active' : ''}`}
+            onPointerDown={e => {
+              e.preventDefault();
+              handleDoubleBonus();
+            }}
+            disabled={!targetWord || player?.doubleBonusUsed || player?.doubleBonusActive}
+            title={
+              player?.doubleBonusUsed
+                ? t.doubleBonusUsed
+                : player?.doubleBonusActive
+                  ? t.doubleBonusActive
+                  : t.doubleBonus
+            }
+          >
+            {player?.doubleBonusActive
+              ? formatDoubleBonusMultiplierLabel(player.doubleBonusStreak)
+              : '2×'}
+          </button>
           {isMultiplayer && (
             <button
               className="shuffle-btn"
-              onClick={handleShuffle}
+              onPointerDown={e => {
+                e.preventDefault();
+                handleShuffle();
+              }}
               disabled={player?.shuffleUsed}
               title={player?.shuffleUsed ? (language === 'tr' ? 'Kullanıldı' : 'Used') : (language === 'tr' ? 'Rakibin tahtasını karıştır!' : 'Shuffle opponent board!')}
             >

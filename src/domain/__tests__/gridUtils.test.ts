@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { createSeededRng } from '../seededRng';
-import { fillGrid, pickTargetWord, buildLetterFreqMap, calculateWordDuration, calculateWordLetterScarcity, letterFrequencyMultiplier, pityTimeMultiplier, findHintCellId, targetWordSelectionWeight, refillEmptySlots, getPlayerWordDuration, doubleBonusStreakTimeMultiplier, doubleBonusStreakScoreMultiplier, getMultiplayerScoreMultiplier, formatDoubleBonusMultiplierLabel } from '../gridUtils';
+import { fillGrid, pickTargetWord, buildLetterFreqMap, calculateWordDuration, calculateWordLetterScarcity, letterFrequencyMultiplier, pityTimeMultiplier, findHintCellId, targetWordSelectionWeight, refillEmptySlots, getPlayerWordDuration, doubleBonusStreakTimeMultiplier, doubleBonusStreakScoreMultiplier, getMultiplayerScoreMultiplier, formatDoubleBonusMultiplierLabel, computeWordPoints } from '../gridUtils';
 import { GRID_COLS, GRID_ROWS, SECONDS_PER_LETTER, WARMUP_BONUS_MS, TARGET_WORD_LENGTH_RAMP, DOUBLE_BONUS_SCORE_MULTIPLIER } from '../constants';
 import { createInitialPlayerState } from '../gameReducer';
 
@@ -444,5 +444,127 @@ describe('findHintCellId', () => {
     const columns = [[{ id: 'a1', letter: 'b' }], [{ id: 'b1', letter: 'a' }]];
     const hintId = findHintCellId(columns, 'ba', ['a1']);
     expect(hintId).toBe('b1');
+  });
+});
+
+describe('computeWordPoints', () => {
+  function scoreInput(
+    word: string,
+    submittedAt: number,
+    opts: {
+      matchMode?: 'solo' | 'multiplayer';
+      soloDifficulty?: 'easy' | 'normal' | 'hard';
+      doubleActive?: boolean;
+      wordStartedAt?: number;
+    } = {},
+  ) {
+    const { columns, wordPool } = fillGrid(createSeededRng('score-test'));
+    const player = {
+      ...createInitialPlayerState(),
+      columns,
+      wordPool,
+      targetWord: word,
+      wordStartedAt: opts.wordStartedAt ?? 1000,
+      doubleBonusActive: opts.doubleActive ?? false,
+    };
+    return {
+      word,
+      columns,
+      submittedAt,
+      wordStartedAt: player.wordStartedAt,
+      matchMode: opts.matchMode ?? 'solo',
+      player,
+      soloDifficulty: opts.soloDifficulty ?? 'hard',
+    };
+  }
+
+  it('awards more points for faster completion', () => {
+    const started = 1000;
+    const input = scoreInput('bal', started, { wordStartedAt: started });
+    const allowed = getPlayerWordDuration(input.player, input.matchMode, input.soloDifficulty);
+    const fast = computeWordPoints({ ...input, submittedAt: started + allowed * 0.1 }).timerMultiplier;
+    const slow = computeWordPoints({ ...input, submittedAt: started + allowed * 0.85 }).timerMultiplier;
+    expect(fast).toBeGreaterThan(slow);
+  });
+
+  it('awards more points on higher solo difficulty via tighter timer pressure', () => {
+    const started = 1000;
+    const submitted = started + 500;
+    const easy = computeWordPoints(
+      scoreInput('bal', submitted, { soloDifficulty: 'easy', wordStartedAt: started }),
+    ).timerMultiplier;
+    const hard = computeWordPoints(
+      scoreInput('bal', submitted, { soloDifficulty: 'hard', wordStartedAt: started }),
+    ).timerMultiplier;
+    expect(hard).toBeGreaterThan(easy);
+  });
+
+  it('awards more for scarce letters on the board', () => {
+    const word = 'balon';
+    const abundantColumns = [
+      [
+        { id: 'a1', letter: 'b' },
+        { id: 'a2', letter: 'a' },
+        { id: 'a3', letter: 'l' },
+        { id: 'a4', letter: 'o' },
+        { id: 'a5', letter: 'n' },
+      ],
+      [
+        { id: 'b1', letter: 'b' },
+        { id: 'b2', letter: 'a' },
+        { id: 'b3', letter: 'l' },
+        { id: 'b4', letter: 'o' },
+        { id: 'b5', letter: 'n' },
+      ],
+    ];
+    const scarceColumns = [
+      [{ id: 'a1', letter: 'b' }],
+      [{ id: 'b1', letter: 'a' }],
+      [{ id: 'c1', letter: 'l' }],
+      [{ id: 'd1', letter: 'o' }],
+      [{ id: 'e1', letter: 'n' }],
+    ];
+    const player = { ...createInitialPlayerState(), targetWord: word, wordStartedAt: 1000 };
+    const abundant = computeWordPoints({
+      word,
+      columns: abundantColumns,
+      submittedAt: 2000,
+      wordStartedAt: 1000,
+      matchMode: 'solo',
+      player: { ...player, columns: abundantColumns },
+      soloDifficulty: 'hard',
+    });
+    const scarce = computeWordPoints({
+      word,
+      columns: scarceColumns,
+      submittedAt: 2000,
+      wordStartedAt: 1000,
+      matchMode: 'solo',
+      player: { ...player, columns: scarceColumns },
+      soloDifficulty: 'hard',
+    });
+    expect(scarce.scarcityMultiplier).toBeGreaterThan(abundant.scarcityMultiplier);
+    expect(scarce.total).toBeGreaterThan(abundant.total);
+  });
+
+  it('awards more points under 2× via a tighter timer', () => {
+    const started = 1000;
+    const submitted = started + 100;
+    const base = computeWordPoints(scoreInput('bal', submitted, { wordStartedAt: started })).total;
+    const withDouble = computeWordPoints(
+      scoreInput('bal', submitted, { wordStartedAt: started, doubleActive: true }),
+    ).total;
+    expect(withDouble).toBeGreaterThan(base);
+  });
+
+  it('embeds multiplayer timer pressure at normal difficulty', () => {
+    const mp = computeWordPoints(scoreInput('bal', 2000, { matchMode: 'multiplayer' })).timerMultiplier;
+    const soloHard = computeWordPoints(scoreInput('bal', 2000, { matchMode: 'solo', soloDifficulty: 'hard' })).timerMultiplier;
+    expect(soloHard).toBeGreaterThanOrEqual(mp);
+  });
+
+  it('always returns whole-number totals', () => {
+    const { total } = computeWordPoints(scoreInput('bal', 2500));
+    expect(Number.isInteger(total)).toBe(true);
   });
 });
