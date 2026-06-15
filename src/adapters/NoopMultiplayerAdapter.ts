@@ -28,5 +28,7 @@ export class NoopMultiplayerAdapter implements MultiplayerPort {
 
   async requestRematch(): Promise<void> {}
 
+  async rejoinMatch(_matchId: string): Promise<void> {}
+
   async leave(): Promise<void> {}
 }

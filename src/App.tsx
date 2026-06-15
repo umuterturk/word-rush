@@ -9,7 +9,8 @@ import { FirebaseAnalyticsAdapter } from './adapters/FirebaseAnalyticsAdapter';
 import { NoopAnalyticsAdapter } from './adapters/NoopAnalyticsAdapter';
 import { isFirebaseConfigured } from './firebase/config';
 import type { SoloDifficulty } from './domain/types';
-import { useGameSession } from './app/useGameSession';
+import type { SavedGameSession } from './domain/savedGameSession';
+import { useGameSession, type GameSessionExtras } from './app/useGameSession';
 import { useMultiplayer } from './app/useMultiplayer';
 import { shareInviteLink } from './app/shareInvite';
 import { useI18n } from './i18n';
@@ -23,6 +24,13 @@ import { RoomUnavailableScreen } from './app/RoomUnavailableScreen';
 import { useAppUpdate } from './app/useAppUpdate';
 import { usePlayerProfile } from './app/usePlayerProfile';
 import { useLeaderboard } from './app/useLeaderboard';
+import {
+  clearJoinGameParam,
+  clearSoloGameParam,
+  getJoinCodeFromUrl,
+  setJoinGameParam,
+  setSoloGameParam,
+} from './app/gameUrl';
 
 const clock = new BrowserClockAdapter();
 const storage = new LocalStorageAdapter();
@@ -37,7 +45,6 @@ type FriendMatchPhase = 'creating' | 'sharing' | 'waiting' | 'found';
 
 export default function App() {
   const { t } = useI18n();
-  const { gameState, logicalTime, bestScore, dispatchAction } = useGameSession(clock, storage);
   const { username, saveUsername } = usePlayerProfile(storage);
   const { entries: leaderboardEntries, loading: leaderboardLoading, refresh: refreshLeaderboard } =
     useLeaderboard(leaderboard);
@@ -52,11 +59,64 @@ export default function App() {
   const [isRematching, setIsRematching] = useState(false);
   const [gameUnavailable, setGameUnavailable] = useState(false);
   const [shuffleSignal, setShuffleSignal] = useState(0);
+
+  const activeMatchIdRef = useRef<string | undefined>(undefined);
   const prevScoreRef = useRef(0);
   const matchStartedRef = useRef(false);
   const roundRef = useRef(0);
   const lastShuffleNonceRef = useRef(0);
   const matchEndedAtRef = useRef(0);
+  const wasPlayingRef = useRef(false);
+
+  const isMultiplayer = appMode === 'multiplayer';
+
+  const getSessionExtras = useCallback(
+    (): GameSessionExtras => ({
+      matchId: isMultiplayer ? (mp.matchConfig?.matchId ?? activeMatchIdRef.current) : undefined,
+      inviteCode: isMultiplayer ? (mp.inviteCode ?? undefined) : undefined,
+      lastShuffleNonce: lastShuffleNonceRef.current,
+      prevPublishedScore: prevScoreRef.current,
+    }),
+    [isMultiplayer, mp.matchConfig?.matchId, mp.inviteCode],
+  );
+
+  const handleSessionRestored = useCallback(
+    (session: SavedGameSession) => {
+      setAppMode(session.gameState.matchMode === 'multiplayer' ? 'multiplayer' : 'solo');
+      if (session.gameState.soloDifficulty) {
+        setSoloDifficulty(session.gameState.soloDifficulty);
+      }
+      if (session.lastShuffleNonce !== undefined) {
+        lastShuffleNonceRef.current = session.lastShuffleNonce;
+      }
+      if (session.prevPublishedScore !== undefined) {
+        prevScoreRef.current = session.prevPublishedScore;
+      }
+      matchStartedRef.current = true;
+      setShowCountdown(false);
+      setIsRematching(false);
+      setFriendMatchPhase(null);
+      setInviteCopied(false);
+      setGameUnavailable(false);
+      activeMatchIdRef.current = session.matchId;
+
+      if (session.matchId && firebaseReady) {
+        void mp.rejoinMatch(session.matchId).then(() => {
+          mp.markPlaying();
+        });
+      }
+    },
+    [mp],
+  );
+
+  const { gameState, logicalTime, bestScore, hydrated, dispatchAction } = useGameSession(
+    clock,
+    storage,
+    {
+      getSessionExtras,
+      onRestored: handleSessionRestored,
+    },
+  );
 
   const isMainMenu = gameState.matchStatus === 'idle' && !showCountdown;
   useAppUpdate(isMainMenu);
@@ -71,13 +131,10 @@ export default function App() {
 
     // Handle deep link: ?join=CODE (only once)
     if (deepLinkHandled.current) return;
-    const params = new URLSearchParams(window.location.search);
-    const joinCode = params.get('join');
+    const joinCode = getJoinCodeFromUrl();
     if (joinCode && firebaseReady) {
       deepLinkHandled.current = true;
       roundRef.current = 0;
-      // Clear the URL param so refresh doesn't re-join
-      window.history.replaceState({}, '', window.location.pathname);
       setAppMode('multiplayer');
       setLobbyMode('join');
       analytics.track('mp_room_joined', { via: 'deep_link' });
@@ -91,7 +148,28 @@ export default function App() {
     void mp.cancel();
   }, [lobbyMode, mp.phase, mp.error, mp]);
 
-  const isMultiplayer = appMode === 'multiplayer';
+  useEffect(() => {
+    if (!hydrated) return;
+
+    if (gameState.matchStatus === 'playing') {
+      if (isMultiplayer) {
+        if (mp.inviteCode) setJoinGameParam(mp.inviteCode);
+      } else {
+        setSoloGameParam();
+      }
+      wasPlayingRef.current = true;
+      return;
+    }
+
+    if (wasPlayingRef.current) {
+      if (isMultiplayer) {
+        clearJoinGameParam();
+      } else {
+        clearSoloGameParam();
+      }
+      wasPlayingRef.current = false;
+    }
+  }, [hydrated, gameState.matchStatus, isMultiplayer, mp.inviteCode]);
 
   const startMatch = useCallback(
     (seed: string) => {
@@ -105,6 +183,7 @@ export default function App() {
       setShowCountdown(false);
       if (isMultiplayer) {
         mp.markPlaying();
+        activeMatchIdRef.current = mp.matchConfig?.matchId;
         analytics.track('match_started', { mode: 'multiplayer' });
       } else {
         analytics.track('match_started', { mode: 'solo', difficulty: soloDifficulty });
@@ -202,6 +281,9 @@ export default function App() {
 
   const handleBackToMenu = useCallback(() => {
     roundRef.current = 0;
+    activeMatchIdRef.current = undefined;
+    clearSoloGameParam();
+    clearJoinGameParam();
     setIsRematching(false);
     setGameUnavailable(false);
     setFriendMatchPhase(null);
@@ -213,6 +295,9 @@ export default function App() {
 
   const handleQuitGame = useCallback(() => {
     matchStartedRef.current = false;
+    activeMatchIdRef.current = undefined;
+    clearSoloGameParam();
+    clearJoinGameParam();
     if (isMultiplayer) {
       void mp.reset();
     }
@@ -331,6 +416,10 @@ export default function App() {
   const handleCountdownComplete = useCallback(() => {
     startMatch(getMatchSeed());
   }, [startMatch, getMatchSeed]);
+
+  if (!hydrated) {
+    return null;
+  }
 
   if (gameUnavailable) {
     return (

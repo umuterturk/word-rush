@@ -362,6 +362,12 @@ export class FirebaseMultiplayerAdapter implements MultiplayerPort {
     await this.leave();
   }
 
+  async rejoinMatch(matchId: string): Promise<void> {
+    await this.getUid();
+    this.matchId = matchId;
+    this.startListening();
+  }
+
   async leave(): Promise<void> {
     this.stopListening();
 

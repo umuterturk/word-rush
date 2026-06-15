@@ -8,7 +8,7 @@ import type { SoloDifficulty } from './types';
 export const MATCH_DURATION_MS = 120_000;
 
 /** Solo: board refills allowed after correct words. */
-export const SOLO_REFILL_LIMIT = 5;
+export const SOLO_REFILL_LIMIT = 10;
 
 /** Solo per-word timer multiplier by difficulty. */
 export const SOLO_TIME_MULTIPLIER: Readonly<Record<SoloDifficulty, number>> = {

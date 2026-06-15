@@ -85,12 +85,12 @@ export function GameScreen({
   const selectedSet = new Set(selectedIds);
   const targetWord = player?.targetWord ?? '';
   
-  // Word timer calculations with board density (use clock for real-time updates)
+  // Word timer uses wall clock so it survives refresh (logicalTime is 0 until the first frame).
   const wordStartedAt = player?.wordStartedAt ?? 0;
   const wordDuration = player && targetWord
     ? getPlayerWordDuration(player, gameState.matchMode, gameState.soloDifficulty)
     : 0;
-  const currentTime = gameState.matchStatus === 'playing' ? gameState.matchStartedAt + logicalTime : clock.now();
+  const currentTime = clock.now();
   const wordElapsed = wordStartedAt > 0 ? Math.max(0, currentTime - wordStartedAt) : 0;
   const wordTimeLeft = Math.max(0, wordDuration - wordElapsed);
   const wordTimerKey = `${targetWord}-${wordStartedAt}`;
@@ -357,7 +357,12 @@ export function GameScreen({
               <div
                 key={wordTimerKey}
                 className="word-timer-bar__fill"
-                style={{ '--word-duration': `${wordDuration}ms` } as React.CSSProperties}
+                style={
+                  {
+                    '--word-duration': `${wordDuration}ms`,
+                    '--word-elapsed': `${Math.min(wordElapsed, wordDuration)}ms`,
+                  } as React.CSSProperties
+                }
               />
             </div>
             <div className="word-timer-bar__text">

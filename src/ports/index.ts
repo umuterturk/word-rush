@@ -1,4 +1,5 @@
 import type { MatchSnapshot } from '../multiplayer/types';
+import type { SavedGameSession } from '../domain/savedGameSession';
 
 /**
  * Abstracts wall-clock time and the animation frame scheduler.
@@ -22,6 +23,9 @@ export interface StoragePort {
   loadBestScore(): Promise<number>;
   saveUsername(name: string): Promise<void>;
   loadUsername(): Promise<string>;
+  saveGameSession(session: SavedGameSession): Promise<void>;
+  loadGameSession(): Promise<SavedGameSession | null>;
+  clearGameSession(): Promise<void>;
 }
 
 export interface LeaderboardEntry {
@@ -49,6 +53,8 @@ export interface MultiplayerPort {
   /** Send a one-time "shuffle attack" at the opponent's board. */
   sendShuffle(): Promise<void>;
   requestRematch(): Promise<void>;
+  /** Reconnect to an in-progress match after a page reload. */
+  rejoinMatch(matchId: string): Promise<void>;
   leave(): Promise<void>;
 }
 

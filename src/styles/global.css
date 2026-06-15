@@ -994,6 +994,7 @@ button {
   );
   /* One-shot GPU animation — no per-frame JS updates, no competing shimmer */
   animation: word-timer-drain var(--word-duration, 5s) linear forwards;
+  animation-delay: calc(-1 * var(--word-elapsed, 0ms));
   box-shadow: 0 0 8px rgba(255, 107, 107, 0.45);
 }
 

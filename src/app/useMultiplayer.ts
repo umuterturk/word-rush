@@ -22,6 +22,7 @@ interface MultiplayerSession {
   publishScore: (score: number) => Promise<void>;
   sendShuffle: () => Promise<void>;
   requestRematch: () => Promise<void>;
+  rejoinMatch: (matchId: string) => Promise<void>;
   markPlaying: () => void;
   markEnded: () => void;
   getResult: (localScore: number) => MatchResult | null;
@@ -168,6 +169,11 @@ export function useMultiplayer(multiplayer: MultiplayerPort, available: boolean)
     [multiplayer],
   );
 
+  const rejoinMatch = useCallback(
+    (matchId: string) => multiplayer.rejoinMatch(matchId),
+    [multiplayer],
+  );
+
   const markPlaying = useCallback(() => {
     // Start fresh: a new match always begins with the opponent at zero.
     // Guards against a stale snapshot from the previous match leaking a
@@ -221,6 +227,7 @@ export function useMultiplayer(multiplayer: MultiplayerPort, available: boolean)
       publishScore,
       sendShuffle,
       requestRematch,
+      rejoinMatch,
       markPlaying,
       markEnded,
       getResult,
@@ -245,6 +252,7 @@ export function useMultiplayer(multiplayer: MultiplayerPort, available: boolean)
       publishScore,
       sendShuffle,
       requestRematch,
+      rejoinMatch,
       markPlaying,
       markEnded,
       getResult,

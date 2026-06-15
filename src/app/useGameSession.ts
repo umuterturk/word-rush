@@ -2,15 +2,30 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { GameAction, GameState } from '../domain/types';
 import { INITIAL_GAME_STATE } from '../domain/gameReducer';
 import { updateGame } from '../domain/updateGame';
+import type { SavedGameSession } from '../domain/savedGameSession';
+import { shouldRestoreSavedSession } from './gameUrl';
 import type { ClockPort, StoragePort } from '../ports';
 import { AUTO_SKIP_ON_TIMEOUT } from '../domain/constants';
 import { getPlayerWordDuration } from '../domain/gridUtils';
+
+export interface GameSessionExtras {
+  matchId?: string;
+  inviteCode?: string;
+  lastShuffleNonce?: number;
+  prevPublishedScore?: number;
+}
+
+interface GameSessionOptions {
+  getSessionExtras: () => GameSessionExtras;
+  onRestored?: (session: SavedGameSession) => void;
+}
 
 interface GameSession {
   gameState: GameState;
   /** Milliseconds elapsed since match start (updated every animation frame). */
   logicalTime: number;
   bestScore: number;
+  hydrated: boolean;
   dispatchAction: (action: GameAction) => void;
 }
 
@@ -21,20 +36,77 @@ interface GameSession {
  *   - The requestAnimationFrame loop
  *   - The pending-action queue (batched per frame for the reducer)
  *   - Loading/saving best score via StoragePort
+ *   - Restoring an in-progress match after page reload
  *
  * It does NOT own rendering or input — those are React component concerns.
  *
  * Multiplayer note: to replay remote actions, simply push them into the action
  * queue via dispatchAction (after they arrive from MatchSyncPort).
  */
-export function useGameSession(clock: ClockPort, storage: StoragePort): GameSession {
+export function useGameSession(
+  clock: ClockPort,
+  storage: StoragePort,
+  options: GameSessionOptions,
+): GameSession {
+  const { getSessionExtras, onRestored } = options;
+  const onRestoredRef = useRef(onRestored);
+  useEffect(() => {
+    onRestoredRef.current = onRestored;
+  }, [onRestored]);
+
   const [gameState, setGameState] = useState<GameState>(INITIAL_GAME_STATE);
   const [logicalTime, setLogicalTime] = useState(0);
   const [bestScore, setBestScore] = useState(0);
+  const [hydrated, setHydrated] = useState(false);
 
   // Refs let the rAF loop read/write current state without stale closures
   const stateRef = useRef<GameState>(INITIAL_GAME_STATE);
   const actionQueueRef = useRef<GameAction[]>([]);
+
+  const getSessionExtrasRef = useRef(getSessionExtras);
+  useEffect(() => {
+    getSessionExtrasRef.current = getSessionExtras;
+  }, [getSessionExtras]);
+
+  const persistSession = useCallback(
+    (state: GameState) => {
+      if (state.matchStatus !== 'playing') return;
+      const extras = getSessionExtrasRef.current();
+      void storage.saveGameSession({
+        gameState: state,
+        matchId: extras.matchId,
+        inviteCode: extras.inviteCode,
+        lastShuffleNonce: extras.lastShuffleNonce,
+        prevPublishedScore: extras.prevPublishedScore,
+      });
+    },
+    [storage],
+  );
+
+  // Restore an in-progress match saved before a refresh.
+  useEffect(() => {
+    let active = true;
+
+    storage.loadGameSession().then(saved => {
+      if (!active) return;
+
+      if (saved?.gameState.matchStatus === 'playing') {
+        if (shouldRestoreSavedSession(saved)) {
+          stateRef.current = saved.gameState;
+          setGameState(saved.gameState);
+          onRestoredRef.current?.(saved);
+        } else {
+          void storage.clearGameSession();
+        }
+      }
+
+      setHydrated(true);
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [storage]);
 
   // Load best score on mount
   useEffect(() => {
@@ -53,6 +125,30 @@ export function useGameSession(clock: ClockPort, storage: StoragePort): GameSess
       return prev;
     });
   }, [gameState.matchStatus, storage]); // intentional: fires once per status change
+
+  // Persist or clear the active session as match status changes.
+  useEffect(() => {
+    if (!hydrated) return;
+
+    if (gameState.matchStatus !== 'playing') {
+      void storage.clearGameSession();
+      return;
+    }
+
+    persistSession(gameState);
+  }, [gameState, hydrated, persistSession, storage]);
+
+  // Flush the latest state when the page is hidden (refresh, tab switch, etc.).
+  useEffect(() => {
+    const onPageHide = () => {
+      if (stateRef.current.matchStatus === 'playing') {
+        persistSession(stateRef.current);
+      }
+    };
+
+    window.addEventListener('pagehide', onPageHide);
+    return () => window.removeEventListener('pagehide', onPageHide);
+  }, [persistSession]);
 
   // Debug: Space adds 10 seconds (dev builds only)
   useEffect(() => {
@@ -142,5 +238,5 @@ export function useGameSession(clock: ClockPort, storage: StoragePort): GameSess
     actionQueueRef.current.push(action);
   }, []);
 
-  return { gameState, logicalTime, bestScore, dispatchAction };
+  return { gameState, logicalTime, bestScore, hydrated, dispatchAction };
 }
