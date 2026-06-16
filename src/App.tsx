@@ -18,6 +18,7 @@ import { StartScreen } from './app/StartScreen';
 import { CountdownScreen } from './app/CountdownScreen';
 import { GameScreen } from './app/GameScreen';
 import { EndScreen } from './app/EndScreen';
+import { ProfilePopup } from './app/ProfilePopup';
 import { MultiplayerLobbyScreen } from './app/MultiplayerLobbyScreen';
 import { FriendMatchOverlay } from './app/FriendMatchOverlay';
 import { RoomUnavailableScreen } from './app/RoomUnavailableScreen';
@@ -31,6 +32,7 @@ import {
   setJoinGameParam,
   setSoloGameParam,
 } from './app/gameUrl';
+import { ensureWordListLoaded, type WordLanguage } from './domain/wordSet';
 
 const clock = new BrowserClockAdapter();
 const storage = new LocalStorageAdapter();
@@ -44,7 +46,7 @@ type LobbyMode = 'quick' | 'create' | 'join';
 type FriendMatchPhase = 'creating' | 'sharing' | 'waiting' | 'found';
 
 export default function App() {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const { username, saveUsername } = usePlayerProfile(storage);
   const { entries: leaderboardEntries, loading: leaderboardLoading, refresh: refreshLeaderboard } =
     useLeaderboard(leaderboard);
@@ -59,6 +61,8 @@ export default function App() {
   const [isRematching, setIsRematching] = useState(false);
   const [gameUnavailable, setGameUnavailable] = useState(false);
   const [shuffleSignal, setShuffleSignal] = useState(0);
+  const [endProfileDismissed, setEndProfileDismissed] = useState(false);
+  const [loadedWordLanguage, setLoadedWordLanguage] = useState<WordLanguage | null>(null);
 
   const activeMatchIdRef = useRef<string | undefined>(undefined);
   const prevScoreRef = useRef(0);
@@ -178,6 +182,7 @@ export default function App() {
         seed,
         at: clock.now(),
         mode: isMultiplayer ? 'multiplayer' : 'solo',
+        language,
         difficulty: isMultiplayer ? undefined : soloDifficulty,
       });
       setShowCountdown(false);
@@ -192,7 +197,7 @@ export default function App() {
       prevScoreRef.current = 0;
       lastShuffleNonceRef.current = 0;
     },
-    [dispatchAction, isMultiplayer, mp, soloDifficulty],
+    [dispatchAction, isMultiplayer, language, mp, soloDifficulty],
   );
 
   const handlePlaySolo = useCallback((difficulty: SoloDifficulty) => {
@@ -334,7 +339,7 @@ export default function App() {
       });
     } else {
       analytics.track('match_ended', { mode: 'solo', score: localScore });
-      if (localScore > 0) {
+      if (localScore > 0 && username.trim()) {
         void leaderboard.submitScore(username.trim(), localScore).then(() => refreshLeaderboard());
       }
     }
@@ -413,9 +418,58 @@ export default function App() {
     return String(clock.now());
   }, [isMultiplayer, mp.matchConfig?.seed]);
 
-  const handleCountdownComplete = useCallback(() => {
+  const handleCountdownComplete = useCallback(async () => {
+    await ensureWordListLoaded(language);
     startMatch(getMatchSeed());
-  }, [startMatch, getMatchSeed]);
+  }, [startMatch, getMatchSeed, language]);
+
+  const requiredWordLanguage: WordLanguage | null =
+    gameState.matchStatus === 'playing'
+      ? gameState.language
+      : showCountdown
+        ? language
+        : null;
+
+  useEffect(() => {
+    if (!requiredWordLanguage) {
+      return;
+    }
+
+    let active = true;
+    void ensureWordListLoaded(requiredWordLanguage).then(() => {
+      if (active) setLoadedWordLanguage(requiredWordLanguage);
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [requiredWordLanguage]);
+
+  const wordsReady =
+    requiredWordLanguage !== null && loadedWordLanguage === requiredWordLanguage;
+
+  useEffect(() => {
+    if (gameState.matchStatus === 'playing' || gameState.matchStatus === 'idle') {
+      setEndProfileDismissed(false);
+    }
+  }, [gameState.matchStatus]);
+
+  const showEndProfilePopup =
+    gameState.matchStatus === 'ended' &&
+    !isMultiplayer &&
+    !username.trim() &&
+    !endProfileDismissed;
+
+  const handleEndProfileSave = useCallback(
+    (name: string) => {
+      saveUsername(name);
+      const localScore = gameState.players['local']?.score ?? 0;
+      if (localScore > 0 && name.trim()) {
+        void leaderboard.submitScore(name.trim(), localScore).then(() => refreshLeaderboard());
+      }
+    },
+    [saveUsername, gameState.players, refreshLeaderboard],
+  );
 
   if (!hydrated) {
     return null;
@@ -454,6 +508,7 @@ export default function App() {
       <CountdownScreen
         onComplete={handleCountdownComplete}
         opponentName={isMultiplayer ? mp.opponentName : undefined}
+        paused={!wordsReady}
       />
     );
   }
@@ -490,6 +545,8 @@ export default function App() {
   }
 
   if (gameState.matchStatus === 'playing') {
+    if (!wordsReady) return null;
+
     return (
       <GameScreen
         gameState={gameState}
@@ -508,16 +565,26 @@ export default function App() {
   }
 
   return (
-    <EndScreen
-      score={gameState.players['local']?.score ?? 0}
-      bestScore={bestScore}
-      onPlayAgain={handlePlayAgain}
-      onBackToMenu={handleBackToMenu}
-      isMultiplayer={isMultiplayer}
-      opponentScore={mp.opponentScore}
-      opponentName={mp.opponentName}
-      opponentWantsRematch={isMultiplayer && mp.opponentWantsRematch}
-      result={isMultiplayer ? mp.getResult(gameState.players['local']?.score ?? 0) : null}
-    />
+    <>
+      <EndScreen
+        score={gameState.players['local']?.score ?? 0}
+        bestScore={bestScore}
+        onPlayAgain={handlePlayAgain}
+        onBackToMenu={handleBackToMenu}
+        isMultiplayer={isMultiplayer}
+        opponentScore={mp.opponentScore}
+        opponentName={mp.opponentName}
+        opponentWantsRematch={isMultiplayer && mp.opponentWantsRematch}
+        result={isMultiplayer ? mp.getResult(gameState.players['local']?.score ?? 0) : null}
+      />
+      {showEndProfilePopup && (
+        <ProfilePopup
+          username={username}
+          message={t.leaderboardNamePrompt}
+          onSave={handleEndProfileSave}
+          onClose={() => setEndProfileDismissed(true)}
+        />
+      )}
+    </>
   );
 }

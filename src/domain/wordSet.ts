@@ -1,17 +1,17 @@
-import wordListData from './wordList.json';
+export type WordLanguage = 'tr' | 'en';
 
-const wordArray = wordListData as string[];
+const loaders: Record<WordLanguage, () => Promise<{ default: string[] }>> = {
+  tr: () => import('./wordList.json'),
+  en: () => import('./wordListEn.json'),
+};
 
-/** Full filtered word list, used for stream generation. */
-export const WORD_LIST: readonly string[] = wordArray;
+const wordArrays: Partial<Record<WordLanguage, readonly string[]>> = {};
+const wordSets: Partial<Record<WordLanguage, Set<string>>> = {};
+const loadPromises: Partial<Record<WordLanguage, Promise<void>>> = {};
 
-/** O(1) lookup set of valid Turkish words (3–8 chars, lowercase). */
-const WORD_SET = new Set<string>(wordArray);
-
-/** Normalized letter frequencies derived from the word list (sum ≈ 1). */
-export const LETTER_FREQUENCIES: Readonly<Record<string, number>> = (() => {
+function buildLetterFrequencies(words: readonly string[]): Readonly<Record<string, number>> {
   const counts: Record<string, number> = {};
-  for (const word of wordArray) {
+  for (const word of words) {
     for (const ch of word) {
       counts[ch] = (counts[ch] ?? 0) + 1;
     }
@@ -22,18 +22,49 @@ export const LETTER_FREQUENCIES: Readonly<Record<string, number>> = (() => {
     freq[ch] = n / total;
   }
   return freq;
-})();
+}
+
+const letterFrequencies: Partial<Record<WordLanguage, Readonly<Record<string, number>>>> = {};
+
+/** Loads the word list for a language on first use. Safe to call multiple times. */
+export function ensureWordListLoaded(language: WordLanguage): Promise<void> {
+  if (wordArrays[language]) return Promise.resolve();
+
+  if (!loadPromises[language]) {
+    loadPromises[language] = loaders[language]().then(mod => {
+      const words = mod.default as string[];
+      wordArrays[language] = words;
+      wordSets[language] = new Set(words);
+      letterFrequencies[language] = buildLetterFrequencies(words);
+    });
+  }
+
+  return loadPromises[language]!;
+}
+
+export function isWordListLoaded(language: WordLanguage): boolean {
+  return wordArrays[language] !== undefined;
+}
+
+export function getWordList(language: WordLanguage): readonly string[] {
+  const list = wordArrays[language];
+  if (!list) {
+    throw new Error(`Word list for "${language}" not loaded. Call ensureWordListLoaded first.`);
+  }
+  return list;
+}
 
 function turkishLower(str: string): string {
   return str.replace(/İ/g, 'i').replace(/I/g, 'ı').toLowerCase();
 }
 
-/**
- * Returns true if the given string is a valid Turkish word (3–8 chars).
- * Normalises to lowercase with Turkish rules before the Set lookup.
- */
-export function isValidWord(word: string): boolean {
+export function isValidWordForLanguage(word: string, language: WordLanguage): boolean {
   const chars = Array.from(word);
   if (chars.length < 3 || chars.length > 8) return false;
-  return WORD_SET.has(turkishLower(word));
+  const set = wordSets[language];
+  if (!set) {
+    throw new Error(`Word list for "${language}" not loaded. Call ensureWordListLoaded first.`);
+  }
+  if (language === 'en') return set.has(word.toLowerCase());
+  return set.has(turkishLower(word));
 }

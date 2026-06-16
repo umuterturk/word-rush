@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { GameAction, GameState } from '../domain/types';
 import { GRID_COLS, GRID_ROWS, SKIP_PENALTY, LETTER_HINT_DELAY_MS } from '../domain/constants';
 import type { ClockPort } from '../ports';
 import { useI18n } from '../i18n';
 import { getPlayerWordDuration, formatDoubleBonusMultiplierLabel, findHintCellId, getCellById, isCorrectNextLetter, computeWordPoints } from '../domain/gridUtils';
-import { turkishUpper } from '../domain/turkishText';
+import { upperByLanguage } from '../domain/turkishText';
 
 interface Props {
   gameState: GameState;
@@ -43,10 +43,10 @@ function tileColor(letter: string): string {
 }
 
 /** Isolated letter node — immune to WebView auto-translate rewriting İ → "ben". */
-function LetterGlyph({ letter }: { letter: string }) {
+function LetterGlyph({ letter, language }: { letter: string; language: 'tr' | 'en' }) {
   return (
     <span className="letter-glyph notranslate" translate="no">
-      {turkishUpper(letter)}
+      {upperByLanguage(letter, language)}
     </span>
   );
 }
@@ -94,6 +94,10 @@ export function GameScreen({
   const wordElapsed = wordStartedAt > 0 ? Math.max(0, currentTime - wordStartedAt) : 0;
   const wordTimeLeft = Math.max(0, wordDuration - wordElapsed);
   const wordTimerKey = `${targetWord}-${wordStartedAt}`;
+  const initialWordElapsed = useMemo(
+    () => Math.min(wordDuration, Math.max(0, clock.now() - wordStartedAt)),
+    [wordTimerKey, wordDuration, clock, wordStartedAt],
+  );
 
   // Build letter map for the current word display
   const letterMap = new Map<string, string>();
@@ -328,13 +332,13 @@ export function GameScreen({
       )}
 
       {/* Target word banner */}
-      <div className="target-word-banner notranslate" lang="tr" translate="no">
+      <div className="target-word-banner notranslate" lang={language} translate="no">
         {targetWord ? (
           <>
             <span className="target-word-label">{t.find}</span>
             <span className="target-word-text">
               {Array.from(targetWord).map((ch, i) => (
-                <span key={i} className="letter-glyph" translate="no">{turkishUpper(ch)}</span>
+                <span key={i} className="letter-glyph" translate="no">{upperByLanguage(ch, language)}</span>
               ))}
             </span>
             {wordMatchesTarget && formedWord.length > 0 && (
@@ -360,7 +364,7 @@ export function GameScreen({
                 style={
                   {
                     '--word-duration': `${wordDuration}ms`,
-                    '--word-elapsed': `${Math.min(wordElapsed, wordDuration)}ms`,
+                    '--word-start-elapsed': `${initialWordElapsed}ms`,
                   } as React.CSSProperties
                 }
               />
@@ -374,7 +378,7 @@ export function GameScreen({
         {/* Grid arena */}
         <div
           className={`arena grid-arena notranslate${isShuffling ? ' grid-arena--shuffling' : ''}`}
-          lang="tr"
+          lang={language}
           translate="no"
           style={{ '--grid-cols': GRID_COLS, '--grid-rows': GRID_ROWS } as React.CSSProperties}
         >
@@ -414,7 +418,7 @@ export function GameScreen({
                 onPointerDown={e => handleTapTile(cell.id, e)}
                 {...TILE_BUTTON_ATTRS}
               >
-                <LetterGlyph letter={cell.letter} />
+                <LetterGlyph letter={cell.letter} language={language} />
                 {hintCellId === cell.id && (
                   <span className="grid-tile__hint-badge">{t.hintBadge}</span>
                 )}
@@ -431,7 +435,7 @@ export function GameScreen({
       {/* Word panel */}
       <div
         className={`word-panel notranslate${submitFeedback === 'valid' ? ' word-panel--valid' : ''}${submitFeedback === 'invalid' ? ' word-panel--invalid' : ''}`}
-        lang="tr"
+        lang={language}
         translate="no"
       >
         <div className={`formed-word-row${wordMatchesTarget ? ' formed-word-row--match' : ''}`}>
@@ -447,7 +451,7 @@ export function GameScreen({
                   onPointerDown={e => { e.preventDefault(); handleTapTile(id, e); }}
                   {...TILE_BUTTON_ATTRS}
                 >
-                  <LetterGlyph letter={letter} />
+                  <LetterGlyph letter={letter} language={language} />
                   {i === selectedIds.length - 1 && wordMatchesTarget && (
                     <span className="formed-letter__score">+{wordScore}</span>
                   )}

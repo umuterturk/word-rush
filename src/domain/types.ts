@@ -1,6 +1,7 @@
 export type MatchStatus = 'idle' | 'playing' | 'ended';
 export type MatchMode = 'solo' | 'multiplayer';
 export type SoloDifficulty = 'easy' | 'normal' | 'hard';
+export type GameLanguage = 'en' | 'tr';
 
 /** A letter cell that lives in the grid. */
 export interface LandedCell {
@@ -41,6 +42,7 @@ export interface PlayerState {
 export interface GameState {
   matchStatus: MatchStatus;
   matchMode: MatchMode;
+  language: GameLanguage;
   matchStartedAt: number;
   matchDuration: number;
   seed: string;
@@ -49,7 +51,7 @@ export interface GameState {
 }
 
 export type GameAction =
-  | { type: 'START_MATCH'; seed: string; at: number; mode: MatchMode; difficulty?: SoloDifficulty }
+  | { type: 'START_MATCH'; seed: string; at: number; mode: MatchMode; language?: GameLanguage; difficulty?: SoloDifficulty }
   | { type: 'END_MATCH'; at: number }
   | { type: 'RESET' }
   | { type: 'SELECT_LETTER'; playerId: string; letterId: string }

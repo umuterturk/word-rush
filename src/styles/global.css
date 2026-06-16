@@ -154,6 +154,15 @@ button {
   text-transform: uppercase;
 }
 
+.profile-popup-message {
+  margin: -4px 0 0;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.45;
+  color: rgba(255, 255, 255, 0.65);
+  text-align: center;
+}
+
 .profile-input {
   width: 100%;
   background: rgba(255, 255, 255, 0.06);
@@ -994,7 +1003,7 @@ button {
   );
   /* One-shot GPU animation — no per-frame JS updates, no competing shimmer */
   animation: word-timer-drain var(--word-duration, 5s) linear forwards;
-  animation-delay: calc(-1 * var(--word-elapsed, 0ms));
+  animation-delay: calc(-1 * var(--word-start-elapsed, 0ms));
   box-shadow: 0 0 8px rgba(255, 107, 107, 0.45);
 }
 

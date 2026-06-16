@@ -24,6 +24,7 @@ export function createInitialPlayerState(): PlayerState {
 export const INITIAL_GAME_STATE: GameState = {
   matchStatus: 'idle',
   matchMode: 'solo',
+  language: 'tr',
   matchStartedAt: 0,
   matchDuration: MATCH_DURATION_MS,
   seed: '',
@@ -38,12 +39,14 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
   switch (action.type) {
     case 'START_MATCH': {
       const rng = createSeededRng(action.seed);
-      const { columns, wordPool } = fillGrid(rng);
+      const language = action.language ?? 'tr';
+      const { columns, wordPool } = fillGrid(rng, language);
       const targetWord = pickTargetWord(rng, columns, wordPool, 0) ?? '';
       const isSolo = action.mode === 'solo';
       return {
         matchStatus: 'playing',
         matchMode: action.mode,
+        language,
         matchStartedAt: action.at,
         matchDuration: MATCH_DURATION_MS,
         seed: action.seed,
@@ -167,7 +170,12 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       // Solo: refill only while refills remain
       if (state.matchMode === 'solo' && refillsRemaining > 0) {
         const refillRng = createSeededRng(state.seed + '-refill-' + newWordsCompleted);
-        const refill = refillEmptySlots(refillRng, finalColumns, `inj${newWordsCompleted}`);
+        const refill = refillEmptySlots(
+          refillRng,
+          finalColumns,
+          `inj${newWordsCompleted}`,
+          state.language ?? 'tr',
+        );
         if (refill) {
           finalColumns = refill.columns;
           finalWordPool = [...finalWordPool, ...refill.words];
@@ -175,7 +183,12 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         }
       } else if (state.matchMode === 'multiplayer') {
         const refillRng = createSeededRng(state.seed + '-refill-' + newWordsCompleted);
-        const refill = refillEmptySlots(refillRng, finalColumns, `inj${newWordsCompleted}`);
+        const refill = refillEmptySlots(
+          refillRng,
+          finalColumns,
+          `inj${newWordsCompleted}`,
+          state.language ?? 'tr',
+        );
         if (refill) {
           finalColumns = refill.columns;
           finalWordPool = [...finalWordPool, ...refill.words];

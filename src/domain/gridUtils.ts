@@ -1,33 +1,50 @@
 import type { RngFn } from './seededRng';
 import type { LandedCell, MatchMode, PlayerState, SoloDifficulty } from './types';
 import { GRID_COLS, GRID_ROWS, MIN_WORD_LENGTH, MAX_WORD_LENGTH, MAX_EMPTY_CELLS, PITY_TIME_BONUS_PER_TIMEOUT, MAX_PITY_TIMEOUTS, WARMUP_BONUS_MS, TARGET_WORD_LENGTH_RAMP, SECONDS_PER_LETTER, SOLO_TIME_MULTIPLIER, MULTIPLAYER_TIME_MULTIPLIER, DOUBLE_BONUS_TIME_MULTIPLIER, DOUBLE_BONUS_SCORE_MULTIPLIER, MULTIPLAYER_STREAK_TIME_FACTOR, MULTIPLAYER_STREAK_SCORE_FACTOR, WORD_SCORE, SPEED_BONUS_MAX } from './constants';
-import { WORD_LIST } from './wordSet';
+import { getWordList, type WordLanguage } from './wordSet';
 
 // ─── Strategic Grid Fill ──────────────────────────────────────────────────────
 
-const WORDS_BY_LENGTH: Record<number, string[]> = {};
-for (const word of WORD_LIST) {
-  if (word.length >= MIN_WORD_LENGTH && word.length <= MAX_WORD_LENGTH) {
-    (WORDS_BY_LENGTH[word.length] ??= []).push(word);
+const WORDS_BY_LENGTH_CACHE: Record<WordLanguage, Record<number, string[]>> = {
+  tr: {},
+  en: {},
+};
+
+function getWordsByLength(language: WordLanguage): Record<number, string[]> {
+  const cached = WORDS_BY_LENGTH_CACHE[language];
+  if (Object.keys(cached).length > 0) return cached;
+
+  const byLength: Record<number, string[]> = {};
+  for (const word of getWordList(language)) {
+    if (word.length >= MIN_WORD_LENGTH && word.length <= MAX_WORD_LENGTH) {
+      (byLength[word.length] ??= []).push(word);
+    }
   }
+  WORDS_BY_LENGTH_CACHE[language] = byLength;
+  return byLength;
 }
 
-function pickWordOfLength(rng: RngFn, length: number): string {
-  const pool = WORDS_BY_LENGTH[length];
+function pickWordOfLength(rng: RngFn, length: number, wordsByLength: Record<number, string[]>): string {
+  const pool = wordsByLength[length];
   if (!pool?.length) {
     throw new Error(`No words of length ${length} in word list`);
   }
   return pool[Math.floor(rng() * pool.length)];
 }
 
-function pickRandomFittingWord(rng: RngFn, total: number, cap: number): string {
+function pickRandomFittingWord(
+  rng: RngFn,
+  total: number,
+  cap: number,
+  wordsByLength: Record<number, string[]>,
+): string {
   const maxLen = Math.min(MAX_WORD_LENGTH, cap - total);
   const fittingLengths: number[] = [];
   for (let len = MIN_WORD_LENGTH; len <= maxLen; len++) {
-    if (WORDS_BY_LENGTH[len]?.length) fittingLengths.push(len);
+    if (wordsByLength[len]?.length) fittingLengths.push(len);
   }
   const length = fittingLengths[Math.floor(rng() * fittingLengths.length)];
-  return pickWordOfLength(rng, length);
+  return pickWordOfLength(rng, length, wordsByLength);
 }
 
 /**
@@ -38,7 +55,8 @@ function pickRandomFittingWord(rng: RngFn, total: number, cap: number): string {
  * Phase 2 — close the gap with one word (remainder <= MAX) or two words
  *           (MIN + remainder - MIN).
  */
-function buildWordPool(rng: RngFn, targetCells: number): string[] {
+function buildWordPool(rng: RngFn, targetCells: number, language: WordLanguage): string[] {
+  const wordsByLength = getWordsByLength(language);
   const threshold = targetCells - MAX_WORD_LENGTH - MIN_WORD_LENGTH;
   const cap = targetCells - MIN_WORD_LENGTH;
 
@@ -46,7 +64,7 @@ function buildWordPool(rng: RngFn, targetCells: number): string[] {
   let total = 0;
 
   while (total < threshold) {
-    const word = pickRandomFittingWord(rng, total, cap);
+    const word = pickRandomFittingWord(rng, total, cap, wordsByLength);
     wordPool.push(word);
     total += word.length;
   }
@@ -55,11 +73,11 @@ function buildWordPool(rng: RngFn, targetCells: number): string[] {
 
   const remainder = targetCells - total;
   if (remainder <= MAX_WORD_LENGTH) {
-    wordPool.push(pickWordOfLength(rng, remainder));
+    wordPool.push(pickWordOfLength(rng, remainder, wordsByLength));
   } else {
     wordPool.push(
-      pickWordOfLength(rng, MIN_WORD_LENGTH),
-      pickWordOfLength(rng, remainder - MIN_WORD_LENGTH),
+      pickWordOfLength(rng, MIN_WORD_LENGTH, wordsByLength),
+      pickWordOfLength(rng, remainder - MIN_WORD_LENGTH, wordsByLength),
     );
   }
 
@@ -88,9 +106,9 @@ export interface GridGenerationResult {
  * - No orphan padding letters outside the word pool
  * - Perfect consumability when every pool word is submitted
  */
-export function fillGrid(rng: RngFn): GridGenerationResult {
+export function fillGrid(rng: RngFn, language: WordLanguage = 'tr'): GridGenerationResult {
   const targetCells = GRID_COLS * GRID_ROWS - MAX_EMPTY_CELLS;
-  const wordPool = buildWordPool(rng, targetCells);
+  const wordPool = buildWordPool(rng, targetCells, language);
   const letters = Array.from(wordPool.join(''));
   
   // Shuffle letters for random distribution
@@ -140,12 +158,13 @@ export function refillEmptySlots(
   rng: RngFn,
   columns: LandedCell[][],
   idSeed: string,
+  language: WordLanguage = 'tr',
 ): { columns: LandedCell[][]; words: string[] } | null {
   const colHeight = columnCapacity();
   const totalEmpty = columns.reduce((sum, col) => sum + (colHeight - col.length), 0);
   if (totalEmpty < MIN_WORD_LENGTH) return null;
 
-  const words = buildWordPool(rng, totalEmpty);
+  const words = buildWordPool(rng, totalEmpty, language);
   const letters = Array.from(words.join(''));
 
   for (let i = letters.length - 1; i > 0; i--) {

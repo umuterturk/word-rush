@@ -9,6 +9,7 @@ export interface Translations {
   yourBest: string;
   yourName: string;
   namePlaceholder: string;
+  leaderboardNamePrompt: string;
   login: string;
   save: string;
   leaderboard: string;
@@ -117,6 +118,7 @@ export const translations: Record<Language, Translations> = {
     yourBest: 'YOUR BEST',
     yourName: 'YOUR NAME',
     namePlaceholder: 'Enter name',
+    leaderboardNamePrompt: 'Enter your name to appear on the leaderboard.',
     login: 'LOGIN',
     save: 'SAVE',
     leaderboard: 'TOP 3',
@@ -222,6 +224,7 @@ export const translations: Record<Language, Translations> = {
     yourBest: 'EN İYİ SKORUN',
     yourName: 'ADIN',
     namePlaceholder: 'Adını yaz',
+    leaderboardNamePrompt: 'Skor tablosunda görünmek için adını gir.',
     login: 'GİRİŞ YAP',
     save: 'KAYDET',
     leaderboard: 'İLK 3',

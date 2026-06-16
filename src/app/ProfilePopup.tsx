@@ -5,9 +5,10 @@ interface Props {
   username: string;
   onSave: (name: string) => void;
   onClose: () => void;
+  message?: string;
 }
 
-export function ProfilePopup({ username, onSave, onClose }: Props) {
+export function ProfilePopup({ username, onSave, onClose, message }: Props) {
   const { t } = useI18n();
   const [draft, setDraft] = useState(username);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -32,6 +33,7 @@ export function ProfilePopup({ username, onSave, onClose }: Props) {
         <h2 id="profile-popup-title" className="profile-popup-title">
           {t.yourName}
         </h2>
+        {message && <p className="profile-popup-message">{message}</p>}
         <input
           ref={inputRef}
           className="profile-input"

@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeAll } from 'vitest';
 import { gameReducer, INITIAL_GAME_STATE } from '../gameReducer';
 import type { GameState } from '../types';
 import { GRID_COLS, GRID_ROWS, SOLO_REFILL_LIMIT } from '../constants';
@@ -17,7 +17,11 @@ function startedState(
 // ─── START_MATCH ──────────────────────────────────────────────────────────────
 
 describe('START_MATCH', () => {
-  const state = startedState();
+  let state: GameState;
+
+  beforeAll(() => {
+    state = startedState();
+  });
 
   it('sets matchStatus to playing', () => {
     expect(state.matchStatus).toBe('playing');

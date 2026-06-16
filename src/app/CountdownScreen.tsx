@@ -4,12 +4,14 @@ import { useI18n } from '../i18n';
 interface Props {
   onComplete: () => void;
   opponentName?: string;
+  /** Hold the countdown until word data is ready. */
+  paused?: boolean;
 }
 
 const COUNTDOWN_VALUES = [3, 2, 1] as const;
 const STEP_DURATION_MS = 667;
 
-export function CountdownScreen({ onComplete, opponentName }: Props) {
+export function CountdownScreen({ onComplete, opponentName, paused = false }: Props) {
   const [step, setStep] = useState(0);
   const { t } = useI18n();
   const onCompleteRef = useRef(onComplete);
@@ -18,6 +20,8 @@ export function CountdownScreen({ onComplete, opponentName }: Props) {
   }, [onComplete]);
 
   useEffect(() => {
+    if (paused) return;
+
     if (step >= COUNTDOWN_VALUES.length) {
       onCompleteRef.current();
       return;
@@ -28,7 +32,7 @@ export function CountdownScreen({ onComplete, opponentName }: Props) {
     }, STEP_DURATION_MS);
 
     return () => clearTimeout(timer);
-  }, [step]);
+  }, [step, paused]);
 
   const countdownValue = COUNTDOWN_VALUES[step];
 
