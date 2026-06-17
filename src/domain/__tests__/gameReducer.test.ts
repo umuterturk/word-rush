@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { gameReducer, INITIAL_GAME_STATE } from '../gameReducer';
+import { computeWordPoints } from '../gridUtils';
 import type { GameState } from '../types';
 import { GRID_COLS, GRID_ROWS, SOLO_REFILL_LIMIT } from '../constants';
 
@@ -453,19 +454,31 @@ describe('2× mode streak', () => {
     expect(Number.isInteger(next.players['local'].score)).toBe(true);
   });
 
-  it('doubles solo score while 2× is active', () => {
+  it('awards more solo timer score while 2× is active', () => {
     const base = startedState('solo-double', 1000, 'solo');
     const manual = stateWithManualTargetFrom(base, 'balon');
-    const submitted = manual.players['local'].wordStartedAt + 100;
-    const withoutDouble = gameReducer(manual, { type: 'SUBMIT_WORD', playerId: 'local', at: submitted });
-    const withDouble = {
-      ...manual,
-      players: {
-        local: { ...manual.players['local'], doubleBonusActive: true },
-      },
-    };
-    const withDoubleResult = gameReducer(withDouble, { type: 'SUBMIT_WORD', playerId: 'local', at: submitted });
-    expect(withDoubleResult.players['local'].score).toBeGreaterThan(withoutDouble.players['local'].score);
+    const player = manual.players['local'];
+    const submitted = player.wordStartedAt + 100;
+
+    const withoutTimer = computeWordPoints({
+      word: player.targetWord,
+      columns: player.columns,
+      submittedAt: submitted,
+      wordStartedAt: player.wordStartedAt,
+      matchMode: 'solo',
+      player,
+      soloDifficulty: 'hard',
+    }).timerMultiplier;
+    const withTimer = computeWordPoints({
+      word: player.targetWord,
+      columns: player.columns,
+      submittedAt: submitted,
+      wordStartedAt: player.wordStartedAt,
+      matchMode: 'solo',
+      player: { ...player, doubleBonusActive: true },
+      soloDifficulty: 'hard',
+    }).timerMultiplier;
+    expect(withTimer).toBeGreaterThan(withoutTimer);
   });
 
   it('increments 2× streak on success while active and resets on miss', () => {

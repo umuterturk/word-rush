@@ -305,6 +305,7 @@ export class FirebaseMultiplayerAdapter implements MultiplayerPort {
   }
 
   async publishScore(score: number): Promise<void> {
+    if (import.meta.env.DEV) return;
     if (!this.matchId || !this.localUid) return;
     await updateDoc(this.matchRef, {
       [`players.${this.localUid}.score`]: score,

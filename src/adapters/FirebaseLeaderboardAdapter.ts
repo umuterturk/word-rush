@@ -16,6 +16,8 @@ import type { LeaderboardEntry, LeaderboardPort } from '../ports';
 
 export class FirebaseLeaderboardAdapter implements LeaderboardPort {
   async submitScore(name: string, score: number): Promise<void> {
+    if (import.meta.env.DEV) return;
+
     const uid = await ensureAnonymousAuth();
     const db = getFirebaseDb();
     await addDoc(collection(db, LEADERBOARD_COLLECTION), {

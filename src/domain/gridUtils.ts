@@ -1,6 +1,6 @@
 import type { RngFn } from './seededRng';
 import type { LandedCell, MatchMode, PlayerState, SoloDifficulty } from './types';
-import { GRID_COLS, GRID_ROWS, MIN_WORD_LENGTH, MAX_WORD_LENGTH, MAX_EMPTY_CELLS, PITY_TIME_BONUS_PER_TIMEOUT, MAX_PITY_TIMEOUTS, WARMUP_BONUS_MS, TARGET_WORD_LENGTH_RAMP, SECONDS_PER_LETTER, SOLO_TIME_MULTIPLIER, MULTIPLAYER_TIME_MULTIPLIER, DOUBLE_BONUS_TIME_MULTIPLIER, DOUBLE_BONUS_SCORE_MULTIPLIER, MULTIPLAYER_STREAK_TIME_FACTOR, MULTIPLAYER_STREAK_SCORE_FACTOR, WORD_SCORE, SPEED_BONUS_MAX } from './constants';
+import { GRID_COLS, GRID_ROWS, MIN_WORD_LENGTH, MAX_WORD_LENGTH, MAX_EMPTY_CELLS, PITY_TIME_BONUS_PER_TIMEOUT, MAX_PITY_TIMEOUTS, WARMUP_BONUS_MS, TARGET_WORD_LENGTH_RAMP, SECONDS_PER_LETTER, SOLO_TIME_MULTIPLIER, MULTIPLAYER_TIME_MULTIPLIER, DOUBLE_BONUS_TIME_MULTIPLIER, DOUBLE_BONUS_SCORE_MULTIPLIER, MULTIPLAYER_STREAK_TIME_FACTOR, MULTIPLAYER_STREAK_SCORE_FACTOR, WORD_SCORE, SPEED_BONUS_MAX, MAX_WORD_TIME_MS } from './constants';
 import { getWordList, type WordLanguage } from './wordSet';
 
 // ─── Strategic Grid Fill ──────────────────────────────────────────────────────
@@ -444,8 +444,8 @@ export interface WordScoreBreakdown {
 }
 
 /**
- * Points for one correct word — word length, letter scarcity, and the word timer.
- * Difficulty and 2× affect score only through the timer (tighter clock = more pressure).
+ * Points for one correct word — word length, letter scarcity, and timer pressure.
+ * Difficulty and 2× affect score only through allotted per-word time.
  */
 export function computeWordPoints(input: WordScoreInput): WordScoreBreakdown {
   const { word, columns, submittedAt, wordStartedAt, matchMode, player, soloDifficulty } = input;
@@ -455,9 +455,8 @@ export function computeWordPoints(input: WordScoreInput): WordScoreBreakdown {
   const scarcityMultiplier = wordScarcityScoreMultiplier(scarcity);
 
   const allowedMs = getPlayerWordDuration(player, matchMode, soloDifficulty);
-  const neutralAllowedMs = getNeutralWordDuration(word, columns, matchMode);
   const elapsedMs = Math.max(0, submittedAt - wordStartedAt);
-  const timerMultiplier = wordTimerScoreMultiplier(allowedMs, elapsedMs, neutralAllowedMs);
+  const timerMultiplier = wordTimerScoreMultiplier(allowedMs, elapsedMs);
 
   const total = Math.round(base * scarcityMultiplier * timerMultiplier);
 
@@ -501,39 +500,18 @@ export function getPlayerWordDuration(
   return duration;
 }
 
-/** Neutral reference timer for scoring — no solo difficulty shift, no 2× shrink, no pity/warmup. */
-export function getNeutralWordDuration(
-  word: string,
-  columns: LandedCell[][],
-  matchMode: MatchMode,
-): number {
-  const timeMultiplier =
-    matchMode === 'solo' ? SOLO_TIME_MULTIPLIER.normal : MULTIPLAYER_TIME_MULTIPLIER;
-
-  return calculateWordDuration(
-    word,
-    columns,
-    SECONDS_PER_LETTER,
-    0,
-    false,
-    0,
-    timeMultiplier,
-  );
-}
-
 /**
- * Score factor from the word timer — difficulty and 2× are embedded via clock pressure.
- * Tighter timers (hard mode, 2× active) multiply score for the same finish speed.
+ * Score factor from allotted time and solve speed only.
+ * Halving allowed time doubles the score; speed is measured against the 60s cap.
  */
-export function wordTimerScoreMultiplier(
-  allowedMs: number,
-  elapsedMs: number,
-  neutralAllowedMs: number,
-): number {
+export function wordTimerScoreMultiplier(allowedMs: number, elapsedMs: number): number {
   if (allowedMs <= 0) return 1;
 
-  const remainingRatio = Math.max(0, Math.min(1, (allowedMs - elapsedMs) / allowedMs));
-  const pressure = neutralAllowedMs > 0 ? neutralAllowedMs / allowedMs : 1;
+  const allowed = Math.min(allowedMs, MAX_WORD_TIME_MS);
+  const elapsed = Math.min(Math.max(0, elapsedMs), MAX_WORD_TIME_MS);
 
-  return 1 + remainingRatio * pressure * SPEED_BONUS_MAX;
+  const pressureRatio = MAX_WORD_TIME_MS / allowed;
+  const speedFactor = (MAX_WORD_TIME_MS - elapsed) / MAX_WORD_TIME_MS;
+
+  return pressureRatio * (1 + speedFactor * SPEED_BONUS_MAX);
 }

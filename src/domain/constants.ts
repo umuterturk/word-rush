@@ -32,8 +32,14 @@ export const MULTIPLAYER_STREAK_TIME_FACTOR = 0.9;
 /** 2× mode: per consecutive find while active, score grows 10% (compound). */
 export const MULTIPLAYER_STREAK_SCORE_FACTOR = 1.1;
 
-/** Speed bonus ceiling when finishing with full timer remaining (1 = up to 2× from timer alone). */
-export const SPEED_BONUS_MAX = 1;
+/**
+ * Speed bonus scale — tuned so hard (15s) ≈ 10 pts and hard 2× (7.5s) ≈ 20 pts
+ * for a 4-letter word solved in 5s.
+ */
+export const SPEED_BONUS_MAX = 3 / 11;
+
+/** Reference cap for per-word timer scoring — longer allowed clocks score less. */
+export const MAX_WORD_TIME_MS = 60_000;
 
 /** Points awarded per word length. */
 export const WORD_SCORE: Readonly<Record<number, number>> = {

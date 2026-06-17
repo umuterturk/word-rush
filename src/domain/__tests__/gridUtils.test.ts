@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { createSeededRng } from '../seededRng';
-import { fillGrid, pickTargetWord, buildLetterFreqMap, calculateWordDuration, calculateWordLetterScarcity, letterFrequencyMultiplier, pityTimeMultiplier, findHintCellId, targetWordSelectionWeight, refillEmptySlots, getPlayerWordDuration, doubleBonusStreakTimeMultiplier, doubleBonusStreakScoreMultiplier, getMultiplayerScoreMultiplier, formatDoubleBonusMultiplierLabel, computeWordPoints } from '../gridUtils';
+import { fillGrid, pickTargetWord, buildLetterFreqMap, calculateWordDuration, calculateWordLetterScarcity, letterFrequencyMultiplier, pityTimeMultiplier, findHintCellId, targetWordSelectionWeight, refillEmptySlots, getPlayerWordDuration, doubleBonusStreakTimeMultiplier, doubleBonusStreakScoreMultiplier, getMultiplayerScoreMultiplier, formatDoubleBonusMultiplierLabel, computeWordPoints, wordTimerScoreMultiplier } from '../gridUtils';
 import { GRID_COLS, GRID_ROWS, SECONDS_PER_LETTER, WARMUP_BONUS_MS, TARGET_WORD_LENGTH_RAMP, DOUBLE_BONUS_SCORE_MULTIPLIER } from '../constants';
 import { createInitialPlayerState } from '../gameReducer';
 
@@ -550,21 +550,73 @@ describe('computeWordPoints', () => {
   it('awards more points under 2× via a tighter timer', () => {
     const started = 1000;
     const submitted = started + 100;
-    const base = computeWordPoints(scoreInput('bal', submitted, { wordStartedAt: started })).total;
+    const base = computeWordPoints(scoreInput('bal', submitted, { wordStartedAt: started })).timerMultiplier;
     const withDouble = computeWordPoints(
       scoreInput('bal', submitted, { wordStartedAt: started, doubleActive: true }),
-    ).total;
+    ).timerMultiplier;
     expect(withDouble).toBeGreaterThan(base);
   });
 
-  it('embeds multiplayer timer pressure at normal difficulty', () => {
+  it('embeds solo hard timer pressure vs multiplayer normal difficulty', () => {
     const mp = computeWordPoints(scoreInput('bal', 2000, { matchMode: 'multiplayer' })).timerMultiplier;
     const soloHard = computeWordPoints(scoreInput('bal', 2000, { matchMode: 'solo', soloDifficulty: 'hard' })).timerMultiplier;
-    expect(soloHard).toBeGreaterThanOrEqual(mp);
+    expect(soloHard).toBeGreaterThan(mp);
   });
 
   it('always returns whole-number totals', () => {
     const { total } = computeWordPoints(scoreInput('bal', 2500));
     expect(Number.isInteger(total)).toBe(true);
+  });
+});
+
+describe('wordTimerScoreMultiplier', () => {
+  it('scores less when more time is allotted', () => {
+    const tight = wordTimerScoreMultiplier(10_000, 5_000);
+    const loose = wordTimerScoreMultiplier(40_000, 5_000);
+    expect(tight).toBeGreaterThan(loose);
+  });
+
+  it('scores less when more time is spent solving', () => {
+    const fast = wordTimerScoreMultiplier(20_000, 2_000);
+    const slow = wordTimerScoreMultiplier(20_000, 18_000);
+    expect(fast).toBeGreaterThan(slow);
+  });
+
+  it('uses 60s as the maximum reference for allotted time', () => {
+    const atCap = wordTimerScoreMultiplier(60_000, 10_000);
+    const aboveCap = wordTimerScoreMultiplier(90_000, 10_000);
+    expect(atCap).toBe(aboveCap);
+  });
+
+  it('scores speed against the 60s reference, not allotted time', () => {
+    const elapsed = 5_000;
+    const hardWith2x = wordTimerScoreMultiplier(7_500, elapsed);
+    const easyWith2x = wordTimerScoreMultiplier(30_000, elapsed);
+    expect(hardWith2x).toBeGreaterThan(easyWith2x);
+  });
+
+  it('doubles timer score when allotted time is halved', () => {
+    const elapsed = 5_000;
+    const full = wordTimerScoreMultiplier(60_000, elapsed);
+    const half = wordTimerScoreMultiplier(30_000, elapsed);
+    expect(half / full).toBeCloseTo(2, 5);
+  });
+
+  it('keeps climbing as clocks get tighter', () => {
+    const elapsed = 5_000;
+    const at30 = wordTimerScoreMultiplier(30_000, elapsed);
+    const at15 = wordTimerScoreMultiplier(15_000, elapsed);
+    const at7_5 = wordTimerScoreMultiplier(7_500, elapsed);
+    expect(at15).toBeGreaterThan(at30);
+    expect(at7_5).toBeGreaterThan(at15);
+  });
+
+  it('targets 10 pts on hard and 20 pts on hard 2× for a 4-letter word at 5s', () => {
+    const elapsed = 5_000;
+    const hard = wordTimerScoreMultiplier(15_000, elapsed);
+    const hardWith2x = wordTimerScoreMultiplier(7_500, elapsed);
+    expect(Math.round(2 * hard)).toBe(10);
+    expect(Math.round(2 * hardWith2x)).toBe(20);
+    expect(hardWith2x / hard).toBeCloseTo(2, 5);
   });
 });
