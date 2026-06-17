@@ -75,11 +75,32 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
 
     case 'END_MATCH': {
       if (state.matchStatus !== 'playing') return state;
-      return { ...state, matchStatus: 'ended' };
+      return { ...state, matchStatus: 'ended', soloVictoryPending: undefined };
     }
 
     case 'RESET': {
       return INITIAL_GAME_STATE;
+    }
+
+    case 'TRIGGER_SOLO_VICTORY': {
+      if (state.matchMode !== 'solo' || state.matchStatus !== 'playing') return state;
+      const player = state.players[action.playerId];
+      if (!player) return state;
+      return {
+        ...state,
+        soloVictoryPending: true,
+        soloVictoryAt: action.at,
+        players: {
+          ...state.players,
+          [action.playerId]: {
+            ...player,
+            columns: player.columns.map(() => []),
+            selectedIds: [],
+            targetWord: '',
+            wordPool: [],
+          },
+        },
+      };
     }
 
     case 'SELECT_LETTER': {
@@ -214,7 +235,8 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
 
       return {
         ...state,
-        matchStatus: soloComplete ? 'ended' : state.matchStatus,
+        soloVictoryPending: soloComplete ? true : state.soloVictoryPending,
+        soloVictoryAt: soloComplete ? action.at : state.soloVictoryAt,
         players: {
           ...state.players,
           [action.playerId]: {

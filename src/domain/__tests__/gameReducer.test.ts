@@ -274,7 +274,9 @@ describe('SUBMIT_WORD', () => {
       },
     };
     const next = gameReducer(state, { type: 'SUBMIT_WORD', playerId: 'local', at: 30_000 });
-    expect(next.matchStatus).toBe('ended');
+    expect(next.soloVictoryPending).toBe(true);
+    expect(next.soloVictoryAt).toBe(30_000);
+    expect(next.matchStatus).toBe('playing');
     expect(next.players['local'].score).toBeGreaterThan(0);
   });
 
@@ -289,9 +291,27 @@ describe('SUBMIT_WORD', () => {
       },
     };
     const next = gameReducer(state, { type: 'SUBMIT_WORD', playerId: 'local', at: 2000 });
-    expect(next.matchStatus).toBe('ended');
+    expect(next.soloVictoryPending).toBe(true);
+    expect(next.soloVictoryAt).toBe(2000);
+    expect(next.matchStatus).toBe('playing');
     expect(next.players['local'].columns.every(col => col.length === 0)).toBe(true);
     expect(next.players['local'].refillsRemaining).toBe(0);
+  });
+
+  it('ends solo after victory celebration dispatches END_MATCH', () => {
+    const state = {
+      ...stateWithOnlyTarget('bal'),
+      soloVictoryPending: true,
+      players: {
+        local: {
+          ...stateWithOnlyTarget('bal').players['local'],
+          refillsRemaining: 0,
+        },
+      },
+    };
+    const next = gameReducer(state, { type: 'END_MATCH', at: 2000 });
+    expect(next.matchStatus).toBe('ended');
+    expect(next.soloVictoryPending).toBeUndefined();
   });
 
   it('does not refill solo when refills are exhausted', () => {

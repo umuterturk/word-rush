@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { createSeededRng } from '../seededRng';
-import { fillGrid, pickTargetWord, buildLetterFreqMap, calculateWordDuration, calculateWordLetterScarcity, letterFrequencyMultiplier, pityTimeMultiplier, findHintCellId, refillEmptySlots, getPlayerWordDuration, doubleBonusStreakTimeMultiplier, doubleBonusStreakScoreMultiplier, getMultiplayerScoreMultiplier, formatDoubleBonusMultiplierLabel, computeWordPoints, wordTimerScoreMultiplier } from '../gridUtils';
+import { fillGrid, pickTargetWord, buildLetterFreqMap, calculateWordDuration, calculateWordLetterScarcity, letterFrequencyMultiplier, pityTimeMultiplier, findHintCellId, refillEmptySlots, getPlayerWordDuration, doubleBonusStreakTimeMultiplier, doubleBonusStreakScoreMultiplier, getMultiplayerScoreMultiplier, formatDoubleBonusMultiplierLabel, computeWordPoints, wordTimerScoreMultiplier, buildVictoryAlphabetGrid } from '../gridUtils';
 import { GRID_COLS, GRID_ROWS, SECONDS_PER_LETTER, WARMUP_BONUS_MS, DOUBLE_BONUS_SCORE_MULTIPLIER } from '../constants';
 import { createInitialPlayerState } from '../gameReducer';
 
@@ -79,6 +79,32 @@ describe('fillGrid', () => {
       const { wordPool } = fillGrid(createSeededRng(`unique-fill-${i}`));
       expect(new Set(wordPool).size).toBe(wordPool.length);
     }
+  });
+});
+
+describe('buildVictoryAlphabetGrid', () => {
+  it('fills the board with the alphabet in reading order', () => {
+    const { columns } = buildVictoryAlphabetGrid('tr');
+    const totalCells = columns.reduce((sum, col) => sum + col.length, 0);
+    expect(totalCells).toBe(GRID_COLS * GRID_ROWS);
+
+    const letterAt = (col: number, rowFromTop: number) => {
+      const rowFromBottom = GRID_ROWS - 1 - rowFromTop;
+      return columns[col][rowFromBottom].letter;
+    };
+
+    expect(letterAt(0, 0)).toBe('a');
+    expect(letterAt(4, 0)).toBe('d');
+    expect(letterAt(0, 1)).toBe('e');
+    expect(letterAt(4, 6)).toBe('e');
+  });
+
+  it('uses the English alphabet when requested', () => {
+    const { columns } = buildVictoryAlphabetGrid('en');
+    const rowFromBottom = GRID_ROWS - 1;
+    expect(columns[0][rowFromBottom].letter).toBe('a');
+    expect(columns[4][rowFromBottom].letter).toBe('e');
+    expect(columns[0][rowFromBottom - 1].letter).toBe('f');
   });
 });
 

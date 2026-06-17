@@ -54,6 +54,10 @@ export interface Translations {
   timesUp: string;
   soloComplete: string;
   newBest: string;
+  newBestHonor: string;
+  newBestHonorFirst: string;
+  leaderboardHonor: string;
+  epicHonorBoth: string;
   point: string;
   points: string;
   youWin: string;
@@ -163,6 +167,10 @@ export const translations: Record<Language, Translations> = {
     timesUp: 'TIME\'S UP',
     soloComplete: 'COMPLETE',
     newBest: 'NEW BEST!',
+    newBestHonor: 'You smashed your personal best of {prev} — {score} points of pure skill.',
+    newBestHonorFirst: 'Your first mark on the board: {score} points. The journey begins.',
+    leaderboardHonor: 'A top-three score. The leaderboard will remember this one.',
+    epicHonorBoth: 'New personal best and a top-three finish. Absolutely legendary.',
     point: 'point',
     points: 'points',
     youWin: 'YOU WIN!',
@@ -269,6 +277,10 @@ export const translations: Record<Language, Translations> = {
     timesUp: 'SÜRE BİTTİ',
     soloComplete: 'TAMAMLANDI',
     newBest: 'YENİ REKOR!',
+    newBestHonor: 'Kişisel rekorunu ({prev}) geçtin — {score} puanla muhteşem bir oyun.',
+    newBestHonorFirst: 'İlk skorun: {score} puan. Serüven şimdi başlıyor.',
+    leaderboardHonor: 'İlk üçe giren bir skor. Tablo bunu unutmayacak.',
+    epicHonorBoth: 'Yeni rekor ve ilk üç. Tam anlamıyla efsanevi.',
     point: 'puan',
     points: 'puan',
     youWin: 'KAZANDIN!',

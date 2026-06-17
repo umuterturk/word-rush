@@ -242,6 +242,39 @@ export function fillGrid(rng: RngFn, language: WordLanguage = 'tr'): GridGenerat
   return { columns, wordPool };
 }
 
+const EN_ALPHABET = Array.from('abcdefghijklmnopqrstuvwxyz');
+const TR_ALPHABET = Array.from('abcçdefgğhıijklmnoöprsştuüvyz');
+
+function getVictoryAlphabetLetters(language: WordLanguage): string[] {
+  const alphabet = language === 'tr' ? TR_ALPHABET : EN_ALPHABET;
+  const cellCount = GRID_COLS * GRID_ROWS;
+  return Array.from({ length: cellCount }, (_, i) => alphabet[i % alphabet.length]);
+}
+
+/**
+ * Fills the board with the alphabet in reading order for the victory celebration.
+ */
+export function buildVictoryAlphabetGrid(language: WordLanguage = 'tr'): GridGenerationResult {
+  const letters = getVictoryAlphabetLetters(language);
+  const colHeight = GRID_ROWS - Math.floor(MAX_EMPTY_CELLS / GRID_COLS);
+  const columns: LandedCell[][] = [];
+
+  for (let col = 0; col < GRID_COLS; col++) {
+    const column: LandedCell[] = [];
+    for (let rowFromBottom = 0; rowFromBottom < colHeight; rowFromBottom++) {
+      const rowFromTop = GRID_ROWS - 1 - rowFromBottom;
+      const index = rowFromTop * GRID_COLS + col;
+      column.push({
+        id: `victory-c${col}r${rowFromBottom}`,
+        letter: letters[index],
+      });
+    }
+    columns.push(column);
+  }
+
+  return { columns, wordPool: [] };
+}
+
 /** True when every column on the board is empty. */
 export function isBoardEmpty(columns: LandedCell[][]): boolean {
   return columns.every(col => col.length === 0);

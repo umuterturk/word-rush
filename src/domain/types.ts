@@ -49,6 +49,10 @@ export interface GameState {
   matchDuration: number;
   seed: string;
   soloDifficulty?: SoloDifficulty;
+  /** Solo: last word cleared — UI runs victory celebration before END_MATCH. */
+  soloVictoryPending?: boolean;
+  /** Wall-clock time when solo victory started; freezes the elapsed timer. */
+  soloVictoryAt?: number;
   players: Record<string, PlayerState>;
 }
 
@@ -63,4 +67,6 @@ export type GameAction =
   | { type: 'WORD_TIMEOUT'; playerId: string; at: number }
   | { type: 'SHUFFLE_BOARD'; playerId: string }
   | { type: 'MARK_SHUFFLE_USED'; playerId: string }
-  | { type: 'ACTIVATE_DOUBLE'; playerId: string; at: number };
+  | { type: 'ACTIVATE_DOUBLE'; playerId: string; at: number }
+  /** Dev/testing: jump to solo victory celebration (empty board + pending flag). */
+  | { type: 'TRIGGER_SOLO_VICTORY'; playerId: string; at: number };

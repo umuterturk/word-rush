@@ -298,6 +298,21 @@ export default function App() {
     dispatchAction({ type: 'RESET' });
   }, [mp, dispatchAction]);
 
+  const handleSoloVictoryDone = useCallback(
+    (action: 'playAgain' | 'menu') => {
+      dispatchAction({ type: 'END_MATCH', at: clock.now() });
+      window.setTimeout(() => {
+        if (action === 'playAgain') {
+          dispatchAction({ type: 'RESET' });
+          setShowCountdown(true);
+        } else {
+          handleBackToMenu();
+        }
+      }, 0);
+    },
+    [clock, dispatchAction, handleBackToMenu],
+  );
+
   const handleQuitGame = useCallback(() => {
     matchStartedRef.current = false;
     activeMatchIdRef.current = undefined;
@@ -560,6 +575,9 @@ export default function App() {
         onShuffle={handleShuffleAttack}
         shuffleSignal={shuffleSignal}
         onQuit={handleQuitGame}
+        bestScore={bestScore}
+        leaderboardEntries={leaderboardEntries}
+        onSoloVictoryDone={isMultiplayer ? undefined : handleSoloVictoryDone}
       />
     );
   }

@@ -1,10 +1,26 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { GameAction, GameState } from '../domain/types';
 import { GRID_COLS, GRID_ROWS, SKIP_PENALTY, LETTER_HINT_DELAY_MS } from '../domain/constants';
-import type { ClockPort } from '../ports';
+import type { ClockPort, LeaderboardEntry } from '../ports';
 import { useI18n } from '../i18n';
-import { getPlayerWordDuration, formatDoubleBonusMultiplierLabel, findHintCellId, getCellById, isCorrectNextLetter, computeWordPoints } from '../domain/gridUtils';
+import { getPlayerWordDuration, formatDoubleBonusMultiplierLabel, findHintCellId, getCellById, isCorrectNextLetter, computeWordPoints, buildVictoryAlphabetGrid } from '../domain/gridUtils';
+import { createSeededRng } from '../domain/seededRng';
 import { upperByLanguage } from '../domain/turkishText';
+import {
+  SOLO_VICTORY_WAIT_MS,
+  CELEBRATION_STAGGER_MS,
+  CELEBRATION_POPUP_DELAY_MS,
+  CELEBRATION_TILE_POP_MS,
+  VICTORY_POPUP_ACTION_DELAY_MS,
+  brokeLocalRecord,
+  devLeaderboardPreviewScore,
+  devVictoryPreviewScore,
+  getVictoryEpicBadgeLabel,
+  getVictoryHonorMessage,
+  isEpicVictoryCelebration,
+  resolveVictoryHonorFocus,
+  wouldQualifyForLeaderboard,
+} from './victoryCelebration';
 
 interface Props {
   gameState: GameState;
@@ -20,6 +36,9 @@ interface Props {
   /** Increments whenever our own board was shuffled by the opponent (triggers animation). */
   shuffleSignal?: number;
   onQuit?: () => void;
+  bestScore?: number;
+  leaderboardEntries?: LeaderboardEntry[];
+  onSoloVictoryDone?: (action: 'playAgain' | 'menu') => void;
 }
 
 function formatTime(ms: number): string {
@@ -60,6 +79,146 @@ const TILE_BUTTON_ATTRS = {
 
 const COL_PCT = 100 / GRID_COLS;
 const ROW_PCT = 100 / GRID_ROWS;
+const CONFETTI_COLORS = ['#ffd54f', '#81c784', '#ce93d8', '#4fc3f7', '#ff8a65', '#fff176'];
+
+interface ConfettiPiece {
+  id: number;
+  left: number;
+  delay: number;
+  duration: number;
+  drift: number;
+  rotate: number;
+  color: string;
+  size: number;
+}
+
+interface VictorySnapshot {
+  score: number;
+  previousBest: number;
+  forceRecord: boolean;
+  forceEpic: boolean;
+}
+
+function buildVictorySnapshot(
+  score: number,
+  storedBest: number,
+  forceRecord: boolean,
+  forceEpic: boolean,
+  devPreview: boolean,
+  leaderboardEntries: LeaderboardEntry[],
+): VictorySnapshot {
+  let resolvedScore = score;
+  if (import.meta.env.DEV && devPreview && score <= 0) {
+    if (forceRecord && !forceEpic) {
+      resolvedScore = devVictoryPreviewScore(storedBest, leaderboardEntries);
+    } else if (forceEpic && !forceRecord) {
+      resolvedScore = devLeaderboardPreviewScore(storedBest, leaderboardEntries);
+    } else {
+      resolvedScore = devVictoryPreviewScore(storedBest, leaderboardEntries);
+    }
+  }
+
+  let previousBest = storedBest;
+  if (forceRecord && !brokeLocalRecord(resolvedScore, storedBest)) {
+    previousBest = Math.max(0, resolvedScore - Math.max(12, Math.ceil(resolvedScore * 0.35)));
+    if (previousBest >= resolvedScore) previousBest = resolvedScore - 1;
+  }
+
+  return { score: resolvedScore, previousBest, forceRecord, forceEpic };
+}
+
+interface FireworkSpark {
+  angle: number;
+  distance: number;
+  color: string;
+}
+
+interface FireworkBurst {
+  id: number;
+  left: number;
+  top: number;
+  delay: number;
+  rocketColor: string;
+  flashColor: string;
+  sparks: FireworkSpark[];
+}
+
+function buildFireworkBursts(seed: string, count: number): FireworkBurst[] {
+  const rng = createSeededRng(`${seed}-fireworks`);
+  const palette = ['#ffd54f', '#ff7043', '#81c784', '#e040fb', '#40c4ff', '#fff176', '#ffab91'];
+  return Array.from({ length: count }, (_, id) => {
+    const rocketColor = palette[Math.floor(rng() * palette.length)];
+    const sparkCount = 16 + Math.floor(rng() * 12);
+    const sparks = Array.from({ length: sparkCount }, () => ({
+      angle: rng() * 360,
+      distance: 28 + rng() * 52,
+      color: palette[Math.floor(rng() * palette.length)],
+    }));
+    return {
+      id,
+      left: 4 + rng() * 92,
+      top: 6 + rng() * 48,
+      delay: rng() * 3.5,
+      rocketColor,
+      flashColor: rocketColor,
+      sparks,
+    };
+  });
+}
+
+function VictoryFireworks({ bursts }: { bursts: FireworkBurst[] }) {
+  return (
+    <div className="victory-fireworks" aria-hidden="true">
+      {bursts.map(burst => (
+        <div
+          key={burst.id}
+          className="victory-firework"
+          style={{
+            left: `${burst.left}%`,
+            top: `${burst.top}%`,
+            '--fw-delay': `${burst.delay}s`,
+            '--rocket-color': burst.rocketColor,
+            '--flash-color': burst.flashColor,
+          } as React.CSSProperties}
+        >
+          <span className="victory-firework-rocket" />
+          <span className="victory-firework-flash" />
+          {burst.sparks.map((spark, sparkIndex) => (
+            <span
+              key={sparkIndex}
+              className="victory-firework-spark"
+              style={{
+                '--spark-angle': `${spark.angle}deg`,
+                '--spark-dist': `${spark.distance}px`,
+                '--spark-color': spark.color,
+              } as React.CSSProperties}
+            />
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function buildConfettiPieces(seed: string, count: number): ConfettiPiece[] {
+  const rng = createSeededRng(`${seed}-confetti`);
+  return Array.from({ length: count }, (_, id) => ({
+    id,
+    left: rng() * 100,
+    delay: rng() * 1.8,
+    duration: 3 + rng() * 2.5,
+    drift: -50 + rng() * 100,
+    rotate: rng() * 360,
+    color: CONFETTI_COLORS[Math.floor(rng() * CONFETTI_COLORS.length)],
+    size: 5 + rng() * 7,
+  }));
+}
+
+function celebrationTileDelay(col: number, rowFromTop: number): number {
+  const centerCol = (GRID_COLS - 1) / 2;
+  const centerRow = (GRID_ROWS - 1) / 2;
+  return Math.round(Math.hypot(col - centerCol, rowFromTop - centerRow) * CELEBRATION_STAGGER_MS);
+}
 
 export function GameScreen({
   gameState,
@@ -73,6 +232,9 @@ export function GameScreen({
   onShuffle,
   shuffleSignal = 0,
   onQuit,
+  bestScore = 0,
+  leaderboardEntries = [],
+  onSoloVictoryDone,
 }: Props) {
   const { t, language } = useI18n();
   const player = gameState.players['local'];
@@ -127,6 +289,54 @@ export function GameScreen({
   const [hintCellId, setHintCellId] = useState<string | null>(null);
   const [isShuffling, setIsShuffling] = useState(false);
   const [showResignConfirm, setShowResignConfirm] = useState(false);
+  const [celebrationPhase, setCelebrationPhase] = useState<'idle' | 'wait' | 'celebrate'>('idle');
+  const [celebrationGrid, setCelebrationGrid] = useState<ReturnType<typeof buildVictoryAlphabetGrid> | null>(null);
+  const [showVictoryPopup, setShowVictoryPopup] = useState(false);
+  const [confettiPieces, setConfettiPieces] = useState<ConfettiPiece[]>([]);
+  const [fireworkBursts, setFireworkBursts] = useState<FireworkBurst[]>([]);
+  const [celebrationEpic, setCelebrationEpic] = useState(false);
+  const [victorySnapshot, setVictorySnapshot] = useState<VictorySnapshot | null>(null);
+  const forceEpicRef = useRef(false);
+  const forceRecordRef = useRef(false);
+  const devPreviewRef = useRef(false);
+  const victoryRunRef = useRef(0);
+  const [victoryActionsEnabled, setVictoryActionsEnabled] = useState(false);
+
+  const isSoloVictory = !isMultiplayer && gameState.soloVictoryPending === true;
+  const isCelebrating = celebrationPhase === 'celebrate';
+  const snapshotScore = victorySnapshot?.score ?? displayScore;
+  const snapshotPreviousBest = victorySnapshot?.previousBest ?? bestScore;
+  const isNewBest =
+    isSoloVictory &&
+    victorySnapshot != null &&
+    (victorySnapshot.forceRecord ||
+      brokeLocalRecord(snapshotScore, snapshotPreviousBest));
+  const qualifiesForLeaderboard =
+    isSoloVictory &&
+    wouldQualifyForLeaderboard(snapshotScore, leaderboardEntries);
+  const honorFocus = victorySnapshot
+    ? resolveVictoryHonorFocus(victorySnapshot.forceRecord, victorySnapshot.forceEpic)
+    : 'both';
+  const victoryHonorMessage =
+    isSoloVictory && victorySnapshot && (isNewBest || qualifiesForLeaderboard)
+      ? getVictoryHonorMessage(
+          t,
+          isNewBest,
+          qualifiesForLeaderboard,
+          snapshotScore,
+          snapshotPreviousBest,
+          honorFocus,
+        )
+      : null;
+  const epicBadgeLabel =
+    celebrationEpic && victorySnapshot
+      ? getVictoryEpicBadgeLabel(
+          { newBest: t.newBest, leaderboard: t.leaderboard },
+          isNewBest,
+          qualifiesForLeaderboard,
+          honorFocus,
+        )
+      : null;
 
   // Auto-submit when the formed word exactly matches the target
   const prevFormedRef = useRef('');
@@ -178,6 +388,159 @@ export function GameScreen({
 
     return () => window.clearTimeout(timeoutId);
   }, [hintTimerKey, targetWord, player, selectedIds]);
+
+  useEffect(() => {
+    if (!isSoloVictory) {
+      setVictorySnapshot(null);
+      return;
+    }
+
+    setVictorySnapshot(prev => {
+      if (!prev) {
+        return buildVictorySnapshot(
+          displayScore,
+          bestScore,
+          forceRecordRef.current,
+          forceEpicRef.current,
+          devPreviewRef.current,
+          leaderboardEntries,
+        );
+      }
+      if (!prev.forceRecord && bestScore > prev.previousBest) {
+        return { ...prev, previousBest: bestScore };
+      }
+      return prev;
+    });
+  }, [isSoloVictory, displayScore, bestScore]);
+
+  useEffect(() => {
+    if (!isSoloVictory) {
+      setCelebrationPhase('idle');
+      setCelebrationGrid(null);
+      setShowVictoryPopup(false);
+      setConfettiPieces([]);
+      setFireworkBursts([]);
+      setCelebrationEpic(false);
+      forceEpicRef.current = false;
+      forceRecordRef.current = false;
+      devPreviewRef.current = false;
+      setVictoryActionsEnabled(false);
+      return;
+    }
+
+    victoryRunRef.current += 1;
+    const runId = victoryRunRef.current;
+    const seed = gameState.seed;
+    const language = gameState.language ?? 'tr';
+
+    setCelebrationPhase('wait');
+    setCelebrationGrid(null);
+    setShowVictoryPopup(false);
+    setConfettiPieces([]);
+    setFireworkBursts([]);
+    setVictoryActionsEnabled(false);
+
+    let popupTimerId: number | undefined;
+
+    const waitId = window.setTimeout(() => {
+      if (victoryRunRef.current !== runId) return;
+
+      setVictorySnapshot(snap => {
+        const resolved =
+          snap ??
+          buildVictorySnapshot(
+            displayScore,
+            bestScore,
+            forceRecordRef.current,
+            forceEpicRef.current,
+            devPreviewRef.current,
+            leaderboardEntries,
+          );
+        const epic = isEpicVictoryCelebration(
+          resolved.score,
+          resolved.previousBest,
+          leaderboardEntries,
+          resolved.forceEpic || resolved.forceRecord,
+        );
+        setCelebrationEpic(epic);
+        setConfettiPieces(buildConfettiPieces(seed, epic ? 80 : 36));
+        if (epic) {
+          setFireworkBursts(buildFireworkBursts(seed, 18));
+        }
+        return resolved;
+      });
+
+      setCelebrationGrid(buildVictoryAlphabetGrid(language));
+      setCelebrationPhase('celebrate');
+
+      popupTimerId = window.setTimeout(() => {
+        if (victoryRunRef.current !== runId) return;
+        setShowVictoryPopup(true);
+      }, CELEBRATION_POPUP_DELAY_MS);
+    }, SOLO_VICTORY_WAIT_MS);
+
+    return () => {
+      window.clearTimeout(waitId);
+      if (popupTimerId !== undefined) window.clearTimeout(popupTimerId);
+    };
+  }, [isSoloVictory, gameState.seed, gameState.language]);
+
+  useEffect(() => {
+    if (!showVictoryPopup) {
+      setVictoryActionsEnabled(false);
+      return;
+    }
+
+    const timer = window.setTimeout(
+      () => setVictoryActionsEnabled(true),
+      VICTORY_POPUP_ACTION_DELAY_MS,
+    );
+    return () => window.clearTimeout(timer);
+  }, [showVictoryPopup]);
+
+  function handleVictoryAction(action: 'playAgain' | 'menu') {
+    if (!victoryActionsEnabled || !onSoloVictoryDone) return;
+    onSoloVictoryDone(action);
+  }
+
+  useEffect(() => {
+    if (!import.meta.env.DEV || isMultiplayer || isSoloVictory) return;
+
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.repeat) return;
+      const target = e.target;
+      if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) return;
+
+      if (e.key === 'v' || e.code === 'KeyV') {
+        e.preventDefault();
+        forceEpicRef.current = false;
+        forceRecordRef.current = false;
+        devPreviewRef.current = true;
+        onDispatch({ type: 'TRIGGER_SOLO_VICTORY', playerId: 'local', at: clock.now() });
+        return;
+      }
+
+      if (e.key === 'r' || e.code === 'KeyR') {
+        e.preventDefault();
+        forceEpicRef.current = false;
+        forceRecordRef.current = true;
+        devPreviewRef.current = true;
+        onDispatch({ type: 'TRIGGER_SOLO_VICTORY', playerId: 'local', at: clock.now() });
+        return;
+      }
+
+      if (e.key === 'e' || e.code === 'KeyE') {
+        e.preventDefault();
+        forceEpicRef.current = true;
+        forceRecordRef.current = false;
+        devPreviewRef.current = true;
+        onDispatch({ type: 'TRIGGER_SOLO_VICTORY', playerId: 'local', at: clock.now() });
+      }
+    }
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isMultiplayer, isSoloVictory, onDispatch, clock]);
 
   const isLeading = isMultiplayer && displayScore > opponentScore;
   const isBehind = isMultiplayer && displayScore < opponentScore;
@@ -248,7 +611,8 @@ export function GameScreen({
 
   return (
     <div
-      className={`screen game-screen${isMultiplayer ? ' game-screen--vs' : ''}`}
+      className={`screen game-screen${isMultiplayer ? ' game-screen--vs' : ''}${isSoloVictory ? ' game-screen--solo-victory' : ''}${isCelebrating ? ' game-screen--celebrating' : ''}${celebrationEpic ? ' game-screen--celebrating-epic' : ''}`}
+      style={{ '--celebration-pop-ms': `${CELEBRATION_TILE_POP_MS}ms` } as React.CSSProperties}
     >
       {showResignConfirm && onQuit && (
         <div className="confirm-overlay" onClick={() => setShowResignConfirm(false)}>
@@ -332,12 +696,17 @@ export function GameScreen({
       )}
 
       {/* Target word banner */}
+      {!showVictoryPopup && (
       <div
-        className={`target-word-banner notranslate${submitFeedback === 'valid' ? ' target-word-banner--valid' : ''}${submitFeedback === 'invalid' ? ' target-word-banner--invalid' : ''}${wordMatchesTarget ? ' target-word-banner--complete' : ''}`}
+        className={`target-word-banner notranslate${submitFeedback === 'valid' ? ' target-word-banner--valid' : ''}${submitFeedback === 'invalid' ? ' target-word-banner--invalid' : ''}${wordMatchesTarget ? ' target-word-banner--complete' : ''}${isSoloVictory ? ' target-word-banner--victory' : ''}`}
         lang={language}
         translate="no"
       >
-        {targetWord ? (
+        {isSoloVictory && !showVictoryPopup ? (
+          <span className="target-word-victory-badge target-word-victory-badge--compact">
+            {t.soloComplete}
+          </span>
+        ) : isSoloVictory ? null : targetWord ? (
           <>
             <span className="target-word-label">{t.find}</span>
             <span className="target-word-text">
@@ -369,11 +738,12 @@ export function GameScreen({
           </span>
         )}
       </div>
+      )}
 
       {/* Grid arena container with timer */}
       <div className="arena-container">
         {/* Vertical word timer bar */}
-        {targetWord && wordDuration > 0 && (
+        {targetWord && wordDuration > 0 && !isSoloVictory && (
           <div className="word-timer-bar word-timer-bar--vertical">
             <div className="word-timer-bar__fill-track">
               <div
@@ -395,7 +765,7 @@ export function GameScreen({
         
         {/* Grid arena */}
         <div
-          className={`arena grid-arena notranslate${isShuffling ? ' grid-arena--shuffling' : ''}`}
+          className={`arena grid-arena notranslate${isShuffling ? ' grid-arena--shuffling' : ''}${isCelebrating ? ' grid-arena--celebration' : ''}${celebrationEpic ? ' grid-arena--celebration-epic' : ''}`}
           lang={language}
           translate="no"
           style={{ '--grid-cols': GRID_COLS, '--grid-rows': GRID_ROWS } as React.CSSProperties}
@@ -417,7 +787,30 @@ export function GameScreen({
         )}
 
         {/* Filled cells */}
-        {player?.columns.map((col, colIdx) =>
+        {isCelebrating && celebrationGrid
+          ? celebrationGrid.columns.map((col, colIdx) =>
+              col.map((cell, rowFromBottom) => {
+                const rowFromTop = GRID_ROWS - 1 - rowFromBottom;
+                const delay = celebrationTileDelay(colIdx, rowFromTop);
+                return (
+                  <div
+                    key={cell.id}
+                    className="grid-tile grid-tile--celebration"
+                    style={{
+                      left: `${colIdx * COL_PCT}%`,
+                      top: `${rowFromTop * ROW_PCT}%`,
+                      width: `${COL_PCT}%`,
+                      height: `${ROW_PCT}%`,
+                      background: tileColor(cell.letter),
+                      '--celebration-delay': `${delay}ms`,
+                    } as React.CSSProperties}
+                  >
+                    <LetterGlyph letter={cell.letter} language={language} />
+                  </div>
+                );
+              }),
+            )
+          : player?.columns.map((col, colIdx) =>
           col.map((cell, rowFromBottom) => {
             const rowFromTop = GRID_ROWS - 1 - rowFromBottom;
             const isSelected = selectedSet.has(cell.id);
@@ -451,6 +844,7 @@ export function GameScreen({
       </div>
 
       {/* Action bar */}
+      {!isSoloVictory && (
       <div className="word-panel">
         <div className="word-panel-actions">
           {onQuit && (
@@ -507,6 +901,92 @@ export function GameScreen({
           )}
         </div>
       </div>
+      )}
+
+      {celebrationEpic && fireworkBursts.length > 0 && (isCelebrating || showVictoryPopup) && (
+        <VictoryFireworks bursts={fireworkBursts} />
+      )}
+
+      {showVictoryPopup && (
+        <div
+          className={`victory-overlay${celebrationEpic ? ' victory-overlay--epic' : ''}`}
+          role="presentation"
+        >
+          <div className="victory-confetti" aria-hidden="true">
+            {confettiPieces.map(piece => (
+              <span
+                key={piece.id}
+                className="victory-confetti__piece"
+                style={{
+                  left: `${piece.left}%`,
+                  width: `${piece.size}px`,
+                  height: `${piece.size * 0.55}px`,
+                  background: piece.color,
+                  animationDelay: `${piece.delay}s`,
+                  animationDuration: `${piece.duration}s`,
+                  '--confetti-drift': `${piece.drift}px`,
+                  '--confetti-rotate': `${piece.rotate}deg`,
+                } as React.CSSProperties}
+              />
+            ))}
+          </div>
+          <div
+            className={`victory-popup${celebrationEpic ? ' victory-popup--epic' : ''}`}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="victory-popup-title"
+          >
+            <h2 id="victory-popup-title" className="victory-popup__title">
+              {t.soloComplete}
+            </h2>
+            {epicBadgeLabel && <div className="victory-epic-badge">{epicBadgeLabel}</div>}
+            {!celebrationEpic && isNewBest && <div className="new-best-badge">{t.newBest}</div>}
+            <div className="victory-popup__score">{snapshotScore}</div>
+            <div className="victory-popup__score-label">
+              {snapshotScore === 1 ? t.point : t.points}
+            </div>
+            {victoryHonorMessage && (
+              <p
+                className={`victory-popup__honor${
+                  honorFocus === 'record' || (honorFocus === 'both' && isNewBest)
+                    ? ' victory-popup__honor--record'
+                    : ''
+                }`}
+              >
+                {victoryHonorMessage}
+              </p>
+            )}
+            {!isNewBest && snapshotPreviousBest > 0 && (
+              <div className="best-score-chip">
+                <span className="best-score-chip__label">{t.yourBest}</span>
+                <span className="best-score-chip__value">{snapshotPreviousBest}</span>
+              </div>
+            )}
+            <div className={`victory-popup__actions${victoryActionsEnabled ? '' : ' victory-popup__actions--locked'}`}>
+              <button
+                type="button"
+                className="play-btn"
+                disabled={!victoryActionsEnabled}
+                onPointerDown={e => e.preventDefault()}
+                onClick={() => handleVictoryAction('playAgain')}
+              >
+                {t.playAgain}
+              </button>
+              {onSoloVictoryDone && (
+                <button
+                  type="button"
+                  className="play-btn play-btn--secondary"
+                  disabled={!victoryActionsEnabled}
+                  onPointerDown={e => e.preventDefault()}
+                  onClick={() => handleVictoryAction('menu')}
+                >
+                  {t.menu}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

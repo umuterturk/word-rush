@@ -8,6 +8,11 @@ import type { ClockPort, StoragePort } from '../ports';
 import { AUTO_SKIP_ON_TIMEOUT } from '../domain/constants';
 import { getPlayerWordDuration } from '../domain/gridUtils';
 
+function frozenSoloLogicalTime(state: GameState): number | null {
+  if (state.soloVictoryAt == null) return null;
+  return Math.max(0, state.soloVictoryAt - state.matchStartedAt);
+}
+
 export interface GameSessionExtras {
   matchId?: string;
   inviteCode?: string;
@@ -188,6 +193,7 @@ export function useGameSession(
       // Check if word timer has expired (before processing pending actions)
       if (
         prev.matchStatus === 'playing' &&
+        !prev.soloVictoryPending &&
         AUTO_SKIP_ON_TIMEOUT &&
         prev.players['local']
       ) {
@@ -213,11 +219,13 @@ export function useGameSession(
       }
 
       // Update logical time every frame so the arena animates smoothly
+      const frozenSoloTime = frozenSoloLogicalTime(next);
       if (next.matchStatus === 'playing') {
-        setLogicalTime(now - next.matchStartedAt);
+        setLogicalTime(frozenSoloTime ?? now - next.matchStartedAt);
       } else if (next.matchStatus === 'ended') {
         setLogicalTime(
-          next.matchMode === 'solo' ? now - next.matchStartedAt : next.matchDuration,
+          frozenSoloTime
+            ?? (next.matchMode === 'solo' ? now - next.matchStartedAt : next.matchDuration),
         );
       } else {
         setLogicalTime(0);
