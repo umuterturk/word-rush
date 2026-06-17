@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { createSeededRng } from '../seededRng';
-import { fillGrid, pickTargetWord, buildLetterFreqMap, calculateWordDuration, calculateWordLetterScarcity, letterFrequencyMultiplier, pityTimeMultiplier, findHintCellId, targetWordSelectionWeight, refillEmptySlots, getPlayerWordDuration, doubleBonusStreakTimeMultiplier, doubleBonusStreakScoreMultiplier, getMultiplayerScoreMultiplier, formatDoubleBonusMultiplierLabel, computeWordPoints, wordTimerScoreMultiplier } from '../gridUtils';
-import { GRID_COLS, GRID_ROWS, SECONDS_PER_LETTER, WARMUP_BONUS_MS, TARGET_WORD_LENGTH_RAMP, DOUBLE_BONUS_SCORE_MULTIPLIER } from '../constants';
+import { fillGrid, pickTargetWord, buildLetterFreqMap, calculateWordDuration, calculateWordLetterScarcity, letterFrequencyMultiplier, pityTimeMultiplier, findHintCellId, refillEmptySlots, getPlayerWordDuration, doubleBonusStreakTimeMultiplier, doubleBonusStreakScoreMultiplier, getMultiplayerScoreMultiplier, formatDoubleBonusMultiplierLabel, computeWordPoints, wordTimerScoreMultiplier } from '../gridUtils';
+import { GRID_COLS, GRID_ROWS, SECONDS_PER_LETTER, WARMUP_BONUS_MS, DOUBLE_BONUS_SCORE_MULTIPLIER } from '../constants';
 import { createInitialPlayerState } from '../gameReducer';
 
 describe('fillGrid', () => {
@@ -73,6 +73,13 @@ describe('fillGrid', () => {
     );
     expect(result1.wordPool).toEqual(result2.wordPool);
   });
+
+  it('uses each word at most once in the initial word pool', () => {
+    for (let i = 0; i < 200; i++) {
+      const { wordPool } = fillGrid(createSeededRng(`unique-fill-${i}`));
+      expect(new Set(wordPool).size).toBe(wordPool.length);
+    }
+  });
 });
 
 describe('refillEmptySlots', () => {
@@ -113,6 +120,7 @@ describe('refillEmptySlots', () => {
     for (let seed = 0; seed < 20; seed++) {
       const rng = createSeededRng(`sim-${seed}`);
       let { columns, wordPool } = fillGrid(rng);
+      let usedWords = [...wordPool];
       let wordsCompleted = 0;
 
       for (let round = 0; round < 12; round++) {
@@ -120,7 +128,6 @@ describe('refillEmptySlots', () => {
           createSeededRng(`pick-${seed}-${round}`),
           columns,
           wordPool,
-          wordsCompleted,
         );
         if (!target) break;
 
@@ -151,16 +158,33 @@ describe('refillEmptySlots', () => {
           createSeededRng(`refill-${seed}-${wordsCompleted}`),
           columns,
           `inj${wordsCompleted}`,
+          'tr',
+          new Set(usedWords),
         );
         expect(refill).not.toBeNull();
         if (!refill) break;
         columns = refill.columns;
         wordPool.push(...refill.words);
+        usedWords.push(...refill.words);
+        expect(new Set(usedWords).size).toBe(usedWords.length);
 
         const totalCells = columns.reduce((sum, col) => sum + col.length, 0);
         expect(totalCells).toBe(GRID_COLS * GRID_ROWS);
       }
     }
+  });
+
+  it('does not reuse words already seen in the match', () => {
+    const columns = Array.from({ length: GRID_COLS }, () => [] as { id: string; letter: string }[]);
+    const excludeWords = new Set(['elma', 'armut']);
+    const result = refillEmptySlots(createSeededRng('refill-unique'), columns, 'test', 'tr', excludeWords);
+    expect(result).not.toBeNull();
+    if (!result) return;
+
+    for (const word of result.words) {
+      expect(excludeWords.has(word)).toBe(false);
+    }
+    expect(new Set(result.words).size).toBe(result.words.length);
   });
 
   it('returns null when there is not enough room for a word', () => {
@@ -236,7 +260,7 @@ describe('pickTargetWord', () => {
     }
   });
 
-  it('strongly favors shorter spellable words early in the match', () => {
+  it('picks uniformly among equally spellable words', () => {
     const columns = [[
       { id: 'a', letter: 'a' },
       { id: 'b', letter: 'b' },
@@ -247,21 +271,15 @@ describe('pickTargetWord', () => {
     const wordPool = ['abc', 'abcd', 'abcde'];
     const counts = { abc: 0, abcd: 0, abcde: 0 };
 
-    for (let i = 0; i < 500; i++) {
-      const word = pickTargetWord(createSeededRng(`short-bias-${i}`), columns, wordPool, 0);
+    for (let i = 0; i < 3000; i++) {
+      const word = pickTargetWord(createSeededRng(`uniform-${i}`), columns, wordPool);
       if (word) counts[word as keyof typeof counts]++;
     }
 
-    expect(counts.abc).toBeGreaterThan(counts.abcd);
-    expect(counts.abcd).toBeGreaterThan(counts.abcde);
-    expect(counts.abc).toBeGreaterThan(200);
-  });
-
-  it('evens out target length weights after the ramp', () => {
-    expect(targetWordSelectionWeight(3, 0)).toBeGreaterThan(targetWordSelectionWeight(8, 0));
-    expect(targetWordSelectionWeight(3, TARGET_WORD_LENGTH_RAMP)).toBe(
-      targetWordSelectionWeight(8, TARGET_WORD_LENGTH_RAMP),
-    );
+    for (const count of Object.values(counts)) {
+      expect(count).toBeGreaterThan(700);
+      expect(count).toBeLessThan(1300);
+    }
   });
 });
 

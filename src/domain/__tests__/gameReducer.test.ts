@@ -588,6 +588,7 @@ function stateWithOnlyTarget(word: string): GameState {
         targetWord: word,
         selectedIds: wordCells.map(c => c.id),
         wordPool: [word],
+        usedWords: [word],
       },
     },
   };

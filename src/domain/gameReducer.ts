@@ -12,6 +12,7 @@ export function createInitialPlayerState(): PlayerState {
     wordsCompleted: 0,
     doubleBonusStreak: 0,
     wordPool: [],
+    usedWords: [],
     wordStartedAt: 0,
     shuffleUsed: false,
     doubleBonusActive: false,
@@ -41,7 +42,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       const rng = createSeededRng(action.seed);
       const language = action.language ?? 'tr';
       const { columns, wordPool } = fillGrid(rng, language);
-      const targetWord = pickTargetWord(rng, columns, wordPool, 0) ?? '';
+      const targetWord = pickTargetWord(rng, columns, wordPool) ?? '';
       const isSolo = action.mode === 'solo';
       return {
         matchStatus: 'playing',
@@ -60,6 +61,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
             wordsCompleted: 0,
             doubleBonusStreak: 0,
             wordPool,
+            usedWords: [...wordPool],
             wordStartedAt: action.at,
             shuffleUsed: false,
             doubleBonusActive: false,
@@ -165,7 +167,9 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       // Remove the completed word from the pool
       let finalColumns = newColumns;
       let finalWordPool = player.wordPool.filter(w => w !== targetWord);
+      let finalUsedWords = player.usedWords;
       let refillsRemaining = player.refillsRemaining;
+      const usedWordSet = new Set(finalUsedWords);
 
       // Solo: refill only while refills remain
       if (state.matchMode === 'solo' && refillsRemaining > 0) {
@@ -175,10 +179,12 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
           finalColumns,
           `inj${newWordsCompleted}`,
           state.language ?? 'tr',
+          usedWordSet,
         );
         if (refill) {
           finalColumns = refill.columns;
           finalWordPool = [...finalWordPool, ...refill.words];
+          finalUsedWords = [...finalUsedWords, ...refill.words];
           refillsRemaining -= 1;
         }
       } else if (state.matchMode === 'multiplayer') {
@@ -188,17 +194,19 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
           finalColumns,
           `inj${newWordsCompleted}`,
           state.language ?? 'tr',
+          usedWordSet,
         );
         if (refill) {
           finalColumns = refill.columns;
           finalWordPool = [...finalWordPool, ...refill.words];
+          finalUsedWords = [...finalUsedWords, ...refill.words];
         }
       }
 
       // Pick a new target word from the remaining letters and word pool
       // Use a deterministic seed derived from current score + word to stay reproducible
       const rng = createSeededRng(state.seed + '-' + newWordsCompleted);
-      const nextWord = pickTargetWord(rng, finalColumns, finalWordPool, newWordsCompleted);
+      const nextWord = pickTargetWord(rng, finalColumns, finalWordPool);
 
       const boardCleared = isBoardEmpty(finalColumns);
       const soloComplete = isSolo && boardCleared && refillsRemaining === 0;
@@ -218,6 +226,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
             wordsCompleted: newWordsCompleted,
             doubleBonusStreak: newDoubleBonusStreak,
             wordPool: finalWordPool,
+            usedWords: finalUsedWords,
             wordStartedAt: action.at,
             pityTimeouts: Math.max(0, player.pityTimeouts - 1),
             refillsRemaining,
@@ -234,7 +243,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       const newWordsCompleted = player.wordsCompleted + 1;
 
       const rng = createSeededRng(state.seed + '-skip-' + newWordsCompleted);
-      const nextWord = pickTargetWord(rng, player.columns, player.wordPool, newWordsCompleted);
+      const nextWord = pickTargetWord(rng, player.columns, player.wordPool);
 
       return {
         ...state,
@@ -265,7 +274,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       const newPityTimeouts = player.pityTimeouts + 1;
 
       const rng = createSeededRng(state.seed + '-skip-' + newWordsCompleted);
-      const nextWord = pickTargetWord(rng, player.columns, player.wordPool, newWordsCompleted);
+      const nextWord = pickTargetWord(rng, player.columns, player.wordPool);
 
       return {
         ...state,

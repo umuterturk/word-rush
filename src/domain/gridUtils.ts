@@ -1,6 +1,6 @@
 import type { RngFn } from './seededRng';
 import type { LandedCell, MatchMode, PlayerState, SoloDifficulty } from './types';
-import { GRID_COLS, GRID_ROWS, MIN_WORD_LENGTH, MAX_WORD_LENGTH, MAX_EMPTY_CELLS, PITY_TIME_BONUS_PER_TIMEOUT, MAX_PITY_TIMEOUTS, WARMUP_BONUS_MS, TARGET_WORD_LENGTH_RAMP, SECONDS_PER_LETTER, SOLO_TIME_MULTIPLIER, MULTIPLAYER_TIME_MULTIPLIER, DOUBLE_BONUS_TIME_MULTIPLIER, DOUBLE_BONUS_SCORE_MULTIPLIER, MULTIPLAYER_STREAK_TIME_FACTOR, MULTIPLAYER_STREAK_SCORE_FACTOR, WORD_SCORE, SPEED_BONUS_MAX, MAX_WORD_TIME_MS } from './constants';
+import { GRID_COLS, GRID_ROWS, MIN_WORD_LENGTH, MAX_WORD_LENGTH, MAX_EMPTY_CELLS, PITY_TIME_BONUS_PER_TIMEOUT, MAX_PITY_TIMEOUTS, WARMUP_BONUS_MS, SECONDS_PER_LETTER, SOLO_TIME_MULTIPLIER, MULTIPLAYER_TIME_MULTIPLIER, DOUBLE_BONUS_TIME_MULTIPLIER, DOUBLE_BONUS_SCORE_MULTIPLIER, MULTIPLAYER_STREAK_TIME_FACTOR, MULTIPLAYER_STREAK_SCORE_FACTOR, WORD_SCORE, SPEED_BONUS_MAX, MAX_WORD_TIME_MS } from './constants';
 import { getWordList, type WordLanguage } from './wordSet';
 
 // ─── Strategic Grid Fill ──────────────────────────────────────────────────────
@@ -24,12 +24,27 @@ function getWordsByLength(language: WordLanguage): Record<number, string[]> {
   return byLength;
 }
 
-function pickWordOfLength(rng: RngFn, length: number, wordsByLength: Record<number, string[]>): string {
+function availableWordsOfLength(
+  length: number,
+  wordsByLength: Record<number, string[]>,
+  used: ReadonlySet<string>,
+): string[] {
   const pool = wordsByLength[length];
-  if (!pool?.length) {
-    throw new Error(`No words of length ${length} in word list`);
+  if (!pool?.length) return [];
+  return pool.filter(word => !used.has(word));
+}
+
+function pickWordOfLength(
+  rng: RngFn,
+  length: number,
+  wordsByLength: Record<number, string[]>,
+  used: ReadonlySet<string>,
+): string {
+  const available = availableWordsOfLength(length, wordsByLength, used);
+  if (!available.length) {
+    throw new Error(`No unused words of length ${length} in word list`);
   }
-  return pool[Math.floor(rng() * pool.length)];
+  return available[Math.floor(rng() * available.length)];
 }
 
 function pickRandomFittingWord(
@@ -37,14 +52,66 @@ function pickRandomFittingWord(
   total: number,
   cap: number,
   wordsByLength: Record<number, string[]>,
+  used: ReadonlySet<string>,
 ): string {
   const maxLen = Math.min(MAX_WORD_LENGTH, cap - total);
   const fittingLengths: number[] = [];
   for (let len = MIN_WORD_LENGTH; len <= maxLen; len++) {
-    if (wordsByLength[len]?.length) fittingLengths.push(len);
+    if (availableWordsOfLength(len, wordsByLength, used).length > 0) {
+      fittingLengths.push(len);
+    }
+  }
+  if (fittingLengths.length === 0) {
+    throw new Error('No unused fitting words available');
   }
   const length = fittingLengths[Math.floor(rng() * fittingLengths.length)];
-  return pickWordOfLength(rng, length, wordsByLength);
+  return pickWordOfLength(rng, length, wordsByLength, used);
+}
+
+function tryPickOneWord(
+  rng: RngFn,
+  length: number,
+  wordsByLength: Record<number, string[]>,
+  used: ReadonlySet<string>,
+): string | null {
+  const available = availableWordsOfLength(length, wordsByLength, used);
+  if (!available.length) return null;
+  return available[Math.floor(rng() * available.length)];
+}
+
+function tryPickTwoWords(
+  rng: RngFn,
+  remainder: number,
+  wordsByLength: Record<number, string[]>,
+  used: ReadonlySet<string>,
+): [string, string] | null {
+  const firstLengths: number[] = [];
+  for (let len = MIN_WORD_LENGTH; len <= Math.min(MAX_WORD_LENGTH, remainder - MIN_WORD_LENGTH); len++) {
+    const secondLen = remainder - len;
+    if (secondLen >= MIN_WORD_LENGTH && secondLen <= MAX_WORD_LENGTH) {
+      firstLengths.push(len);
+    }
+  }
+
+  for (let i = firstLengths.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [firstLengths[i], firstLengths[j]] = [firstLengths[j], firstLengths[i]];
+  }
+
+  for (const firstLen of firstLengths) {
+    const secondLen = remainder - firstLen;
+    const firstAvailable = availableWordsOfLength(firstLen, wordsByLength, used);
+    if (!firstAvailable.length) continue;
+
+    const first = firstAvailable[Math.floor(rng() * firstAvailable.length)];
+    const secondAvailable = availableWordsOfLength(secondLen, wordsByLength, new Set([...used, first]));
+    if (!secondAvailable.length) continue;
+
+    const second = secondAvailable[Math.floor(rng() * secondAvailable.length)];
+    return [first, second];
+  }
+
+  return null;
 }
 
 /**
@@ -55,8 +122,14 @@ function pickRandomFittingWord(
  * Phase 2 — close the gap with one word (remainder <= MAX) or two words
  *           (MIN + remainder - MIN).
  */
-function buildWordPool(rng: RngFn, targetCells: number, language: WordLanguage): string[] {
+function buildWordPool(
+  rng: RngFn,
+  targetCells: number,
+  language: WordLanguage,
+  excludeWords: ReadonlySet<string> = new Set(),
+): string[] | null {
   const wordsByLength = getWordsByLength(language);
+  const used = new Set(excludeWords);
   const threshold = targetCells - MAX_WORD_LENGTH - MIN_WORD_LENGTH;
   const cap = targetCells - MIN_WORD_LENGTH;
 
@@ -64,24 +137,52 @@ function buildWordPool(rng: RngFn, targetCells: number, language: WordLanguage):
   let total = 0;
 
   while (total < threshold) {
-    const word = pickRandomFittingWord(rng, total, cap, wordsByLength);
-    wordPool.push(word);
-    total += word.length;
+    try {
+      const word = pickRandomFittingWord(rng, total, cap, wordsByLength, used);
+      wordPool.push(word);
+      used.add(word);
+      total += word.length;
+    } catch {
+      break;
+    }
   }
 
   if (total === targetCells) return wordPool;
 
   const remainder = targetCells - total;
+  if (remainder === 0) return wordPool;
+  if (remainder < MIN_WORD_LENGTH) return null;
+
   if (remainder <= MAX_WORD_LENGTH) {
-    wordPool.push(pickWordOfLength(rng, remainder, wordsByLength));
-  } else {
-    wordPool.push(
-      pickWordOfLength(rng, MIN_WORD_LENGTH, wordsByLength),
-      pickWordOfLength(rng, remainder - MIN_WORD_LENGTH, wordsByLength),
-    );
+    const word = tryPickOneWord(rng, remainder, wordsByLength, used);
+    if (word) {
+      wordPool.push(word);
+      return wordPool;
+    }
   }
 
-  return wordPool;
+  if (remainder >= MIN_WORD_LENGTH * 2) {
+    const pair = tryPickTwoWords(rng, remainder, wordsByLength, used);
+    if (pair) {
+      wordPool.push(...pair);
+      return wordPool;
+    }
+  }
+
+  return null;
+}
+
+function buildWordPoolWithRetry(
+  rng: RngFn,
+  targetCells: number,
+  language: WordLanguage,
+  excludeWords: ReadonlySet<string> = new Set(),
+): string[] {
+  for (let attempt = 0; attempt < 50; attempt++) {
+    const pool = buildWordPool(rng, targetCells, language, excludeWords);
+    if (pool) return pool;
+  }
+  throw new Error(`Failed to build unique word pool for ${targetCells} cells`);
 }
 
 /**
@@ -108,7 +209,7 @@ export interface GridGenerationResult {
  */
 export function fillGrid(rng: RngFn, language: WordLanguage = 'tr'): GridGenerationResult {
   const targetCells = GRID_COLS * GRID_ROWS - MAX_EMPTY_CELLS;
-  const wordPool = buildWordPool(rng, targetCells, language);
+  const wordPool = buildWordPoolWithRetry(rng, targetCells, language);
   const letters = Array.from(wordPool.join(''));
   
   // Shuffle letters for random distribution
@@ -159,12 +260,14 @@ export function refillEmptySlots(
   columns: LandedCell[][],
   idSeed: string,
   language: WordLanguage = 'tr',
+  excludeWords: ReadonlySet<string> = new Set(),
 ): { columns: LandedCell[][]; words: string[] } | null {
   const colHeight = columnCapacity();
   const totalEmpty = columns.reduce((sum, col) => sum + (colHeight - col.length), 0);
   if (totalEmpty < MIN_WORD_LENGTH) return null;
 
-  const words = buildWordPool(rng, totalEmpty, language);
+  const words = buildWordPool(rng, totalEmpty, language, excludeWords);
+  if (!words) return null;
   const letters = Array.from(words.join(''));
 
   for (let i = letters.length - 1; i > 0; i--) {
@@ -264,34 +367,20 @@ function canSpell(word: string, freq: Map<string, number>): boolean {
 }
 
 /**
- * Weight for picking a spellable target word. Shorter lengths are strongly favored
- * early in the match; bias fades linearly over TARGET_WORD_LENGTH_RAMP words.
- */
-export function targetWordSelectionWeight(wordLength: number, wordsCompleted: number): number {
-  const progress = Math.min(1, wordsCompleted / TARGET_WORD_LENGTH_RAMP);
-  const shortStrength = 1 - progress;
-  const shorterRank = MAX_WORD_LENGTH - wordLength + 1;
-  const lengthFactor = Math.pow(2, shorterRank - 1);
-  return 1 + shortStrength * lengthFactor;
-}
-
-/**
  * Picks a random valid word from the word pool that can be spelled from the
  * letters currently in the grid. Returns `null` if no such word exists.
  *
  * @param rng Random number generator
  * @param columns Current grid state
  * @param wordPool Pool of words that were used to create this grid
- * @param wordsCompleted Number of words completed (ramps from short → long targets)
  *
- * Strategy: Only select from the pre-determined word pool (words used to create grid).
- * Early game strongly favors shorter spellable words; bias fades over the match.
+ * Strategy: Only select from the pre-determined word pool (words used to create grid),
+ * uniformly at random among spellable candidates.
  */
 export function pickTargetWord(
   rng: RngFn,
   columns: LandedCell[][],
   wordPool: string[],
-  wordsCompleted = 0,
 ): string | null {
   if (wordPool.length === 0) return null;
 
@@ -300,23 +389,8 @@ export function pickTargetWord(
 
   if (spellableWords.length === 0) return null;
 
-  const weighted = spellableWords.map(word => ({
-    word,
-    weight: targetWordSelectionWeight(word.length, wordsCompleted),
-  }));
-
-  const totalWeight = weighted.reduce((sum, w) => sum + w.weight, 0);
-  const r = rng() * totalWeight;
-  let cumulative = 0;
-
-  for (const { word, weight } of weighted) {
-    cumulative += weight;
-    if (r < cumulative) {
-      return word;
-    }
-  }
-
-  return weighted[weighted.length - 1].word;
+  const index = Math.floor(rng() * spellableWords.length);
+  return spellableWords[index];
 }
 
 // ─── Word Timer Calculation ───────────────────────────────────────────────────

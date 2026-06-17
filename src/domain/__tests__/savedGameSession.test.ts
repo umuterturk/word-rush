@@ -26,6 +26,7 @@ function playingState(overrides: Partial<GameState> = {}): GameState {
         wordsCompleted: 1,
         doubleBonusStreak: 0,
         wordPool: ['AT'],
+        usedWords: ['AT'],
         wordStartedAt: 1_000,
         shuffleUsed: false,
         doubleBonusActive: false,
@@ -43,6 +44,22 @@ function soloSession(): SavedGameSession | null {
 }
 
 describe('parseSavedGameSession', () => {
+  it('backfills usedWords from wordPool for older saves', () => {
+    const legacyState = {
+      gameState: {
+        ...playingState(),
+        players: {
+          local: {
+            ...playingState().players.local,
+            usedWords: undefined,
+          },
+        },
+      },
+    };
+    const parsed = parseSavedGameSession(legacyState);
+    expect(parsed?.gameState.players.local.usedWords).toEqual(['AT']);
+  });
+
   it('accepts a valid solo session', () => {
     const parsed = parseSavedGameSession({ gameState: playingState() });
     expect(parsed?.gameState.players.local.score).toBe(12);

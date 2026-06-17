@@ -47,6 +47,12 @@ function isPlayerState(value: unknown): value is PlayerState {
   if (!Array.isArray(player.wordPool) || !player.wordPool.every(word => typeof word === 'string')) {
     return false;
   }
+  if (
+    player.usedWords !== undefined
+    && (!Array.isArray(player.usedWords) || !player.usedWords.every(word => typeof word === 'string'))
+  ) {
+    return false;
+  }
   if (typeof player.wordStartedAt !== 'number') return false;
   if (typeof player.shuffleUsed !== 'boolean') return false;
   if (typeof player.doubleBonusActive !== 'boolean') return false;
@@ -84,5 +90,8 @@ export function parseSavedGameSession(raw: unknown): SavedGameSession | null {
     return null;
   }
   if (session.gameState.matchMode === 'multiplayer' && !session.matchId) return null;
+  if (!session.gameState.players.local.usedWords) {
+    session.gameState.players.local.usedWords = [...session.gameState.players.local.wordPool];
+  }
   return session;
 }

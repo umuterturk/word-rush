@@ -332,14 +332,32 @@ export function GameScreen({
       )}
 
       {/* Target word banner */}
-      <div className="target-word-banner notranslate" lang={language} translate="no">
+      <div
+        className={`target-word-banner notranslate${submitFeedback === 'valid' ? ' target-word-banner--valid' : ''}${submitFeedback === 'invalid' ? ' target-word-banner--invalid' : ''}${wordMatchesTarget ? ' target-word-banner--complete' : ''}`}
+        lang={language}
+        translate="no"
+      >
         {targetWord ? (
           <>
             <span className="target-word-label">{t.find}</span>
             <span className="target-word-text">
-              {Array.from(targetWord).map((ch, i) => (
-                <span key={i} className="letter-glyph" translate="no">{upperByLanguage(ch, language)}</span>
-              ))}
+              {Array.from(targetWord).map((ch, i) => {
+                const progressIndex = selectedIds.length;
+                let letterState = 'pending';
+                if (i < progressIndex) letterState = 'done';
+                else if (i === progressIndex) letterState = 'current';
+
+                return (
+                  <span
+                    key={i}
+                    className={`target-word-letter target-word-letter--${letterState}`}
+                  >
+                    <span className="letter-glyph" translate="no">
+                      {upperByLanguage(ch, language)}
+                    </span>
+                  </span>
+                );
+              })}
             </span>
             {wordMatchesTarget && formedWord.length > 0 && (
               <span className="target-word-score">+{wordScore}</span>
@@ -432,35 +450,8 @@ export function GameScreen({
       </div>
       </div>
 
-      {/* Word panel */}
-      <div
-        className={`word-panel notranslate${submitFeedback === 'valid' ? ' word-panel--valid' : ''}${submitFeedback === 'invalid' ? ' word-panel--invalid' : ''}`}
-        lang={language}
-        translate="no"
-      >
-        <div className={`formed-word-row${wordMatchesTarget ? ' formed-word-row--match' : ''}`}>
-          {selectedIds.length === 0 ? (
-            <span className="formed-word-placeholder">{t.tapToSpell}</span>
-          ) : (
-            selectedIds.map((id, i) => {
-              const letter = letterMap.get(id) ?? '';
-              return (
-                <button
-                  key={id}
-                  className="formed-letter"
-                  onPointerDown={e => { e.preventDefault(); handleTapTile(id, e); }}
-                  {...TILE_BUTTON_ATTRS}
-                >
-                  <LetterGlyph letter={letter} language={language} />
-                  {i === selectedIds.length - 1 && wordMatchesTarget && (
-                    <span className="formed-letter__score">+{wordScore}</span>
-                  )}
-                </button>
-              );
-            })
-          )}
-        </div>
-
+      {/* Action bar */}
+      <div className="word-panel">
         <div className="word-panel-actions">
           {onQuit && (
             <button

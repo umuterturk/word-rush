@@ -25,6 +25,8 @@ export interface PlayerState {
   doubleBonusStreak: number;
   /** Pool of words that were used to create this grid (these are the only findable words). */
   wordPool: string[];
+  /** Every word introduced in this match (initial board + refills); used to avoid repeats. */
+  usedWords: string[];
   /** Timestamp when current target word was assigned (for per-word timer). */
   wordStartedAt: number;
   /** Whether this player has used their shuffle attack (multiplayer only). */
