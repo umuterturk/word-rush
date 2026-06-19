@@ -1,8 +1,17 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { gameReducer, INITIAL_GAME_STATE } from '../gameReducer';
-import { computeWordPoints } from '../gridUtils';
+import { computeWordPoints, getPlayerWordDuration } from '../gridUtils';
 import type { GameState } from '../types';
-import { GRID_COLS, GRID_ROWS, SOLO_REFILL_LIMIT } from '../constants';
+import { SOLO_REFILL_LIMIT, SOLO_GRID_BY_DIFFICULTY } from '../constants';
+import { soloAdaptiveStepFactor } from '../gridUtils';
+
+function stateGrid(state: GameState) {
+  return { cols: state.gridCols, rows: state.gridRows };
+}
+
+function cellCount(state: GameState) {
+  return state.gridCols * state.gridRows;
+}
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -30,11 +39,11 @@ describe('START_MATCH', () => {
 
   it('fills the grid strategically with letters from words', () => {
     const player = state.players['local'];
-    expect(player.columns).toHaveLength(GRID_COLS);
+    expect(player.columns).toHaveLength(state.gridCols);
     
     // Should have most cells filled (allowing for MAX_EMPTY_CELLS empty)
     const totalCells = player.columns.reduce((sum, col) => sum + col.length, 0);
-    expect(totalCells).toBe(GRID_COLS * GRID_ROWS);
+    expect(totalCells).toBe(cellCount(state));
   });
 
   it('picks a non-empty target word', () => {
@@ -58,6 +67,16 @@ describe('START_MATCH', () => {
     const easy = startedState('solo-init', 0, 'solo', 'easy');
     expect(easy.soloDifficulty).toBe('easy');
     expect(easy.players['local'].refillsRemaining).toBe(SOLO_REFILL_LIMIT);
+    expect(easy.gridCols).toBe(SOLO_GRID_BY_DIFFICULTY.easy.cols);
+    expect(easy.gridRows).toBe(SOLO_GRID_BY_DIFFICULTY.easy.rows);
+  });
+
+  it('uses larger grids for harder solo modes', () => {
+    const easy = startedState('grid-easy', 0, 'solo', 'easy');
+    const normal = startedState('grid-normal', 0, 'solo', 'normal');
+    const hard = startedState('grid-hard', 0, 'solo', 'hard');
+    expect(cellCount(easy)).toBeLessThan(cellCount(normal));
+    expect(cellCount(normal)).toBeLessThan(cellCount(hard));
   });
 
   it('does not set refills for multiplayer', () => {
@@ -251,7 +270,7 @@ describe('SUBMIT_WORD', () => {
     expect(next.matchStatus).toBe('playing');
     const player = next.players['local'];
     const totalCells = player.columns.reduce((sum, col) => sum + col.length, 0);
-    expect(totalCells).toBe(GRID_COLS * GRID_ROWS);
+    expect(totalCells).toBe(cellCount(state));
     expect(player.wordPool.length).toBeGreaterThan(0);
     expect(player.targetWord.length).toBeGreaterThan(0);
     expect(player.refillsRemaining).toBe(SOLO_REFILL_LIMIT - 1);
@@ -336,7 +355,7 @@ describe('SUBMIT_WORD', () => {
     const before = state.players['local'].columns.reduce((sum, col) => sum + col.length, 0);
     const next = gameReducer(state, { type: 'SUBMIT_WORD', playerId: 'local', at: 2000 });
     const after = next.players['local'].columns.reduce((sum, col) => sum + col.length, 0);
-    expect(after).toBe(GRID_COLS * GRID_ROWS);
+    expect(after).toBe(cellCount(state));
     expect(after).toBeGreaterThanOrEqual(before - 3);
   });
 
@@ -488,6 +507,7 @@ describe('2× mode streak', () => {
       matchMode: 'solo',
       player,
       soloDifficulty: 'hard',
+      grid: stateGrid(base),
     }).timerMultiplier;
     const withTimer = computeWordPoints({
       word: player.targetWord,
@@ -497,6 +517,7 @@ describe('2× mode streak', () => {
       matchMode: 'solo',
       player: { ...player, doubleBonusActive: true },
       soloDifficulty: 'hard',
+      grid: stateGrid(base),
     }).timerMultiplier;
     expect(withTimer).toBeGreaterThan(withoutTimer);
   });
@@ -632,3 +653,20 @@ function stateWithManualTargetFrom(base: GameState, word: string): GameState {
     },
   };
 }
+
+describe('solo adaptive difficulty', () => {
+  it('initializes adaptive multiplier at 1', () => {
+    const state = startedState('adaptive-init', 1000, 'solo', 'normal');
+    expect(state.players.local.soloAdaptiveMultiplier).toBe(1);
+  });
+
+  it('tightens gameplay timer after a fast solo word', () => {
+    const state = stateWithManualTargetFrom(startedState('adaptive-fast', 1000, 'solo', 'hard'), 'bal');
+    const player = state.players.local;
+    const grid = stateGrid(state);
+    const allowed = getPlayerWordDuration(player, 'solo', 'gameplay', grid);
+    const fastAt = player.wordStartedAt + allowed * 0.2;
+    const next = gameReducer(state, { type: 'SUBMIT_WORD', playerId: 'local', at: fastAt });
+    expect(next.players.local.soloAdaptiveMultiplier).toBeCloseTo(soloAdaptiveStepFactor(0.2), 5);
+  });
+});

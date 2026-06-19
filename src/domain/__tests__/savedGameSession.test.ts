@@ -17,6 +17,8 @@ function playingState(overrides: Partial<GameState> = {}): GameState {
     matchStartedAt: 1_000,
     seed: 'test-seed',
     soloDifficulty: 'normal',
+    gridCols: 7,
+    gridRows: 9,
     players: {
       local: {
         score: 12,
@@ -33,6 +35,7 @@ function playingState(overrides: Partial<GameState> = {}): GameState {
         doubleBonusUsed: false,
         pityTimeouts: 0,
         refillsRemaining: 3,
+        soloAdaptiveMultiplier: 1,
       },
     },
     ...overrides,

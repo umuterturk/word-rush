@@ -10,6 +10,7 @@ interface ImportMetaEnv {
   readonly VITE_FIREBASE_APP_ID: string;
   readonly VITE_FIREBASE_MEASUREMENT_ID?: string;
   readonly VITE_FIREBASE_MATCHES_COLLECTION?: string;
+  readonly VITE_ENABLE_WORD_REPORTS?: string;
 }
 
 interface ImportMeta {

@@ -14,6 +14,7 @@ export interface Translations {
   save: string;
   leaderboard: string;
   leaderboardEmpty: string;
+  play: string;
   easy: string;
   normal: string;
   hard: string;
@@ -49,6 +50,13 @@ export interface Translations {
   resignConfirmMessage: string;
   resignConfirmYes: string;
   resignConfirmNo: string;
+  reportWord: string;
+  reportWordDone: string;
+  reportWordAria: string;
+  reportWordConfirmTitle: string;
+  reportWordConfirmMessage: string;
+  reportWordConfirmYes: string;
+  reportWordConfirmNo: string;
 
   // End screen
   timesUp: string;
@@ -127,6 +135,7 @@ export const translations: Record<Language, Translations> = {
     save: 'SAVE',
     leaderboard: 'TOP 3',
     leaderboardEmpty: 'No scores yet',
+    play: 'PLAY',
     easy: 'EASY',
     normal: 'NORMAL',
     hard: 'HARD',
@@ -162,6 +171,13 @@ export const translations: Record<Language, Translations> = {
     resignConfirmMessage: 'You will forfeit this game.',
     resignConfirmYes: 'RESIGN',
     resignConfirmNo: 'KEEP PLAYING',
+    reportWord: 'Report',
+    reportWordDone: 'Reported',
+    reportWordAria: 'Report inappropriate word',
+    reportWordConfirmTitle: 'REPORT WORD?',
+    reportWordConfirmMessage: 'Report "{word}" as inappropriate? The game will pause while you decide.',
+    reportWordConfirmYes: 'REPORT',
+    reportWordConfirmNo: 'CANCEL',
 
     // End screen
     timesUp: 'TIME\'S UP',
@@ -237,6 +253,7 @@ export const translations: Record<Language, Translations> = {
     save: 'KAYDET',
     leaderboard: 'İLK 3',
     leaderboardEmpty: 'Henüz skor yok',
+    play: 'OYNA',
     easy: 'KOLAY',
     normal: 'NORMAL',
     hard: 'ZOR',
@@ -272,6 +289,13 @@ export const translations: Record<Language, Translations> = {
     resignConfirmMessage: 'Bu oyunu bırakacaksın.',
     resignConfirmYes: 'PES ET',
     resignConfirmNo: 'DEVAM ET',
+    reportWord: 'Bildir',
+    reportWordDone: 'Bildirildi',
+    reportWordAria: 'Uygunsuz kelimeyi bildir',
+    reportWordConfirmTitle: 'KELİMEYİ BİLDİR?',
+    reportWordConfirmMessage: '"{word}" kelimesini uygunsuz olarak bildirmek istiyor musun? Karar verirken oyun duraklatılır.',
+    reportWordConfirmYes: 'BİLDİR',
+    reportWordConfirmNo: 'İPTAL',
 
     // End screen
     timesUp: 'SÜRE BİTTİ',

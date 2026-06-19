@@ -16,3 +16,8 @@ export function upperByLanguage(raw: string, language: GameLanguage): string {
   if (language === 'tr') return turkishUpper(ch);
   return ch.toUpperCase();
 }
+
+/** Uppercase every letter in a word using language-specific casing rules. */
+export function upperWordByLanguage(raw: string, language: GameLanguage): string {
+  return Array.from(raw).map(ch => upperByLanguage(ch, language)).join('');
+}

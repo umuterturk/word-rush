@@ -1,7 +1,7 @@
 import type { GameAction, GameState, PlayerState, LandedCell } from './types';
-import { MAX_BUFFER_SIZE, MATCH_DURATION_MS, SKIP_PENALTY, SOLO_REFILL_LIMIT } from './constants';
+import { MAX_BUFFER_SIZE, MATCH_DURATION_MS, SKIP_PENALTY, SOLO_REFILL_LIMIT, getMatchGridDimensions, type GridDimensions } from './constants';
 import { createSeededRng } from './seededRng';
-import { fillGrid, pickTargetWord, isBoardEmpty, getCellById, isCorrectNextLetter, refillEmptySlots, computeWordPoints } from './gridUtils';
+import { fillGrid, pickTargetWord, isBoardEmpty, getCellById, isCorrectNextLetter, refillEmptySlots, computeWordPoints, getPlayerWordDuration, updateSoloAdaptiveMultiplier } from './gridUtils';
 
 export function createInitialPlayerState(): PlayerState {
   return {
@@ -19,6 +19,7 @@ export function createInitialPlayerState(): PlayerState {
     doubleBonusUsed: false,
     pityTimeouts: 0,
     refillsRemaining: 0,
+    soloAdaptiveMultiplier: 1,
   };
 }
 
@@ -29,8 +30,14 @@ export const INITIAL_GAME_STATE: GameState = {
   matchStartedAt: 0,
   matchDuration: MATCH_DURATION_MS,
   seed: '',
+  gridCols: 0,
+  gridRows: 0,
   players: {},
 };
+
+function matchGrid(state: GameState): GridDimensions {
+  return { cols: state.gridCols, rows: state.gridRows };
+}
 
 /**
  * Pure reducer: (state, action) => state.
@@ -41,9 +48,11 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     case 'START_MATCH': {
       const rng = createSeededRng(action.seed);
       const language = action.language ?? 'tr';
-      const { columns, wordPool } = fillGrid(rng, language);
-      const targetWord = pickTargetWord(rng, columns, wordPool) ?? '';
       const isSolo = action.mode === 'solo';
+      const difficulty = isSolo ? (action.difficulty ?? 'normal') : undefined;
+      const grid = getMatchGridDimensions(action.mode, difficulty);
+      const { columns, wordPool } = fillGrid(rng, language, grid);
+      const targetWord = pickTargetWord(rng, columns, wordPool) ?? '';
       return {
         matchStatus: 'playing',
         matchMode: action.mode,
@@ -51,7 +60,9 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         matchStartedAt: action.at,
         matchDuration: MATCH_DURATION_MS,
         seed: action.seed,
-        soloDifficulty: isSolo ? (action.difficulty ?? 'hard') : undefined,
+        soloDifficulty: difficulty,
+        gridCols: grid.cols,
+        gridRows: grid.rows,
         players: {
           local: {
             score: 0,
@@ -68,6 +79,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
             doubleBonusUsed: false,
             pityTimeouts: 0,
             refillsRemaining: isSolo ? SOLO_REFILL_LIMIT : 0,
+            soloAdaptiveMultiplier: 1,
           },
         },
       };
@@ -175,6 +187,22 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       const isSolo = state.matchMode === 'solo';
       const newWordsCompleted = player.wordsCompleted + 1;
       const newDoubleBonusStreak = player.doubleBonusActive ? player.doubleBonusStreak + 1 : player.doubleBonusStreak;
+      const grid = matchGrid(state);
+      const gameplayAllowedMs = getPlayerWordDuration(
+        player,
+        state.matchMode,
+        'gameplay',
+        grid,
+      );
+      const elapsedMs = Math.max(0, action.at - player.wordStartedAt);
+      const newAdaptiveMultiplier = isSolo
+        ? updateSoloAdaptiveMultiplier(
+            player.soloAdaptiveMultiplier ?? 1,
+            elapsedMs,
+            gameplayAllowedMs,
+            'success',
+          )
+        : (player.soloAdaptiveMultiplier ?? 1);
       const points = computeWordPoints({
         word: targetWord,
         columns,
@@ -183,6 +211,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         matchMode: state.matchMode,
         player,
         soloDifficulty: state.soloDifficulty,
+        grid: matchGrid(state),
       }).total;
 
       // Remove the completed word from the pool
@@ -201,6 +230,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
           `inj${newWordsCompleted}`,
           state.language ?? 'tr',
           usedWordSet,
+          grid,
         );
         if (refill) {
           finalColumns = refill.columns;
@@ -216,6 +246,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
           `inj${newWordsCompleted}`,
           state.language ?? 'tr',
           usedWordSet,
+          grid,
         );
         if (refill) {
           finalColumns = refill.columns;
@@ -252,6 +283,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
             wordStartedAt: action.at,
             pityTimeouts: Math.max(0, player.pityTimeouts - 1),
             refillsRemaining,
+            soloAdaptiveMultiplier: newAdaptiveMultiplier,
           },
         },
       };
@@ -263,6 +295,23 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
 
       const newScore = player.score - SKIP_PENALTY;
       const newWordsCompleted = player.wordsCompleted + 1;
+      const isSolo = state.matchMode === 'solo';
+      const grid = matchGrid(state);
+      const gameplayAllowedMs = getPlayerWordDuration(
+        player,
+        state.matchMode,
+        'gameplay',
+        grid,
+      );
+      const elapsedMs = Math.max(0, action.at - player.wordStartedAt);
+      const newAdaptiveMultiplier = isSolo
+        ? updateSoloAdaptiveMultiplier(
+            player.soloAdaptiveMultiplier ?? 1,
+            elapsedMs,
+            gameplayAllowedMs,
+            'skip',
+          )
+        : (player.soloAdaptiveMultiplier ?? 1);
 
       const rng = createSeededRng(state.seed + '-skip-' + newWordsCompleted);
       const nextWord = pickTargetWord(rng, player.columns, player.wordPool);
@@ -282,6 +331,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
             pityTimeouts: player.pityTimeouts,
             doubleBonusActive: false,
             doubleBonusUsed: player.doubleBonusActive || player.doubleBonusUsed,
+            soloAdaptiveMultiplier: newAdaptiveMultiplier,
           },
         },
       };
@@ -294,6 +344,23 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       const newScore = player.score - SKIP_PENALTY;
       const newWordsCompleted = player.wordsCompleted + 1;
       const newPityTimeouts = player.pityTimeouts + 1;
+      const isSolo = state.matchMode === 'solo';
+      const grid = matchGrid(state);
+      const gameplayAllowedMs = getPlayerWordDuration(
+        player,
+        state.matchMode,
+        'gameplay',
+        grid,
+      );
+      const elapsedMs = Math.max(0, action.at - player.wordStartedAt);
+      const newAdaptiveMultiplier = isSolo
+        ? updateSoloAdaptiveMultiplier(
+            player.soloAdaptiveMultiplier ?? 1,
+            elapsedMs,
+            gameplayAllowedMs,
+            'timeout',
+          )
+        : (player.soloAdaptiveMultiplier ?? 1);
 
       const rng = createSeededRng(state.seed + '-skip-' + newWordsCompleted);
       const nextWord = pickTargetWord(rng, player.columns, player.wordPool);
@@ -313,6 +380,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
             pityTimeouts: newPityTimeouts,
             doubleBonusActive: false,
             doubleBonusUsed: player.doubleBonusActive || player.doubleBonusUsed,
+            soloAdaptiveMultiplier: newAdaptiveMultiplier,
           },
         },
       };

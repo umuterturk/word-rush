@@ -3,22 +3,57 @@ export const MAX_WORD_LENGTH = 8;
 /** Selection cap = max word length. */
 export const MAX_BUFFER_SIZE = MAX_WORD_LENGTH;
 
-import type { SoloDifficulty } from './types';
+import type { MatchMode, SoloDifficulty } from './types';
 
 export const MATCH_DURATION_MS = 120_000;
 
 /** Solo: board refills allowed after correct words. */
 export const SOLO_REFILL_LIMIT = 10;
 
-/** Solo per-word timer multiplier by difficulty. */
-export const SOLO_TIME_MULTIPLIER: Readonly<Record<SoloDifficulty, number>> = {
-  easy: 4,
-  normal: 2,
-  hard: 1,
+export interface GridDimensions {
+  cols: number;
+  rows: number;
+}
+
+/** Solo grid size by difficulty — more rows = harder board, same per-word timer. */
+export const SOLO_GRID_BY_DIFFICULTY: Readonly<Record<SoloDifficulty, GridDimensions>> = {
+  easy: { cols: 5, rows: 5 },
+  normal: { cols: 5, rows: 6 },
+  hard: { cols: 5, rows: 7 },
 };
 
-/** Multiplayer uses normal-mode per-word timer. */
-export const MULTIPLAYER_TIME_MULTIPLIER = SOLO_TIME_MULTIPLIER.normal;
+/** Multiplayer uses the normal solo grid. */
+export const MULTIPLAYER_GRID: GridDimensions = SOLO_GRID_BY_DIFFICULTY.normal;
+
+export function getMatchGridDimensions(
+  matchMode: MatchMode,
+  soloDifficulty?: SoloDifficulty,
+): GridDimensions {
+  if (matchMode === 'solo') {
+    return SOLO_GRID_BY_DIFFICULTY[soloDifficulty ?? 'hard'];
+  }
+  return MULTIPLAYER_GRID;
+}
+
+/** Per-word timer multiplier — identical across solo difficulties; adaptive handles pacing. */
+export const SOLO_TIME_MULTIPLIER = 1;
+
+/** Multiplayer uses the same per-word timer baseline as solo. */
+export const MULTIPLAYER_TIME_MULTIPLIER = SOLO_TIME_MULTIPLIER;
+
+/** Adaptive timer bounds — relative to the base per-word timer. */
+export const SOLO_ADAPTIVE_MIN = 0.35;
+export const SOLO_ADAPTIVE_MAX = 1.25;
+
+/** Used-time bands for per-word adaptive step (fraction of allotted time). */
+export const SOLO_ADAPT_USED_FAST_MAX = 0.1;
+export const SOLO_ADAPT_USED_NEUTRAL_MIN = 0.8;
+export const SOLO_ADAPT_USED_NEUTRAL_MAX = 0.9;
+export const SOLO_ADAPT_USED_SLOW_MIN = 0.9;
+
+/** Per-word step factor at the fast/slow extremes (multiplicative). */
+export const SOLO_ADAPT_STEP_FAST = 0.5;
+export const SOLO_ADAPT_STEP_SLOW = 1.2;
 
 /** Multiplayer 2× power-up: halves per-word timer. */
 export const DOUBLE_BONUS_TIME_MULTIPLIER = 0.5;
@@ -74,6 +109,10 @@ export const WARMUP_BONUS_MS = [3_500, 2_500, 1_500] as const;
 /** Maximum number of empty cells allowed during gameplay. */
 export const MAX_EMPTY_CELLS = 0;
 
-// ─── Grid layout ──────────────────────────────────────────────────────────────
-export const GRID_COLS = 5;
-export const GRID_ROWS = 7;
+/** Default grid for tests and idle state — normal solo size. */
+export const DEFAULT_GRID: GridDimensions = SOLO_GRID_BY_DIFFICULTY.normal;
+
+/** @deprecated Use getMatchGridDimensions or DEFAULT_GRID */
+export const GRID_COLS = DEFAULT_GRID.cols;
+/** @deprecated Use getMatchGridDimensions or DEFAULT_GRID */
+export const GRID_ROWS = DEFAULT_GRID.rows;

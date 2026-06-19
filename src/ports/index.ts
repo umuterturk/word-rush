@@ -64,3 +64,7 @@ export interface MultiplayerPort {
 export interface AnalyticsPort {
   track(event: string, params?: Record<string, string | number | boolean>): void;
 }
+
+export interface WordReportPort {
+  reportWord(word: string, language: 'tr' | 'en'): Promise<void>;
+}

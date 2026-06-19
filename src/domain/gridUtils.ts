@@ -1,6 +1,32 @@
 import type { RngFn } from './seededRng';
 import type { LandedCell, MatchMode, PlayerState, SoloDifficulty } from './types';
-import { GRID_COLS, GRID_ROWS, MIN_WORD_LENGTH, MAX_WORD_LENGTH, MAX_EMPTY_CELLS, PITY_TIME_BONUS_PER_TIMEOUT, MAX_PITY_TIMEOUTS, WARMUP_BONUS_MS, SECONDS_PER_LETTER, SOLO_TIME_MULTIPLIER, MULTIPLAYER_TIME_MULTIPLIER, DOUBLE_BONUS_TIME_MULTIPLIER, DOUBLE_BONUS_SCORE_MULTIPLIER, MULTIPLAYER_STREAK_TIME_FACTOR, MULTIPLAYER_STREAK_SCORE_FACTOR, WORD_SCORE, SPEED_BONUS_MAX, MAX_WORD_TIME_MS } from './constants';
+import {
+  DEFAULT_GRID,
+  type GridDimensions,
+  MIN_WORD_LENGTH,
+  MAX_WORD_LENGTH,
+  MAX_EMPTY_CELLS,
+  PITY_TIME_BONUS_PER_TIMEOUT,
+  MAX_PITY_TIMEOUTS,
+  WARMUP_BONUS_MS,
+  SECONDS_PER_LETTER,
+  SOLO_TIME_MULTIPLIER,
+  MULTIPLAYER_TIME_MULTIPLIER,
+  DOUBLE_BONUS_TIME_MULTIPLIER,
+  DOUBLE_BONUS_SCORE_MULTIPLIER,
+  MULTIPLAYER_STREAK_TIME_FACTOR,
+  MULTIPLAYER_STREAK_SCORE_FACTOR,
+  WORD_SCORE,
+  SPEED_BONUS_MAX,
+  MAX_WORD_TIME_MS,
+  SOLO_ADAPTIVE_MIN,
+  SOLO_ADAPTIVE_MAX,
+  SOLO_ADAPT_USED_FAST_MAX,
+  SOLO_ADAPT_USED_NEUTRAL_MIN,
+  SOLO_ADAPT_USED_SLOW_MIN,
+  SOLO_ADAPT_STEP_FAST,
+  SOLO_ADAPT_STEP_SLOW,
+} from './constants';
 import { getWordList, type WordLanguage } from './wordSet';
 
 // ─── Strategic Grid Fill ──────────────────────────────────────────────────────
@@ -207,8 +233,12 @@ export interface GridGenerationResult {
  * - No orphan padding letters outside the word pool
  * - Perfect consumability when every pool word is submitted
  */
-export function fillGrid(rng: RngFn, language: WordLanguage = 'tr'): GridGenerationResult {
-  const targetCells = GRID_COLS * GRID_ROWS - MAX_EMPTY_CELLS;
+export function fillGrid(
+  rng: RngFn,
+  language: WordLanguage = 'tr',
+  grid: GridDimensions = DEFAULT_GRID,
+): GridGenerationResult {
+  const targetCells = grid.cols * grid.rows - MAX_EMPTY_CELLS;
   const wordPool = buildWordPoolWithRetry(rng, targetCells, language);
   const letters = Array.from(wordPool.join(''));
   
@@ -222,9 +252,9 @@ export function fillGrid(rng: RngFn, language: WordLanguage = 'tr'): GridGenerat
   const columns: LandedCell[][] = [];
   let letterIdx = 0;
   
-  for (let col = 0; col < GRID_COLS; col++) {
+  for (let col = 0; col < grid.cols; col++) {
     const column: LandedCell[] = [];
-    const colHeight = GRID_ROWS - Math.floor(MAX_EMPTY_CELLS / GRID_COLS);
+    const colHeight = grid.rows - Math.floor(MAX_EMPTY_CELLS / grid.cols);
     
     for (let row = 0; row < colHeight; row++) {
       if (letterIdx < letters.length) {
@@ -245,25 +275,28 @@ export function fillGrid(rng: RngFn, language: WordLanguage = 'tr'): GridGenerat
 const EN_ALPHABET = Array.from('abcdefghijklmnopqrstuvwxyz');
 const TR_ALPHABET = Array.from('abcçdefgğhıijklmnoöprsştuüvyz');
 
-function getVictoryAlphabetLetters(language: WordLanguage): string[] {
+function getVictoryAlphabetLetters(language: WordLanguage, grid: GridDimensions): string[] {
   const alphabet = language === 'tr' ? TR_ALPHABET : EN_ALPHABET;
-  const cellCount = GRID_COLS * GRID_ROWS;
+  const cellCount = grid.cols * grid.rows;
   return Array.from({ length: cellCount }, (_, i) => alphabet[i % alphabet.length]);
 }
 
 /**
  * Fills the board with the alphabet in reading order for the victory celebration.
  */
-export function buildVictoryAlphabetGrid(language: WordLanguage = 'tr'): GridGenerationResult {
-  const letters = getVictoryAlphabetLetters(language);
-  const colHeight = GRID_ROWS - Math.floor(MAX_EMPTY_CELLS / GRID_COLS);
+export function buildVictoryAlphabetGrid(
+  language: WordLanguage = 'tr',
+  grid: GridDimensions = DEFAULT_GRID,
+): GridGenerationResult {
+  const letters = getVictoryAlphabetLetters(language, grid);
+  const colHeight = grid.rows - Math.floor(MAX_EMPTY_CELLS / grid.cols);
   const columns: LandedCell[][] = [];
 
-  for (let col = 0; col < GRID_COLS; col++) {
+  for (let col = 0; col < grid.cols; col++) {
     const column: LandedCell[] = [];
     for (let rowFromBottom = 0; rowFromBottom < colHeight; rowFromBottom++) {
-      const rowFromTop = GRID_ROWS - 1 - rowFromBottom;
-      const index = rowFromTop * GRID_COLS + col;
+      const rowFromTop = grid.rows - 1 - rowFromBottom;
+      const index = rowFromTop * grid.cols + col;
       column.push({
         id: `victory-c${col}r${rowFromBottom}`,
         letter: letters[index],
@@ -280,8 +313,8 @@ export function isBoardEmpty(columns: LandedCell[][]): boolean {
   return columns.every(col => col.length === 0);
 }
 
-function columnCapacity(): number {
-  return GRID_ROWS - Math.floor(MAX_EMPTY_CELLS / GRID_COLS);
+function columnCapacity(grid: GridDimensions): number {
+  return grid.rows - Math.floor(MAX_EMPTY_CELLS / grid.cols);
 }
 
 /**
@@ -294,8 +327,9 @@ export function refillEmptySlots(
   idSeed: string,
   language: WordLanguage = 'tr',
   excludeWords: ReadonlySet<string> = new Set(),
+  grid: GridDimensions = DEFAULT_GRID,
 ): { columns: LandedCell[][]; words: string[] } | null {
-  const colHeight = columnCapacity();
+  const colHeight = columnCapacity(grid);
   const totalEmpty = columns.reduce((sum, col) => sum + (colHeight - col.length), 0);
   if (totalEmpty < MIN_WORD_LENGTH) return null;
 
@@ -472,6 +506,53 @@ export function warmupTimeBonusMs(wordsCompleted: number): number {
   return WARMUP_BONUS_MS[wordsCompleted] ?? 0;
 }
 
+export type WordDurationPurpose = 'gameplay' | 'scoring';
+
+function clampSoloAdaptiveMultiplier(value: number): number {
+  return Math.min(SOLO_ADAPTIVE_MAX, Math.max(SOLO_ADAPTIVE_MIN, value));
+}
+
+/**
+ * Per-word multiplicative step from fraction of allotted time used.
+ * 0–10% → −50%, 10–80% → linear −50%..0%, 80–90% → 0%, 90–100% → linear 0%..+20%.
+ */
+export function soloAdaptiveStepFactor(usedRatio: number): number {
+  const used = Math.min(1, Math.max(0, usedRatio));
+
+  if (used <= SOLO_ADAPT_USED_FAST_MAX) {
+    return SOLO_ADAPT_STEP_FAST;
+  }
+  if (used >= SOLO_ADAPT_USED_SLOW_MIN) {
+    return 1 + ((used - SOLO_ADAPT_USED_SLOW_MIN) / (1 - SOLO_ADAPT_USED_SLOW_MIN))
+      * (SOLO_ADAPT_STEP_SLOW - 1);
+  }
+  if (used >= SOLO_ADAPT_USED_NEUTRAL_MIN) {
+    return 1;
+  }
+
+  const span = SOLO_ADAPT_USED_NEUTRAL_MIN - SOLO_ADAPT_USED_FAST_MAX;
+  const t = (used - SOLO_ADAPT_USED_FAST_MAX) / span;
+  return SOLO_ADAPT_STEP_FAST + t * (1 - SOLO_ADAPT_STEP_FAST);
+}
+
+/**
+ * Adjust solo gameplay timer after a word based on how much of the allotted time was used.
+ */
+export function updateSoloAdaptiveMultiplier(
+  current: number,
+  elapsedMs: number,
+  allowedMs: number,
+  outcome: 'success' | 'timeout' | 'skip',
+): number {
+  if (allowedMs <= 0) return clampSoloAdaptiveMultiplier(current);
+
+  const usedRatio = outcome === 'timeout'
+    ? 1
+    : Math.min(1, elapsedMs / allowedMs);
+
+  return clampSoloAdaptiveMultiplier(current * soloAdaptiveStepFactor(usedRatio));
+}
+
 /**
  * Calculate word duration in milliseconds based on word length, board density,
  * and letter scarcity on the board.
@@ -487,11 +568,12 @@ export function calculateWordDuration(
   applyPity = true,
   wordsCompleted = 0,
   timeMultiplier = 1,
+  grid: GridDimensions = DEFAULT_GRID,
 ): number {
   const wordLength = word.length;
   if (wordLength === 0) return 0;
 
-  const maxCells = GRID_COLS * GRID_ROWS;
+  const maxCells = grid.cols * grid.rows;
   const currentLetters = columns.reduce((sum, col) => sum + col.length, 0);
   const boardDensity = currentLetters / maxCells;
 
@@ -541,6 +623,7 @@ export interface WordScoreInput {
   matchMode: MatchMode;
   player: PlayerState;
   soloDifficulty?: SoloDifficulty;
+  grid: GridDimensions;
 }
 
 export interface WordScoreBreakdown {
@@ -555,13 +638,13 @@ export interface WordScoreBreakdown {
  * Difficulty and 2× affect score only through allotted per-word time.
  */
 export function computeWordPoints(input: WordScoreInput): WordScoreBreakdown {
-  const { word, columns, submittedAt, wordStartedAt, matchMode, player, soloDifficulty } = input;
+  const { word, columns, submittedAt, wordStartedAt, matchMode, player, grid } = input;
   const base = WORD_SCORE[word.length] ?? 1;
 
   const scarcity = calculateWordLetterScarcity(word, columns);
   const scarcityMultiplier = wordScarcityScoreMultiplier(scarcity);
 
-  const allowedMs = getPlayerWordDuration(player, matchMode, soloDifficulty);
+  const allowedMs = getPlayerWordDuration(player, matchMode, 'scoring', grid);
   const elapsedMs = Math.max(0, submittedAt - wordStartedAt);
   const timerMultiplier = wordTimerScoreMultiplier(allowedMs, elapsedMs);
 
@@ -580,14 +663,17 @@ export function formatDoubleBonusMultiplierLabel(streak: number): string {
 export function getPlayerWordDuration(
   player: PlayerState,
   matchMode: MatchMode,
-  soloDifficulty?: SoloDifficulty,
+  purpose: WordDurationPurpose = 'gameplay',
+  grid: GridDimensions = DEFAULT_GRID,
 ): number {
   if (!player.targetWord) return 0;
 
-  const timeMultiplier =
-    matchMode === 'solo'
-      ? SOLO_TIME_MULTIPLIER[soloDifficulty ?? 'hard']
-      : MULTIPLAYER_TIME_MULTIPLIER;
+  let timeMultiplier =
+    matchMode === 'solo' ? SOLO_TIME_MULTIPLIER : MULTIPLAYER_TIME_MULTIPLIER;
+
+  if (matchMode === 'solo' && purpose === 'gameplay') {
+    timeMultiplier *= player.soloAdaptiveMultiplier ?? 1;
+  }
 
   let duration = calculateWordDuration(
     player.targetWord,
@@ -597,6 +683,7 @@ export function getPlayerWordDuration(
     true,
     player.wordsCompleted,
     timeMultiplier,
+    grid,
   );
 
   if (player.doubleBonusActive) {

@@ -24,6 +24,9 @@ export const MATCHES_COLLECTION =
 export const LEADERBOARD_COLLECTION =
   import.meta.env.VITE_FIREBASE_LEADERBOARD_COLLECTION ?? 'word-rush-leaderboard';
 
+export const WORD_REPORTS_COLLECTION =
+  import.meta.env.VITE_FIREBASE_WORD_REPORTS_COLLECTION ?? 'word-rush-word-reports';
+
 export function isFirebaseConfigured(): boolean {
   return true;
 }

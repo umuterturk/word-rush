@@ -5,6 +5,8 @@ import { FirebaseMultiplayerAdapter } from './adapters/FirebaseMultiplayerAdapte
 import { NoopMultiplayerAdapter } from './adapters/NoopMultiplayerAdapter';
 import { FirebaseLeaderboardAdapter } from './adapters/FirebaseLeaderboardAdapter';
 import { NoopLeaderboardAdapter } from './adapters/NoopLeaderboardAdapter';
+import { FirebaseWordReportAdapter } from './adapters/FirebaseWordReportAdapter';
+import { NoopWordReportAdapter } from './adapters/NoopWordReportAdapter';
 import { FirebaseAnalyticsAdapter } from './adapters/FirebaseAnalyticsAdapter';
 import { NoopAnalyticsAdapter } from './adapters/NoopAnalyticsAdapter';
 import { isFirebaseConfigured } from './firebase/config';
@@ -33,12 +35,14 @@ import {
   setSoloGameParam,
 } from './app/gameUrl';
 import { ensureWordListLoaded, type WordLanguage } from './domain/wordSet';
+import { brokeLocalRecord, wouldQualifyForLeaderboard } from './app/victoryCelebration';
 
 const clock = new BrowserClockAdapter();
 const storage = new LocalStorageAdapter();
 const firebaseReady = isFirebaseConfigured();
 const multiplayer = firebaseReady ? new FirebaseMultiplayerAdapter() : new NoopMultiplayerAdapter();
 const leaderboard = firebaseReady ? new FirebaseLeaderboardAdapter() : new NoopLeaderboardAdapter();
+const wordReport = firebaseReady ? new FirebaseWordReportAdapter() : new NoopWordReportAdapter();
 const analytics = firebaseReady ? new FirebaseAnalyticsAdapter() : new NoopAnalyticsAdapter();
 
 type AppMode = 'solo' | 'multiplayer';
@@ -113,7 +117,8 @@ export default function App() {
     [mp],
   );
 
-  const { gameState, logicalTime, bestScore, hydrated, dispatchAction } = useGameSession(
+  const { gameState, logicalTime, gameClockNow, bestScore, hydrated, dispatchAction, setGamePaused } =
+    useGameSession(
     clock,
     storage,
     {
@@ -298,7 +303,7 @@ export default function App() {
     dispatchAction({ type: 'RESET' });
   }, [mp, dispatchAction]);
 
-  const handleSoloVictoryDone = useCallback(
+  const completeSoloVictoryExit = useCallback(
     (action: 'playAgain' | 'menu') => {
       dispatchAction({ type: 'END_MATCH', at: clock.now() });
       window.setTimeout(() => {
@@ -311,6 +316,23 @@ export default function App() {
       }, 0);
     },
     [clock, dispatchAction, handleBackToMenu],
+  );
+
+  const handleSoloVictoryDone = useCallback(
+    (action: 'playAgain' | 'menu') => {
+      completeSoloVictoryExit(action);
+    },
+    [completeSoloVictoryExit],
+  );
+
+  const handleVictoryUsernameSave = useCallback(
+    (name: string, score: number) => {
+      saveUsername(name);
+      if (score > 0 && name.trim()) {
+        void leaderboard.submitScore(name.trim(), score).then(() => refreshLeaderboard());
+      }
+    },
+    [saveUsername, refreshLeaderboard],
   );
 
   const handleQuitGame = useCallback(() => {
@@ -329,6 +351,11 @@ export default function App() {
     setAppMode('solo');
     dispatchAction({ type: 'RESET' });
   }, [isMultiplayer, mp, dispatchAction]);
+
+  const handleReportWord = useCallback(
+    (word: string, wordLanguage: 'tr' | 'en') => wordReport.reportWord(word, wordLanguage),
+    [],
+  );
 
   useEffect(() => {
     if (gameState.matchStatus === 'ended') {
@@ -464,26 +491,32 @@ export default function App() {
     requiredWordLanguage !== null && loadedWordLanguage === requiredWordLanguage;
 
   useEffect(() => {
-    if (gameState.matchStatus === 'playing' || gameState.matchStatus === 'idle') {
+    if (gameState.matchStatus === 'idle') {
       setEndProfileDismissed(false);
     }
   }, [gameState.matchStatus]);
+
+  const localScore = gameState.players['local']?.score ?? 0;
+  const qualifiesForLeaderboardNamePrompt =
+    localScore > 0 &&
+    (brokeLocalRecord(localScore, bestScore) ||
+      wouldQualifyForLeaderboard(localScore, leaderboardEntries));
 
   const showEndProfilePopup =
     gameState.matchStatus === 'ended' &&
     !isMultiplayer &&
     !username.trim() &&
-    !endProfileDismissed;
+    !endProfileDismissed &&
+    qualifiesForLeaderboardNamePrompt;
 
   const handleEndProfileSave = useCallback(
     (name: string) => {
       saveUsername(name);
-      const localScore = gameState.players['local']?.score ?? 0;
       if (localScore > 0 && name.trim()) {
         void leaderboard.submitScore(name.trim(), localScore).then(() => refreshLeaderboard());
       }
     },
-    [saveUsername, gameState.players, refreshLeaderboard],
+    [saveUsername, localScore, refreshLeaderboard],
   );
 
   if (!hydrated) {
@@ -566,6 +599,7 @@ export default function App() {
       <GameScreen
         gameState={gameState}
         logicalTime={logicalTime}
+        gameClockNow={gameClockNow}
         onDispatch={dispatchAction}
         clock={clock}
         isMultiplayer={isMultiplayer}
@@ -577,7 +611,11 @@ export default function App() {
         onQuit={handleQuitGame}
         bestScore={bestScore}
         leaderboardEntries={leaderboardEntries}
+        username={username}
+        onVictoryUsernameSave={isMultiplayer ? undefined : handleVictoryUsernameSave}
         onSoloVictoryDone={isMultiplayer ? undefined : handleSoloVictoryDone}
+        onReportWord={firebaseReady ? handleReportWord : undefined}
+        setGamePaused={setGamePaused}
       />
     );
   }

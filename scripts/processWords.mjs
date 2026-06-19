@@ -6,6 +6,7 @@
  *  - Starts with a lowercase letter (excludes proper nouns)
  *  - 3–8 characters (game word length range)
  *  - Only standard Turkish alphabet characters
+ *  - Excludes words in scripts/blocklist-tr.txt
  *
  * Output: src/domain/wordList.json
  */
@@ -21,6 +22,14 @@ const root = join(__dirname, '..');
 function turkishLower(str) {
   return str.replace(/İ/g, 'i').replace(/I/g, 'ı').toLowerCase();
 }
+
+const blocklist = new Set(
+  readFileSync(join(__dirname, 'blocklist-tr.txt'), 'utf-8')
+    .split('\n')
+    .map(line => line.replace(/#.*$/, '').trim())
+    .filter(Boolean)
+    .map(turkishLower),
+);
 
 const raw = readFileSync(join(root, 'turkce_kelime_listesi.txt'), 'utf-8');
 const lines = raw.split('\n');
@@ -44,6 +53,7 @@ for (const line of lines) {
 
   if (chars.length < 3 || chars.length > 8) continue;
   if (!turkishAlpha.test(lower)) continue;       // remove punctuation, numbers, etc.
+  if (blocklist.has(lower)) continue;
   if (seen.has(lower)) continue;
 
   seen.add(lower);

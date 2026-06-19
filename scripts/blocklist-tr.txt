@@ -1,0 +1,64 @@
+# Turkish profanity and strong insults excluded from the game word list.
+# One word per line. Lines starting with # are ignored.
+# Regenerate with: node scripts/processWords.mjs
+
+# Vulgar / sexual
+sik
+sikme
+sikmek
+sikalar
+sikatif
+siklamen
+göt
+orospu
+piç
+piçleşme
+piçlik
+piçsinek
+piçuta
+kahpe
+kahpece
+kahpecik
+kahpelik
+ibne
+ibnelik
+pezevenk
+sürtük
+fahişe
+yarak
+sokturma
+
+# Scatological
+bok
+boklu
+boktan
+boklama
+boklamak
+boklanma
+boklaşma
+
+# Slurs / derogatory
+godoş
+godoşluk
+puşt
+puştluk
+kaltak
+kaltakçı
+kancık
+kancıkça
+dalyarak
+yavşak
+şerefsiz
+
+# Profanity-related
+küfür
+küfürbaz
+
+# Strong insults
+aptal
+aptalca
+aptallık
+aptalsı
+salak
+salakça
+salaklık

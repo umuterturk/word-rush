@@ -17,11 +17,7 @@ interface Props {
   onPlayWithFriend: () => void;
 }
 
-const DIFFICULTIES: { id: SoloDifficulty; labelKey: 'easy' | 'normal' | 'hard'; className: string }[] = [
-  { id: 'easy', labelKey: 'easy', className: 'play-btn--easy' },
-  { id: 'normal', labelKey: 'normal', className: 'play-btn--normal' },
-  { id: 'hard', labelKey: 'hard', className: 'play-btn--hard' },
-];
+const SOLO_MODE: SoloDifficulty = 'normal';
 
 const MEDALS = ['🥇', '🥈', '🥉'];
 
@@ -83,15 +79,12 @@ export function StartScreen({
         </div>
 
         <div className="mode-buttons">
-          {DIFFICULTIES.map(({ id, labelKey, className }) => (
-            <button
-              key={id}
-              className={`play-btn ${className}`}
-              onClick={() => onPlaySolo(id)}
-            >
-              {t[labelKey]}
-            </button>
-          ))}
+          <button
+            className="play-btn play-btn--normal"
+            onClick={() => onPlaySolo(SOLO_MODE)}
+          >
+            {t.play}
+          </button>
 
           {multiplayerAvailable && (
             <button className="play-btn play-btn--vs" onClick={onPlayWithFriend}>

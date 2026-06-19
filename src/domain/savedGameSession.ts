@@ -1,4 +1,5 @@
 import type { GameState, LandedCell, MatchMode, MatchStatus, PlayerState, SoloDifficulty } from './types';
+import { getMatchGridDimensions } from './constants';
 
 export interface SavedGameSession {
   gameState: GameState;
@@ -59,6 +60,12 @@ function isPlayerState(value: unknown): value is PlayerState {
   if (typeof player.doubleBonusUsed !== 'boolean') return false;
   if (typeof player.pityTimeouts !== 'number') return false;
   if (typeof player.refillsRemaining !== 'number') return false;
+  if (
+    player.soloAdaptiveMultiplier !== undefined
+    && typeof player.soloAdaptiveMultiplier !== 'number'
+  ) {
+    return false;
+  }
   return true;
 }
 
@@ -71,6 +78,8 @@ function isGameState(value: unknown): value is GameState {
   if (typeof state.matchDuration !== 'number') return false;
   if (typeof state.seed !== 'string') return false;
   if (state.soloDifficulty !== undefined && !isSoloDifficulty(state.soloDifficulty)) return false;
+  if (state.gridCols !== undefined && typeof state.gridCols !== 'number') return false;
+  if (state.gridRows !== undefined && typeof state.gridRows !== 'number') return false;
   if (!state.players || typeof state.players !== 'object') return false;
   if (!isPlayerState(state.players.local)) return false;
   return true;
@@ -92,6 +101,17 @@ export function parseSavedGameSession(raw: unknown): SavedGameSession | null {
   if (session.gameState.matchMode === 'multiplayer' && !session.matchId) return null;
   if (!session.gameState.players.local.usedWords) {
     session.gameState.players.local.usedWords = [...session.gameState.players.local.wordPool];
+  }
+  if (session.gameState.players.local.soloAdaptiveMultiplier === undefined) {
+    session.gameState.players.local.soloAdaptiveMultiplier = 1;
+  }
+  if (!session.gameState.gridCols || !session.gameState.gridRows) {
+    const grid = getMatchGridDimensions(
+      session.gameState.matchMode,
+      session.gameState.soloDifficulty,
+    );
+    session.gameState.gridCols = grid.cols;
+    session.gameState.gridRows = grid.rows;
   }
   return session;
 }

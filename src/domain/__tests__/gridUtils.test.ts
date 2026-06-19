@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { createSeededRng } from '../seededRng';
-import { fillGrid, pickTargetWord, buildLetterFreqMap, calculateWordDuration, calculateWordLetterScarcity, letterFrequencyMultiplier, pityTimeMultiplier, findHintCellId, refillEmptySlots, getPlayerWordDuration, doubleBonusStreakTimeMultiplier, doubleBonusStreakScoreMultiplier, getMultiplayerScoreMultiplier, formatDoubleBonusMultiplierLabel, computeWordPoints, wordTimerScoreMultiplier, buildVictoryAlphabetGrid } from '../gridUtils';
-import { GRID_COLS, GRID_ROWS, SECONDS_PER_LETTER, WARMUP_BONUS_MS, DOUBLE_BONUS_SCORE_MULTIPLIER } from '../constants';
+import { fillGrid, pickTargetWord, buildLetterFreqMap, calculateWordDuration, calculateWordLetterScarcity, letterFrequencyMultiplier, pityTimeMultiplier, findHintCellId, refillEmptySlots, getPlayerWordDuration, doubleBonusStreakTimeMultiplier, doubleBonusStreakScoreMultiplier, getMultiplayerScoreMultiplier, formatDoubleBonusMultiplierLabel, computeWordPoints, wordTimerScoreMultiplier, buildVictoryAlphabetGrid, updateSoloAdaptiveMultiplier, soloAdaptiveStepFactor } from '../gridUtils';
+import { GRID_COLS, GRID_ROWS, DEFAULT_GRID, SECONDS_PER_LETTER, WARMUP_BONUS_MS, DOUBLE_BONUS_SCORE_MULTIPLIER, SOLO_ADAPT_STEP_FAST, SOLO_ADAPT_STEP_SLOW, SOLO_ADAPTIVE_MIN, SOLO_ADAPTIVE_MAX } from '../constants';
 import { createInitialPlayerState } from '../gameReducer';
 
 describe('fillGrid', () => {
@@ -96,7 +96,7 @@ describe('buildVictoryAlphabetGrid', () => {
     expect(letterAt(0, 0)).toBe('a');
     expect(letterAt(4, 0)).toBe('d');
     expect(letterAt(0, 1)).toBe('e');
-    expect(letterAt(4, 6)).toBe('e');
+    expect(letterAt(4, 5)).toBe('a');
   });
 
   it('uses the English alphabet when requested', () => {
@@ -133,7 +133,7 @@ describe('refillEmptySlots', () => {
     ];
     const before = columns.reduce((sum, col) => sum + col.length, 0);
     const emptyBefore = GRID_COLS * GRID_ROWS - before;
-    const result = refillEmptySlots(createSeededRng('refill-partial'), columns, 'test');
+    const result = refillEmptySlots(createSeededRng('refill-partial'), columns, 'test', 'tr', new Set(), DEFAULT_GRID);
     expect(result).not.toBeNull();
     if (!result) return;
 
@@ -519,19 +519,20 @@ describe('computeWordPoints', () => {
       matchMode: opts.matchMode ?? 'solo',
       player,
       soloDifficulty: opts.soloDifficulty ?? 'hard',
+      grid: DEFAULT_GRID,
     };
   }
 
   it('awards more points for faster completion', () => {
     const started = 1000;
     const input = scoreInput('bal', started, { wordStartedAt: started });
-    const allowed = getPlayerWordDuration(input.player, input.matchMode, input.soloDifficulty);
+    const allowed = getPlayerWordDuration(input.player, input.matchMode, 'gameplay', DEFAULT_GRID);
     const fast = computeWordPoints({ ...input, submittedAt: started + allowed * 0.1 }).timerMultiplier;
     const slow = computeWordPoints({ ...input, submittedAt: started + allowed * 0.85 }).timerMultiplier;
     expect(fast).toBeGreaterThan(slow);
   });
 
-  it('awards more points on higher solo difficulty via tighter timer pressure', () => {
+  it('scores solo words on a fixed difficulty baseline regardless of selected mode', () => {
     const started = 1000;
     const submitted = started + 500;
     const easy = computeWordPoints(
@@ -540,7 +541,7 @@ describe('computeWordPoints', () => {
     const hard = computeWordPoints(
       scoreInput('bal', submitted, { soloDifficulty: 'hard', wordStartedAt: started }),
     ).timerMultiplier;
-    expect(hard).toBeGreaterThan(easy);
+    expect(easy).toBe(hard);
   });
 
   it('awards more for scarce letters on the board', () => {
@@ -577,6 +578,7 @@ describe('computeWordPoints', () => {
       matchMode: 'solo',
       player: { ...player, columns: abundantColumns },
       soloDifficulty: 'hard',
+      grid: DEFAULT_GRID,
     });
     const scarce = computeWordPoints({
       word,
@@ -586,6 +588,7 @@ describe('computeWordPoints', () => {
       matchMode: 'solo',
       player: { ...player, columns: scarceColumns },
       soloDifficulty: 'hard',
+      grid: DEFAULT_GRID,
     });
     expect(scarce.scarcityMultiplier).toBeGreaterThan(abundant.scarcityMultiplier);
     expect(scarce.total).toBeGreaterThan(abundant.total);
@@ -601,10 +604,10 @@ describe('computeWordPoints', () => {
     expect(withDouble).toBeGreaterThan(base);
   });
 
-  it('embeds solo hard timer pressure vs multiplayer normal difficulty', () => {
+  it('matches multiplayer normal timer pressure for solo scoring', () => {
     const mp = computeWordPoints(scoreInput('bal', 2000, { matchMode: 'multiplayer' })).timerMultiplier;
     const soloHard = computeWordPoints(scoreInput('bal', 2000, { matchMode: 'solo', soloDifficulty: 'hard' })).timerMultiplier;
-    expect(soloHard).toBeGreaterThan(mp);
+    expect(soloHard).toBe(mp);
   });
 
   it('always returns whole-number totals', () => {
@@ -662,5 +665,59 @@ describe('wordTimerScoreMultiplier', () => {
     expect(Math.round(2 * hard)).toBe(10);
     expect(Math.round(2 * hardWith2x)).toBe(20);
     expect(hardWith2x / hard).toBeCloseTo(2, 5);
+  });
+});
+
+describe('solo adaptive difficulty', () => {
+  it('applies −50% step for 0–10% time used', () => {
+    expect(soloAdaptiveStepFactor(0)).toBe(SOLO_ADAPT_STEP_FAST);
+    expect(soloAdaptiveStepFactor(0.05)).toBe(SOLO_ADAPT_STEP_FAST);
+    expect(soloAdaptiveStepFactor(0.1)).toBe(SOLO_ADAPT_STEP_FAST);
+    expect(updateSoloAdaptiveMultiplier(1, 500, 10_000, 'success')).toBe(SOLO_ADAPT_STEP_FAST);
+  });
+
+  it('interpolates linearly from −50% to 0% between 10% and 80% used', () => {
+    expect(soloAdaptiveStepFactor(0.45)).toBeCloseTo(0.75, 5);
+    expect(updateSoloAdaptiveMultiplier(1, 4_500, 10_000, 'success')).toBeCloseTo(0.75, 5);
+  });
+
+  it('keeps multiplier unchanged between 80% and 90% used', () => {
+    expect(soloAdaptiveStepFactor(0.85)).toBe(1);
+    expect(updateSoloAdaptiveMultiplier(0.95, 8_500, 10_000, 'success')).toBe(0.95);
+  });
+
+  it('interpolates from 0% to +20% between 90% and 100% used', () => {
+    expect(soloAdaptiveStepFactor(0.95)).toBeCloseTo(1.1, 5);
+    expect(soloAdaptiveStepFactor(1)).toBe(SOLO_ADAPT_STEP_SLOW);
+    expect(updateSoloAdaptiveMultiplier(1, 10_000, 10_000, 'timeout')).toBe(SOLO_ADAPT_STEP_SLOW);
+  });
+
+  it('clamps adaptive multiplier within configured bounds', () => {
+    expect(updateSoloAdaptiveMultiplier(SOLO_ADAPTIVE_MIN, 500, 10_000, 'success')).toBe(
+      SOLO_ADAPTIVE_MIN,
+    );
+    expect(updateSoloAdaptiveMultiplier(SOLO_ADAPTIVE_MAX, 9_800, 10_000, 'success')).toBe(
+      SOLO_ADAPTIVE_MAX,
+    );
+  });
+
+  it('shortens gameplay timer but not scoring timer when adaptive is below 1', () => {
+    const { columns } = fillGrid(createSeededRng('adaptive-timer'));
+    const player = {
+      ...createInitialPlayerState(),
+      columns,
+      targetWord: 'abcde',
+      soloAdaptiveMultiplier: 0.8,
+    };
+    const gameplay = getPlayerWordDuration(player, 'solo', 'gameplay', DEFAULT_GRID);
+    const scoring = getPlayerWordDuration(player, 'solo', 'scoring', DEFAULT_GRID);
+    const baseline = getPlayerWordDuration(
+      { ...player, soloAdaptiveMultiplier: 1 },
+      'solo',
+      'gameplay',
+      DEFAULT_GRID,
+    );
+    expect(gameplay).toBeCloseTo(baseline * 0.8, 0);
+    expect(scoring).toBeGreaterThan(gameplay);
   });
 });

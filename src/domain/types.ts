@@ -39,6 +39,8 @@ export interface PlayerState {
   pityTimeouts: number;
   /** Solo only: board refills remaining after correct words. */
   refillsRemaining: number;
+  /** Solo only: scales per-word gameplay timer up/down based on solve speed (1 = baseline). */
+  soloAdaptiveMultiplier: number;
 }
 
 export interface GameState {
@@ -53,6 +55,10 @@ export interface GameState {
   soloVictoryPending?: boolean;
   /** Wall-clock time when solo victory started; freezes the elapsed timer. */
   soloVictoryAt?: number;
+  /** Column count for this match's board. */
+  gridCols: number;
+  /** Row count for this match's board. */
+  gridRows: number;
   players: Record<string, PlayerState>;
 }
 

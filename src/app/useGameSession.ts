@@ -29,9 +29,12 @@ interface GameSession {
   gameState: GameState;
   /** Milliseconds elapsed since match start (updated every animation frame). */
   logicalTime: number;
+  /** Effective wall-clock time for gameplay timers (pauses while the game is paused). */
+  gameClockNow: number;
   bestScore: number;
   hydrated: boolean;
   dispatchAction: (action: GameAction) => void;
+  setGamePaused: (paused: boolean) => void;
 }
 
 /**
@@ -61,12 +64,15 @@ export function useGameSession(
 
   const [gameState, setGameState] = useState<GameState>(INITIAL_GAME_STATE);
   const [logicalTime, setLogicalTime] = useState(0);
+  const [gameClockNow, setGameClockNow] = useState(0);
   const [bestScore, setBestScore] = useState(0);
   const [hydrated, setHydrated] = useState(false);
 
   // Refs let the rAF loop read/write current state without stale closures
   const stateRef = useRef<GameState>(INITIAL_GAME_STATE);
   const actionQueueRef = useRef<GameAction[]>([]);
+  const pauseAccumMsRef = useRef(0);
+  const pauseStartedAtRef = useRef<number | null>(null);
 
   const getSessionExtrasRef = useRef(getSessionExtras);
   useEffect(() => {
@@ -131,6 +137,12 @@ export function useGameSession(
     });
   }, [gameState.matchStatus, storage]); // intentional: fires once per status change
 
+  useEffect(() => {
+    if (gameState.matchStatus === 'playing') return;
+    pauseAccumMsRef.current = 0;
+    pauseStartedAtRef.current = null;
+  }, [gameState.matchStatus]);
+
   // Persist or clear the active session as match status changes.
   useEffect(() => {
     if (!hydrated) return;
@@ -178,6 +190,31 @@ export function useGameSession(
     return () => window.removeEventListener('keydown', onKeyDown);
   }, []);
 
+  const getEffectiveNow = useCallback((now: number) => {
+    let pausedMs = pauseAccumMsRef.current;
+    if (pauseStartedAtRef.current !== null) {
+      pausedMs += now - pauseStartedAtRef.current;
+    }
+    return now - pausedMs;
+  }, []);
+
+  const setGamePaused = useCallback(
+    (paused: boolean) => {
+      const now = clock.now();
+      if (paused) {
+        if (pauseStartedAtRef.current === null) {
+          pauseStartedAtRef.current = now;
+        }
+        return;
+      }
+      if (pauseStartedAtRef.current !== null) {
+        pauseAccumMsRef.current += now - pauseStartedAtRef.current;
+        pauseStartedAtRef.current = null;
+      }
+    },
+    [clock],
+  );
+
   // Main animation loop
   useEffect(() => {
     let active = true;
@@ -187,6 +224,7 @@ export function useGameSession(
       if (!active) return;
 
       const now = clock.now();
+      const effectiveNow = getEffectiveNow(now);
       const pending = actionQueueRef.current.splice(0);
       const prev = stateRef.current;
       
@@ -202,30 +240,33 @@ export function useGameSession(
           const wordDuration = getPlayerWordDuration(
             player,
             prev.matchMode,
-            prev.soloDifficulty,
+            'gameplay',
+            { cols: prev.gridCols, rows: prev.gridRows },
           );
-          const elapsed = Math.max(0, now - player.wordStartedAt);
+          const elapsed = Math.max(0, effectiveNow - player.wordStartedAt);
           if (elapsed >= wordDuration) {
-            pending.push({ type: 'WORD_TIMEOUT', playerId: 'local', at: now });
+            pending.push({ type: 'WORD_TIMEOUT', playerId: 'local', at: effectiveNow });
           }
         }
       }
       
-      const next = updateGame(prev, now, pending);
+      const next = updateGame(prev, effectiveNow, pending);
 
       if (next !== prev) {
         stateRef.current = next;
         setGameState(next);
       }
 
+      setGameClockNow(effectiveNow);
+
       // Update logical time every frame so the arena animates smoothly
       const frozenSoloTime = frozenSoloLogicalTime(next);
       if (next.matchStatus === 'playing') {
-        setLogicalTime(frozenSoloTime ?? now - next.matchStartedAt);
+        setLogicalTime(frozenSoloTime ?? effectiveNow - next.matchStartedAt);
       } else if (next.matchStatus === 'ended') {
         setLogicalTime(
           frozenSoloTime
-            ?? (next.matchMode === 'solo' ? now - next.matchStartedAt : next.matchDuration),
+            ?? (next.matchMode === 'solo' ? effectiveNow - next.matchStartedAt : next.matchDuration),
         );
       } else {
         setLogicalTime(0);
@@ -240,11 +281,11 @@ export function useGameSession(
       active = false;
       clock.cancelFrame(frameHandle);
     };
-  }, [clock]);
+  }, [clock, getEffectiveNow]);
 
   const dispatchAction = useCallback((action: GameAction) => {
     actionQueueRef.current.push(action);
   }, []);
 
-  return { gameState, logicalTime, bestScore, hydrated, dispatchAction };
+  return { gameState, logicalTime, gameClockNow, bestScore, hydrated, dispatchAction, setGamePaused };
 }

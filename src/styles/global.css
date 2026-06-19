@@ -122,7 +122,7 @@ button {
 .profile-overlay {
   position: fixed;
   inset: 0;
-  z-index: 100;
+  z-index: 200;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1045,8 +1045,16 @@ button {
 }
 
 .game-screen--paused .arena,
-.game-screen--paused .stack-panel {
-  filter: brightness(0.55);
+.game-screen--paused .stack-panel,
+.game-screen--paused .target-word-banner,
+.game-screen--paused .vs-hud,
+.game-screen--paused .hud,
+.game-screen--paused .arena-container {
+  filter: blur(4px) brightness(0.55);
+}
+
+.game-screen--paused .word-timer-bar__fill {
+  animation-play-state: paused;
 }
 
 .pause-overlay {
@@ -1612,6 +1620,47 @@ button {
   animation: pop 0.2s ease-out;
 }
 
+.target-word-report-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  margin-left: 2px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: color 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+}
+
+.target-word-report-btn:hover:not(:disabled) {
+  color: rgba(255, 255, 255, 0.85);
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.22);
+}
+
+.target-word-report-btn:active:not(:disabled) {
+  transform: scale(0.94);
+}
+
+.target-word-report-btn:disabled:not(.target-word-report-btn--done) {
+  opacity: 0.5;
+  cursor: wait;
+}
+
+.target-word-report-btn--done {
+  color: #81c784;
+  border-color: rgba(129, 199, 132, 0.35);
+  background: rgba(129, 199, 132, 0.12);
+  cursor: default;
+}
+
 .target-word-banner--victory {
   flex-direction: column;
   gap: 6px;
@@ -1662,7 +1711,6 @@ button {
 .grid-arena {
   max-width: min(100%, 500px);
   max-height: 100%;
-  aspect-ratio: 5 / 7;
   margin: 0 auto;
 }
 
@@ -2000,13 +2048,45 @@ button {
   box-shadow: 0 0 24px rgba(255, 213, 79, 0.12);
 }
 
-.victory-popup__title {
+.victory-popup__name {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.victory-popup__name-label {
   margin: 0;
-  font-size: 18px;
-  font-weight: 900;
-  letter-spacing: 4px;
-  color: #a5d6a7;
-  text-transform: uppercase;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.victory-popup__name-input {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  color: #fff;
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  padding: 12px 14px;
+  text-align: center;
+  outline: none;
+  user-select: text;
+}
+
+.victory-popup__name-input::placeholder {
+  color: rgba(255, 255, 255, 0.25);
+  font-weight: 600;
+}
+
+.victory-popup__name-input:focus {
+  border-color: rgba(255, 213, 79, 0.5);
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .victory-popup__score {
@@ -2542,12 +2622,6 @@ button {
 @keyframes shimmer-btn {
   0%, 100% { transform: translateX(-100%); }
   50% { transform: translateX(100%); }
-}
-
-/* Paused overlay dims the arena and word panel */
-.game-screen--paused .grid-arena,
-.game-screen--paused .word-panel {
-  filter: brightness(0.55);
 }
 
 /* Falling letter tiles (legacy, kept for safety) */

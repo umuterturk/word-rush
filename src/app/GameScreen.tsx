@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { GameAction, GameState } from '../domain/types';
-import { GRID_COLS, GRID_ROWS, SKIP_PENALTY, LETTER_HINT_DELAY_MS } from '../domain/constants';
+import { SKIP_PENALTY, LETTER_HINT_DELAY_MS } from '../domain/constants';
 import type { ClockPort, LeaderboardEntry } from '../ports';
 import { useI18n } from '../i18n';
 import { getPlayerWordDuration, formatDoubleBonusMultiplierLabel, findHintCellId, getCellById, isCorrectNextLetter, computeWordPoints, buildVictoryAlphabetGrid } from '../domain/gridUtils';
 import { createSeededRng } from '../domain/seededRng';
-import { upperByLanguage } from '../domain/turkishText';
+import { upperByLanguage, upperWordByLanguage } from '../domain/turkishText';
 import {
   SOLO_VICTORY_WAIT_MS,
   CELEBRATION_STAGGER_MS,
@@ -25,6 +25,7 @@ import {
 interface Props {
   gameState: GameState;
   logicalTime: number;
+  gameClockNow: number;
   onDispatch: (action: GameAction) => void;
   clock: ClockPort;
   isMultiplayer?: boolean;
@@ -38,7 +39,11 @@ interface Props {
   onQuit?: () => void;
   bestScore?: number;
   leaderboardEntries?: LeaderboardEntry[];
+  username?: string;
+  onVictoryUsernameSave?: (name: string, score: number) => void;
   onSoloVictoryDone?: (action: 'playAgain' | 'menu') => void;
+  onReportWord?: (word: string, language: 'tr' | 'en') => Promise<void>;
+  setGamePaused?: (paused: boolean) => void;
 }
 
 function formatTime(ms: number): string {
@@ -77,8 +82,6 @@ const TILE_BUTTON_ATTRS = {
   autoCapitalize: 'off',
 } as const;
 
-const COL_PCT = 100 / GRID_COLS;
-const ROW_PCT = 100 / GRID_ROWS;
 const CONFETTI_COLORS = ['#ffd54f', '#81c784', '#ce93d8', '#4fc3f7', '#ff8a65', '#fff176'];
 
 interface ConfettiPiece {
@@ -214,15 +217,21 @@ function buildConfettiPieces(seed: string, count: number): ConfettiPiece[] {
   }));
 }
 
-function celebrationTileDelay(col: number, rowFromTop: number): number {
-  const centerCol = (GRID_COLS - 1) / 2;
-  const centerRow = (GRID_ROWS - 1) / 2;
+function celebrationTileDelay(
+  col: number,
+  rowFromTop: number,
+  gridCols: number,
+  gridRows: number,
+): number {
+  const centerCol = (gridCols - 1) / 2;
+  const centerRow = (gridRows - 1) / 2;
   return Math.round(Math.hypot(col - centerCol, rowFromTop - centerRow) * CELEBRATION_STAGGER_MS);
 }
 
 export function GameScreen({
   gameState,
   logicalTime,
+  gameClockNow,
   onDispatch,
   clock,
   isMultiplayer = false,
@@ -234,10 +243,19 @@ export function GameScreen({
   onQuit,
   bestScore = 0,
   leaderboardEntries = [],
+  username = '',
+  onVictoryUsernameSave,
   onSoloVictoryDone,
+  onReportWord,
+  setGamePaused,
 }: Props) {
   const { t, language } = useI18n();
   const player = gameState.players['local'];
+  const gridCols = gameState.gridCols;
+  const gridRows = gameState.gridRows;
+  const colPct = gridCols > 0 ? 100 / gridCols : 0;
+  const rowPct = gridRows > 0 ? 100 / gridRows : 0;
+  const matchGrid = { cols: gridCols, rows: gridRows };
   const timeLeft = gameState.matchDuration - logicalTime;
   const isUrgent = isMultiplayer && timeLeft < 30_000;
   const elapsedTime = logicalTime;
@@ -250,9 +268,9 @@ export function GameScreen({
   // Word timer uses wall clock so it survives refresh (logicalTime is 0 until the first frame).
   const wordStartedAt = player?.wordStartedAt ?? 0;
   const wordDuration = player && targetWord
-    ? getPlayerWordDuration(player, gameState.matchMode, gameState.soloDifficulty)
+    ? getPlayerWordDuration(player, gameState.matchMode, 'gameplay', matchGrid)
     : 0;
-  const currentTime = clock.now();
+  const currentTime = gameClockNow;
   const wordElapsed = wordStartedAt > 0 ? Math.max(0, currentTime - wordStartedAt) : 0;
   const wordTimeLeft = Math.max(0, wordDuration - wordElapsed);
   const wordTimerKey = `${targetWord}-${wordStartedAt}`;
@@ -281,10 +299,14 @@ export function GameScreen({
           matchMode: gameState.matchMode,
           player,
           soloDifficulty: gameState.soloDifficulty,
+          grid: matchGrid,
         }).total
       : 0;
 
   const [submitFeedback, setSubmitFeedback] = useState<'valid' | 'invalid' | null>(null);
+  const [showReportConfirm, setShowReportConfirm] = useState(false);
+  const [reportedWordKey, setReportedWordKey] = useState<string | null>(null);
+  const [reportingWord, setReportingWord] = useState(false);
   const [errorTileId, setErrorTileId] = useState<string | null>(null);
   const [hintCellId, setHintCellId] = useState<string | null>(null);
   const [isShuffling, setIsShuffling] = useState(false);
@@ -301,6 +323,8 @@ export function GameScreen({
   const devPreviewRef = useRef(false);
   const victoryRunRef = useRef(0);
   const [victoryActionsEnabled, setVictoryActionsEnabled] = useState(false);
+  const [victoryNameDraft, setVictoryNameDraft] = useState('');
+  const victoryNameInputRef = useRef<HTMLInputElement>(null);
 
   const isSoloVictory = !isMultiplayer && gameState.soloVictoryPending === true;
   const isCelebrating = celebrationPhase === 'celebrate';
@@ -314,6 +338,11 @@ export function GameScreen({
   const qualifiesForLeaderboard =
     isSoloVictory &&
     wouldQualifyForLeaderboard(snapshotScore, leaderboardEntries);
+  const needsNamePrompt =
+    isSoloVictory &&
+    !username.trim() &&
+    snapshotScore > 0 &&
+    (isNewBest || qualifiesForLeaderboard);
   const honorFocus = victorySnapshot
     ? resolveVictoryHonorFocus(victorySnapshot.forceRecord, victorySnapshot.forceEpic)
     : 'both';
@@ -470,7 +499,7 @@ export function GameScreen({
         return resolved;
       });
 
-      setCelebrationGrid(buildVictoryAlphabetGrid(language));
+      setCelebrationGrid(buildVictoryAlphabetGrid(language, matchGrid));
       setCelebrationPhase('celebrate');
 
       popupTimerId = window.setTimeout(() => {
@@ -488,6 +517,7 @@ export function GameScreen({
   useEffect(() => {
     if (!showVictoryPopup) {
       setVictoryActionsEnabled(false);
+      setVictoryNameDraft('');
       return;
     }
 
@@ -498,8 +528,17 @@ export function GameScreen({
     return () => window.clearTimeout(timer);
   }, [showVictoryPopup]);
 
+  useEffect(() => {
+    if (!showVictoryPopup || !needsNamePrompt) return;
+    victoryNameInputRef.current?.focus();
+  }, [showVictoryPopup, needsNamePrompt]);
+
   function handleVictoryAction(action: 'playAgain' | 'menu') {
     if (!victoryActionsEnabled || !onSoloVictoryDone) return;
+    const trimmedName = victoryNameDraft.trim();
+    if (needsNamePrompt && trimmedName && onVictoryUsernameSave) {
+      onVictoryUsernameSave(trimmedName, snapshotScore);
+    }
     onSoloVictoryDone(action);
   }
 
@@ -555,6 +594,42 @@ export function GameScreen({
     }, 400);
   }, []);
 
+  const gameLanguage = gameState.language ?? 'tr';
+  const reportWordKey = `${targetWord}-${wordStartedAt}`;
+  const wordReported = reportedWordKey === reportWordKey;
+
+  const closeReportConfirm = useCallback(() => {
+    setShowReportConfirm(false);
+    setGamePaused?.(false);
+  }, [setGamePaused]);
+
+  const openReportConfirm = useCallback(() => {
+    if (!onReportWord || !targetWord || wordReported) return;
+    setShowReportConfirm(true);
+    setGamePaused?.(true);
+  }, [onReportWord, setGamePaused, targetWord, wordReported]);
+
+  const handleReportWord = useCallback(async () => {
+    if (!onReportWord || !targetWord || reportingWord || wordReported) return;
+    setReportingWord(true);
+    try {
+      await onReportWord(targetWord, gameLanguage);
+      setReportedWordKey(reportWordKey);
+      setShowReportConfirm(false);
+      setGamePaused?.(false);
+    } finally {
+      setReportingWord(false);
+    }
+  }, [
+    gameLanguage,
+    onReportWord,
+    reportWordKey,
+    reportingWord,
+    setGamePaused,
+    targetWord,
+    wordReported,
+  ]);
+
   const handleTapTile = useCallback(
     (id: string, e: React.PointerEvent) => {
       e.preventDefault();
@@ -595,10 +670,10 @@ export function GameScreen({
   }
 
   // Pre-compute which columns the clock doesn't need — just render grid cells
-  // columns[col][rowIndex], rowIndex 0 = bottom → visual row = GRID_ROWS - 1 - rowIndex
+  // columns[col][rowIndex], rowIndex 0 = bottom → visual row = gridRows - 1 - rowIndex
   const cellsByPosition = new Map<string, { id: string; letter: string }>();
   if (player) {
-    for (let col = 0; col < GRID_COLS; col++) {
+    for (let col = 0; col < gridCols; col++) {
       const column = player.columns[col] ?? [];
       for (let rowFromBottom = 0; rowFromBottom < column.length; rowFromBottom++) {
         const cell = column[rowFromBottom];
@@ -611,9 +686,46 @@ export function GameScreen({
 
   return (
     <div
-      className={`screen game-screen${isMultiplayer ? ' game-screen--vs' : ''}${isSoloVictory ? ' game-screen--solo-victory' : ''}${isCelebrating ? ' game-screen--celebrating' : ''}${celebrationEpic ? ' game-screen--celebrating-epic' : ''}`}
+      className={`screen game-screen${isMultiplayer ? ' game-screen--vs' : ''}${isSoloVictory ? ' game-screen--solo-victory' : ''}${isCelebrating ? ' game-screen--celebrating' : ''}${celebrationEpic ? ' game-screen--celebrating-epic' : ''}${showReportConfirm ? ' game-screen--paused' : ''}`}
       style={{ '--celebration-pop-ms': `${CELEBRATION_TILE_POP_MS}ms` } as React.CSSProperties}
     >
+      {showReportConfirm && onReportWord && targetWord && (
+        <div className="confirm-overlay" onClick={closeReportConfirm}>
+          <div
+            className="confirm-popup"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="report-confirm-title"
+            onClick={e => e.stopPropagation()}
+          >
+            <h2 id="report-confirm-title" className="confirm-title">
+              {t.reportWordConfirmTitle}
+            </h2>
+            <p className="confirm-message">
+              {t.reportWordConfirmMessage.replace('{word}', upperWordByLanguage(targetWord, language))}
+            </p>
+            <div className="confirm-actions">
+              <button
+                type="button"
+                className="confirm-btn confirm-btn--danger"
+                onClick={() => void handleReportWord()}
+                disabled={reportingWord}
+              >
+                {t.reportWordConfirmYes}
+              </button>
+              <button
+                type="button"
+                className="confirm-btn confirm-btn--secondary"
+                onClick={closeReportConfirm}
+                disabled={reportingWord}
+              >
+                {t.reportWordConfirmNo}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showResignConfirm && onQuit && (
         <div className="confirm-overlay" onClick={() => setShowResignConfirm(false)}>
           <div
@@ -727,6 +839,18 @@ export function GameScreen({
                   </span>
                 );
               })}
+              {onReportWord && (
+                <button
+                  type="button"
+                  className={`target-word-report-btn${wordReported ? ' target-word-report-btn--done' : ''}`}
+                  onClick={openReportConfirm}
+                  disabled={reportingWord || wordReported || showReportConfirm}
+                  aria-label={t.reportWordAria}
+                  title={wordReported ? t.reportWordDone : t.reportWord}
+                >
+                  {wordReported ? '✓' : '!'}
+                </button>
+              )}
             </span>
             {wordMatchesTarget && formedWord.length > 0 && (
               <span className="target-word-score">+{wordScore}</span>
@@ -768,19 +892,23 @@ export function GameScreen({
           className={`arena grid-arena notranslate${isShuffling ? ' grid-arena--shuffling' : ''}${isCelebrating ? ' grid-arena--celebration' : ''}${celebrationEpic ? ' grid-arena--celebration-epic' : ''}`}
           lang={language}
           translate="no"
-          style={{ '--grid-cols': GRID_COLS, '--grid-rows': GRID_ROWS } as React.CSSProperties}
+          style={{
+            '--grid-cols': gridCols,
+            '--grid-rows': gridRows,
+            aspectRatio: `${gridCols} / ${gridRows}`,
+          } as React.CSSProperties}
         >
         {/* Empty cell backgrounds */}
-        {Array.from({ length: GRID_COLS }, (_, col) =>
-          Array.from({ length: GRID_ROWS }, (_, rowFromTop) => (
+        {Array.from({ length: gridCols }, (_, col) =>
+          Array.from({ length: gridRows }, (_, rowFromTop) => (
             <div
               key={`empty-${col}-${rowFromTop}`}
               className="grid-cell-bg"
               style={{
-                left: `${col * COL_PCT}%`,
-                top: `${rowFromTop * ROW_PCT}%`,
-                width: `${COL_PCT}%`,
-                height: `${ROW_PCT}%`,
+                left: `${col * colPct}%`,
+                top: `${rowFromTop * rowPct}%`,
+                width: `${colPct}%`,
+                height: `${rowPct}%`,
               }}
             />
           )),
@@ -790,17 +918,17 @@ export function GameScreen({
         {isCelebrating && celebrationGrid
           ? celebrationGrid.columns.map((col, colIdx) =>
               col.map((cell, rowFromBottom) => {
-                const rowFromTop = GRID_ROWS - 1 - rowFromBottom;
-                const delay = celebrationTileDelay(colIdx, rowFromTop);
+                const rowFromTop = gridRows - 1 - rowFromBottom;
+                const delay = celebrationTileDelay(colIdx, rowFromTop, gridCols, gridRows);
                 return (
                   <div
                     key={cell.id}
                     className="grid-tile grid-tile--celebration"
                     style={{
-                      left: `${colIdx * COL_PCT}%`,
-                      top: `${rowFromTop * ROW_PCT}%`,
-                      width: `${COL_PCT}%`,
-                      height: `${ROW_PCT}%`,
+                      left: `${colIdx * colPct}%`,
+                      top: `${rowFromTop * rowPct}%`,
+                      width: `${colPct}%`,
+                      height: `${rowPct}%`,
                       background: tileColor(cell.letter),
                       '--celebration-delay': `${delay}ms`,
                     } as React.CSSProperties}
@@ -812,7 +940,7 @@ export function GameScreen({
             )
           : player?.columns.map((col, colIdx) =>
           col.map((cell, rowFromBottom) => {
-            const rowFromTop = GRID_ROWS - 1 - rowFromBottom;
+            const rowFromTop = gridRows - 1 - rowFromBottom;
             const isSelected = selectedSet.has(cell.id);
             const selOrder = selectedIds.indexOf(cell.id);
             return (
@@ -820,10 +948,10 @@ export function GameScreen({
                 key={cell.id}
                 className={`grid-tile grid-tile--landed${isSelected ? ' grid-tile--selected' : ''}${errorTileId === cell.id ? ' grid-tile--error' : ''}${hintCellId === cell.id ? ' grid-tile--hint' : ''}`}
                 style={{
-                  left: `${colIdx * COL_PCT}%`,
-                  top: `${rowFromTop * ROW_PCT}%`,
-                  width: `${COL_PCT}%`,
-                  height: `${ROW_PCT}%`,
+                  left: `${colIdx * colPct}%`,
+                  top: `${rowFromTop * rowPct}%`,
+                  width: `${colPct}%`,
+                  height: `${rowPct}%`,
                   background: tileColor(cell.letter),
                 }}
                 onPointerDown={e => handleTapTile(cell.id, e)}
@@ -934,11 +1062,8 @@ export function GameScreen({
             className={`victory-popup${celebrationEpic ? ' victory-popup--epic' : ''}`}
             role="dialog"
             aria-modal="true"
-            aria-labelledby="victory-popup-title"
+            aria-label={t.soloComplete}
           >
-            <h2 id="victory-popup-title" className="victory-popup__title">
-              {t.soloComplete}
-            </h2>
             {epicBadgeLabel && <div className="victory-epic-badge">{epicBadgeLabel}</div>}
             {!celebrationEpic && isNewBest && <div className="new-best-badge">{t.newBest}</div>}
             <div className="victory-popup__score">{snapshotScore}</div>
@@ -960,6 +1085,30 @@ export function GameScreen({
               <div className="best-score-chip">
                 <span className="best-score-chip__label">{t.yourBest}</span>
                 <span className="best-score-chip__value">{snapshotPreviousBest}</span>
+              </div>
+            )}
+            {needsNamePrompt && (
+              <div className="victory-popup__name">
+                <label htmlFor="victory-name-input" className="victory-popup__name-label">
+                  {t.leaderboardNamePrompt}
+                </label>
+                <input
+                  ref={victoryNameInputRef}
+                  id="victory-name-input"
+                  className="victory-popup__name-input"
+                  type="text"
+                  value={victoryNameDraft}
+                  maxLength={20}
+                  placeholder={t.namePlaceholder}
+                  onChange={e => setVictoryNameDraft(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && victoryActionsEnabled) {
+                      handleVictoryAction('playAgain');
+                    }
+                  }}
+                  autoComplete="nickname"
+                  enterKeyHint="done"
+                />
               </div>
             )}
             <div className={`victory-popup__actions${victoryActionsEnabled ? '' : ' victory-popup__actions--locked'}`}>
