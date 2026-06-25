@@ -1889,10 +1889,19 @@ button {
 
 .target-word-letter--current {
   color: #fff;
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.1);
+  font-size: clamp(32px, 9vw, 48px);
+  padding: 6px 10px;
   box-shadow:
-    0 0 0 2px rgba(255, 255, 255, 0.9),
-    0 0 18px rgba(255, 255, 255, 0.18);
+    0 0 0 2px rgba(255, 255, 255, 0.95),
+    0 0 24px rgba(255, 255, 255, 0.28);
+  animation: current-letter-pulse 1s ease-in-out infinite;
+  z-index: 1;
+}
+
+@keyframes current-letter-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.12); }
 }
 
 .target-word-score {
@@ -1904,47 +1913,6 @@ button {
   padding: 3px 10px;
   letter-spacing: 0.5px;
   animation: pop 0.2s ease-out;
-}
-
-.target-word-report-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  margin-left: 2px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.04);
-  color: rgba(255, 255, 255, 0.45);
-  font-size: 14px;
-  font-weight: 800;
-  line-height: 1;
-  cursor: pointer;
-  flex-shrink: 0;
-  transition: color 0.15s ease, background 0.15s ease, border-color 0.15s ease;
-}
-
-.target-word-report-btn:hover:not(:disabled) {
-  color: rgba(255, 255, 255, 0.85);
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.22);
-}
-
-.target-word-report-btn:active:not(:disabled) {
-  transform: scale(0.94);
-}
-
-.target-word-report-btn:disabled:not(.target-word-report-btn--done) {
-  opacity: 0.5;
-  cursor: wait;
-}
-
-.target-word-report-btn--done {
-  color: #81c784;
-  border-color: rgba(129, 199, 132, 0.35);
-  background: rgba(129, 199, 132, 0.12);
-  cursor: default;
 }
 
 .target-word-banner--victory {
@@ -1998,6 +1966,12 @@ button {
   max-width: min(100%, 500px);
   max-height: 100%;
   margin: 0 auto;
+  /* Room for hint glow / ring on edge tiles (parents use overflow: hidden). */
+  padding: clamp(10px, 2.5vmin, 14px);
+}
+
+.arena.grid-arena {
+  overflow: visible;
 }
 
 .grid-arena--shuffling {
@@ -2714,7 +2688,7 @@ button {
   pointer-events: none;
   animation: hint-badge-pop 0.85s ease-in-out infinite;
   white-space: nowrap;
-  z-index: 1;
+  z-index: 2;
 }
 
 @keyframes hint-badge-pop {

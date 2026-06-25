@@ -5,8 +5,6 @@ import { FirebaseMultiplayerAdapter } from './adapters/FirebaseMultiplayerAdapte
 import { NoopMultiplayerAdapter } from './adapters/NoopMultiplayerAdapter';
 import { FirebaseLeaderboardAdapter } from './adapters/FirebaseLeaderboardAdapter';
 import { NoopLeaderboardAdapter } from './adapters/NoopLeaderboardAdapter';
-import { FirebaseWordReportAdapter } from './adapters/FirebaseWordReportAdapter';
-import { NoopWordReportAdapter } from './adapters/NoopWordReportAdapter';
 import { FirebaseAnalyticsAdapter } from './adapters/FirebaseAnalyticsAdapter';
 import { NoopAnalyticsAdapter } from './adapters/NoopAnalyticsAdapter';
 import { FirebaseFriendsAdapter } from './adapters/FirebaseFriendsAdapter';
@@ -48,7 +46,6 @@ const storage = new LocalStorageAdapter();
 const firebaseReady = isFirebaseConfigured();
 const multiplayer = firebaseReady ? new FirebaseMultiplayerAdapter() : new NoopMultiplayerAdapter();
 const leaderboard = firebaseReady ? new FirebaseLeaderboardAdapter() : new NoopLeaderboardAdapter();
-const wordReport = firebaseReady ? new FirebaseWordReportAdapter() : new NoopWordReportAdapter();
 const analytics = firebaseReady ? new FirebaseAnalyticsAdapter() : new NoopAnalyticsAdapter();
 const friends = firebaseReady ? new FirebaseFriendsAdapter() : new NoopFriendsAdapter();
 
@@ -152,7 +149,7 @@ export default function App() {
     [mp],
   );
 
-  const { gameState, logicalTime, gameClockNow, bestScore, hydrated, dispatchAction, setGamePaused } =
+  const { gameState, logicalTime, gameClockNow, bestScore, hydrated, dispatchAction } =
     useGameSession(
     clock,
     storage,
@@ -408,11 +405,6 @@ export default function App() {
     setAppMode('solo');
     dispatchAction({ type: 'RESET' });
   }, [isMultiplayer, mp, dispatchAction]);
-
-  const handleReportWord = useCallback(
-    (word: string, wordLanguage: 'tr' | 'en') => wordReport.reportWord(word, wordLanguage),
-    [],
-  );
 
   const handleChallengeFriend = useCallback(
     async (friend: FriendEntry) => {
@@ -878,8 +870,6 @@ export default function App() {
           username={username}
           onVictoryUsernameSave={isMultiplayer ? undefined : handleVictoryUsernameSave}
           onSoloVictoryDone={isMultiplayer ? undefined : handleSoloVictoryDone}
-          onReportWord={firebaseReady ? handleReportWord : undefined}
-          setGamePaused={setGamePaused}
         />
         {globalOverlays}
       </>

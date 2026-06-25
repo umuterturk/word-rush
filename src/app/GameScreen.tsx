@@ -5,7 +5,7 @@ import type { ClockPort, LeaderboardEntry } from '../ports';
 import { useI18n } from '../i18n';
 import { getPlayerWordDuration, formatDoubleBonusMultiplierLabel, findHintCellId, getCellById, isCorrectNextLetter, computeWordPoints, buildVictoryAlphabetGrid } from '../domain/gridUtils';
 import { createSeededRng } from '../domain/seededRng';
-import { upperByLanguage, upperWordByLanguage } from '../domain/turkishText';
+import { upperByLanguage } from '../domain/turkishText';
 import {
   SOLO_VICTORY_WAIT_MS,
   CELEBRATION_STAGGER_MS,
@@ -42,8 +42,6 @@ interface Props {
   username?: string;
   onVictoryUsernameSave?: (name: string, score: number) => void;
   onSoloVictoryDone?: (action: 'playAgain' | 'menu') => void;
-  onReportWord?: (word: string, language: 'tr' | 'en') => Promise<void>;
-  setGamePaused?: (paused: boolean) => void;
 }
 
 function formatTime(ms: number): string {
@@ -246,8 +244,6 @@ export function GameScreen({
   username = '',
   onVictoryUsernameSave,
   onSoloVictoryDone,
-  onReportWord,
-  setGamePaused,
 }: Props) {
   const { t, language } = useI18n();
   const player = gameState.players['local'];
@@ -304,9 +300,6 @@ export function GameScreen({
       : 0;
 
   const [submitFeedback, setSubmitFeedback] = useState<'valid' | 'invalid' | null>(null);
-  const [showReportConfirm, setShowReportConfirm] = useState(false);
-  const [reportedWordKey, setReportedWordKey] = useState<string | null>(null);
-  const [reportingWord, setReportingWord] = useState(false);
   const [errorTileId, setErrorTileId] = useState<string | null>(null);
   const [hintCellId, setHintCellId] = useState<string | null>(null);
   const [isShuffling, setIsShuffling] = useState(false);
@@ -594,42 +587,6 @@ export function GameScreen({
     }, 400);
   }, []);
 
-  const gameLanguage = gameState.language ?? 'tr';
-  const reportWordKey = `${targetWord}-${wordStartedAt}`;
-  const wordReported = reportedWordKey === reportWordKey;
-
-  const closeReportConfirm = useCallback(() => {
-    setShowReportConfirm(false);
-    setGamePaused?.(false);
-  }, [setGamePaused]);
-
-  const openReportConfirm = useCallback(() => {
-    if (!onReportWord || !targetWord || wordReported) return;
-    setShowReportConfirm(true);
-    setGamePaused?.(true);
-  }, [onReportWord, setGamePaused, targetWord, wordReported]);
-
-  const handleReportWord = useCallback(async () => {
-    if (!onReportWord || !targetWord || reportingWord || wordReported) return;
-    setReportingWord(true);
-    try {
-      await onReportWord(targetWord, gameLanguage);
-      setReportedWordKey(reportWordKey);
-      setShowReportConfirm(false);
-      setGamePaused?.(false);
-    } finally {
-      setReportingWord(false);
-    }
-  }, [
-    gameLanguage,
-    onReportWord,
-    reportWordKey,
-    reportingWord,
-    setGamePaused,
-    targetWord,
-    wordReported,
-  ]);
-
   const handleTapTile = useCallback(
     (id: string, e: React.PointerEvent) => {
       e.preventDefault();
@@ -686,46 +643,9 @@ export function GameScreen({
 
   return (
     <div
-      className={`screen game-screen${isMultiplayer ? ' game-screen--vs' : ''}${isSoloVictory ? ' game-screen--solo-victory' : ''}${isCelebrating ? ' game-screen--celebrating' : ''}${celebrationEpic ? ' game-screen--celebrating-epic' : ''}${showReportConfirm ? ' game-screen--paused' : ''}`}
+      className={`screen game-screen${isMultiplayer ? ' game-screen--vs' : ''}${isSoloVictory ? ' game-screen--solo-victory' : ''}${isCelebrating ? ' game-screen--celebrating' : ''}${celebrationEpic ? ' game-screen--celebrating-epic' : ''}`}
       style={{ '--celebration-pop-ms': `${CELEBRATION_TILE_POP_MS}ms` } as React.CSSProperties}
     >
-      {showReportConfirm && onReportWord && targetWord && (
-        <div className="confirm-overlay" onClick={closeReportConfirm}>
-          <div
-            className="confirm-popup"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="report-confirm-title"
-            onClick={e => e.stopPropagation()}
-          >
-            <h2 id="report-confirm-title" className="confirm-title">
-              {t.reportWordConfirmTitle}
-            </h2>
-            <p className="confirm-message">
-              {t.reportWordConfirmMessage.replace('{word}', upperWordByLanguage(targetWord, language))}
-            </p>
-            <div className="confirm-actions">
-              <button
-                type="button"
-                className="confirm-btn confirm-btn--danger"
-                onClick={() => void handleReportWord()}
-                disabled={reportingWord}
-              >
-                {t.reportWordConfirmYes}
-              </button>
-              <button
-                type="button"
-                className="confirm-btn confirm-btn--secondary"
-                onClick={closeReportConfirm}
-                disabled={reportingWord}
-              >
-                {t.reportWordConfirmNo}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {showResignConfirm && onQuit && (
         <div className="confirm-overlay" onClick={() => setShowResignConfirm(false)}>
           <div
@@ -820,7 +740,6 @@ export function GameScreen({
           </span>
         ) : isSoloVictory ? null : targetWord ? (
           <>
-            <span className="target-word-label">{t.find}</span>
             <span className="target-word-text">
               {Array.from(targetWord).map((ch, i) => {
                 const progressIndex = selectedIds.length;
@@ -839,18 +758,6 @@ export function GameScreen({
                   </span>
                 );
               })}
-              {onReportWord && (
-                <button
-                  type="button"
-                  className={`target-word-report-btn${wordReported ? ' target-word-report-btn--done' : ''}`}
-                  onClick={openReportConfirm}
-                  disabled={reportingWord || wordReported || showReportConfirm}
-                  aria-label={t.reportWordAria}
-                  title={wordReported ? t.reportWordDone : t.reportWord}
-                >
-                  {wordReported ? '✓' : '!'}
-                </button>
-              )}
             </span>
             {wordMatchesTarget && formedWord.length > 0 && (
               <span className="target-word-score">+{wordScore}</span>
