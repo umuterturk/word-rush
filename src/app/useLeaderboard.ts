@@ -1,17 +1,28 @@
 import { useCallback, useEffect, useState } from 'react';
+import { LEADERBOARD_TOP_COUNT } from '../domain/constants';
 import type { LeaderboardEntry, LeaderboardPort } from '../ports';
 
 export function useLeaderboard(leaderboard: LeaderboardPort) {
-  const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
+  const [allTimeEntries, setAllTimeEntries] = useState<LeaderboardEntry[]>([]);
+  const [todayEntries, setTodayEntries] = useState<LeaderboardEntry[]>([]);
+  const [weeklyEntries, setWeeklyEntries] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
 
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
-      const top = await leaderboard.fetchTop(3);
-      setEntries(top);
+      const [allTime, today, weekly] = await Promise.all([
+        leaderboard.fetchTop(LEADERBOARD_TOP_COUNT, 'all-time'),
+        leaderboard.fetchTop(LEADERBOARD_TOP_COUNT, 'today'),
+        leaderboard.fetchTop(LEADERBOARD_TOP_COUNT, 'weekly'),
+      ]);
+      setAllTimeEntries(allTime);
+      setTodayEntries(today);
+      setWeeklyEntries(weekly);
     } catch {
-      setEntries([]);
+      setAllTimeEntries([]);
+      setTodayEntries([]);
+      setWeeklyEntries([]);
     } finally {
       setLoading(false);
     }
@@ -21,5 +32,5 @@ export function useLeaderboard(leaderboard: LeaderboardPort) {
     void refresh();
   }, [refresh]);
 
-  return { entries, loading, refresh };
+  return { allTimeEntries, todayEntries, weeklyEntries, loading, refresh };
 }

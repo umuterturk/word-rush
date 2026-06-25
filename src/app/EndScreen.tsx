@@ -14,6 +14,7 @@ interface Props {
   opponentScore?: number;
   opponentName?: string;
   opponentWantsRematch?: boolean;
+  opponentResigned?: boolean;
   result?: MatchResult | null;
 }
 
@@ -26,6 +27,7 @@ export function EndScreen({
   opponentScore = 0,
   opponentName: _opponentName,
   opponentWantsRematch = false,
+  opponentResigned = false,
   result = null,
 }: Props) {
   const { t } = useI18n();
@@ -57,6 +59,9 @@ export function EndScreen({
             <h2 className={`end-title end-result ${RESULT_CLASSES[result]}`}>
               {RESULT_LABELS[result]}
             </h2>
+            {opponentResigned && (
+              <div className="end-resign-note">{t.opponentResigned}</div>
+            )}
             <div className="end-vs-scores">
               <div className="end-vs-player">
                 <span className="end-vs-label">{t.you}</span>
@@ -93,14 +98,16 @@ export function EndScreen({
         )}
 
         <div className={`end-buttons${actionsEnabled ? '' : ' end-buttons--locked'}`}>
-          <button
-            className="play-btn"
-            disabled={!actionsEnabled}
-            onPointerDown={e => e.preventDefault()}
-            onClick={onPlayAgain}
-          >
-            {isMultiplayer ? t.rematch : t.playAgain}
-          </button>
+          {!(isMultiplayer && opponentResigned) && (
+            <button
+              className="play-btn"
+              disabled={!actionsEnabled}
+              onPointerDown={e => e.preventDefault()}
+              onClick={onPlayAgain}
+            >
+              {isMultiplayer ? t.rematch : t.playAgain}
+            </button>
+          )}
           {onBackToMenu && (
             <button
               className="play-btn play-btn--secondary"

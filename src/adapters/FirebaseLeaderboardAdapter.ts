@@ -6,13 +6,26 @@ import {
   orderBy,
   query,
   serverTimestamp,
+  Timestamp,
+  where,
 } from 'firebase/firestore';
+import { getDayStartUtc, getWeekStartMondayUtc } from '../domain/weekStart';
 import {
   ensureAnonymousAuth,
   getFirebaseDb,
   LEADERBOARD_COLLECTION,
 } from '../firebase/config';
-import type { LeaderboardEntry, LeaderboardPort } from '../ports';
+import type { LeaderboardEntry, LeaderboardPeriod, LeaderboardPort } from '../ports';
+
+const PERIOD_FETCH_LIMIT = 50;
+
+function mapLeaderboardDoc(docSnap: { data: () => Record<string, unknown> }): LeaderboardEntry {
+  const data = docSnap.data();
+  return {
+    name: String(data.name ?? ''),
+    score: Number(data.score) || 0,
+  };
+}
 
 export class FirebaseLeaderboardAdapter implements LeaderboardPort {
   async submitScore(name: string, score: number): Promise<void> {
@@ -28,20 +41,34 @@ export class FirebaseLeaderboardAdapter implements LeaderboardPort {
     });
   }
 
-  async fetchTop(limitCount: number): Promise<LeaderboardEntry[]> {
+  async fetchTop(
+    limitCount: number,
+    period: LeaderboardPeriod = 'all-time',
+  ): Promise<LeaderboardEntry[]> {
     const db = getFirebaseDb();
+
+    if (period === 'all-time') {
+      const q = query(
+        collection(db, LEADERBOARD_COLLECTION),
+        orderBy('score', 'desc'),
+        limit(limitCount),
+      );
+      const snap = await getDocs(q);
+      return snap.docs.map(mapLeaderboardDoc);
+    }
+
+    const periodStart =
+      period === 'today' ? getDayStartUtc() : getWeekStartMondayUtc();
     const q = query(
       collection(db, LEADERBOARD_COLLECTION),
-      orderBy('score', 'desc'),
-      limit(limitCount),
+      where('createdAt', '>=', Timestamp.fromDate(periodStart)),
+      orderBy('createdAt', 'desc'),
+      limit(PERIOD_FETCH_LIMIT),
     );
     const snap = await getDocs(q);
-    return snap.docs.map(docSnap => {
-      const data = docSnap.data();
-      return {
-        name: String(data.name ?? ''),
-        score: Number(data.score) || 0,
-      };
-    });
+    return snap.docs
+      .map(mapLeaderboardDoc)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, limitCount);
   }
 }

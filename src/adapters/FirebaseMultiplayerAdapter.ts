@@ -11,7 +11,7 @@ import {
   updateDoc,
   where,
 } from 'firebase/firestore';
-import { MATCH_DURATION_MS } from '../domain/constants';
+import { MULTIPLAYER_MATCH_DURATION_MS } from '../domain/constants';
 import { ensureAnonymousAuth, getFirebaseDb, MATCHES_COLLECTION } from '../firebase/config';
 import type { MatchDoc, MatchSnapshot } from '../multiplayer/types';
 import type { MultiplayerPort } from '../ports';
@@ -55,11 +55,13 @@ function parseSnapshot(matchId: string, data: MatchDoc, localUid: string): Match
       opponentName: '',
       opponentScore: 0,
       opponentWantsRematch: false,
+      opponentResigned: false,
       incomingShuffleNonce: 0,
     };
   }
 
   const opponent = data.players[opponentUid];
+  const opponentResigned = Boolean(opponent.resigned);
   const result = {
     matchId,
     mode: data.mode,
@@ -72,6 +74,7 @@ function parseSnapshot(matchId: string, data: MatchDoc, localUid: string): Match
     opponentName: opponent.name,
     opponentScore: opponent.score,
     opponentWantsRematch: Boolean(data.rematchReady && data.rematchReady[opponentUid]),
+    opponentResigned,
     // An attack TARGETING us is one the opponent sent, i.e. keyed by their uid.
     incomingShuffleNonce: data.shuffleAttacks?.[opponentUid] ?? 0,
   };
@@ -204,7 +207,7 @@ export class FirebaseMultiplayerAdapter implements MultiplayerPort {
       inviteCode: null,
       status: 'waiting',
       seed: String(Date.now()),
-      matchDuration: MATCH_DURATION_MS,
+      matchDuration: MULTIPLAYER_MATCH_DURATION_MS,
       round: 1,
       createdBy: uid,
       createdAt: serverTimestamp(),
@@ -233,7 +236,7 @@ export class FirebaseMultiplayerAdapter implements MultiplayerPort {
       inviteCode,
       status: 'waiting',
       seed: String(Date.now()),
-      matchDuration: MATCH_DURATION_MS,
+      matchDuration: MULTIPLAYER_MATCH_DURATION_MS,
       round: 1,
       createdBy: uid,
       createdAt: serverTimestamp(),
@@ -369,7 +372,7 @@ export class FirebaseMultiplayerAdapter implements MultiplayerPort {
     this.startListening();
   }
 
-  async leave(): Promise<void> {
+  async leave(forfeit = false): Promise<void> {
     this.stopListening();
 
     if (!this.matchId || !this.localUid) {
@@ -388,6 +391,19 @@ export class FirebaseMultiplayerAdapter implements MultiplayerPort {
 
         const data = snap.data() as MatchDoc;
         const players = { ...data.players };
+        const playerCount = Object.keys(players).length;
+
+        if (forfeit && playerCount === 2 && data.status !== 'ended') {
+          // Forfeit: keep the player entry so their final score stays visible.
+          players[uid] = { ...players[uid], resigned: true };
+          transaction.update(ref, {
+            players,
+            status: 'ended',
+            resignedBy: uid,
+          });
+          return;
+        }
+
         delete players[uid];
 
         const remaining = Object.keys(players).length;
@@ -405,5 +421,9 @@ export class FirebaseMultiplayerAdapter implements MultiplayerPort {
     }
 
     this.matchId = null;
+  }
+
+  getActiveMatchId(): string | null {
+    return this.matchId;
   }
 }

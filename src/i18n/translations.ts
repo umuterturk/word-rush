@@ -13,7 +13,25 @@ export interface Translations {
   login: string;
   save: string;
   leaderboard: string;
+  leaderboardTop3: string;
+  leaderboardToday: string;
+  leaderboardTodayHome: string;
+  leaderboardWeekly: string;
+  leaderboardAllTime: string;
   leaderboardEmpty: string;
+  navHome: string;
+  navLeaderboard: string;
+  navFriends: string;
+  startNavLabel: string;
+  friendsEmpty: string;
+  friendsHint: string;
+  friendsRecord: string;
+  challenge: string;
+  challenging: string;
+  gameRequestTitle: string;
+  gameRequestMessage: string;
+  accept: string;
+  decline: string;
   play: string;
   easy: string;
   normal: string;
@@ -72,6 +90,7 @@ export interface Translations {
   youLose: string;
   tieGame: string;
   opponentWantsRematch: string;
+  opponentResigned: string;
   rematch: string;
   playAgain: string;
   menu: string;
@@ -133,8 +152,26 @@ export const translations: Record<Language, Translations> = {
     leaderboardNamePrompt: 'Enter your name to appear on the leaderboard.',
     login: 'LOGIN',
     save: 'SAVE',
-    leaderboard: 'TOP 3',
+    leaderboard: 'TOP 10',
+    leaderboardTop3: 'TOP 3',
+    leaderboardToday: 'TODAY',
+    leaderboardTodayHome: "TODAY'S RECORDS",
+    leaderboardWeekly: 'THIS WEEK',
+    leaderboardAllTime: 'ALL TIME',
     leaderboardEmpty: 'No scores yet',
+    navHome: 'Home',
+    navLeaderboard: 'Ranks',
+    navFriends: 'Friends',
+    startNavLabel: 'Main menu',
+    friendsEmpty: 'No friends yet. Play a private match and add your opponent.',
+    friendsHint: 'Same device/browser only — your profile stays on this device.',
+    friendsRecord: '{wins}W · {losses}L · {ties}T',
+    challenge: 'Challenge',
+    challenging: 'Sending…',
+    gameRequestTitle: 'GAME REQUEST',
+    gameRequestMessage: '{name} wants to play. Accept?',
+    accept: 'ACCEPT',
+    decline: 'DECLINE',
     play: 'PLAY',
     easy: 'EASY',
     normal: 'NORMAL',
@@ -185,7 +222,7 @@ export const translations: Record<Language, Translations> = {
     newBest: 'NEW BEST!',
     newBestHonor: 'You smashed your personal best of {prev} — {score} points of pure skill.',
     newBestHonorFirst: 'Your first mark on the board: {score} points. The journey begins.',
-    leaderboardHonor: 'A top-three score. The leaderboard will remember this one.',
+    leaderboardHonor: 'A top-ten score. The leaderboard will remember this one.',
     epicHonorBoth: 'New personal best and a top-three finish. Absolutely legendary.',
     point: 'point',
     points: 'points',
@@ -193,6 +230,7 @@ export const translations: Record<Language, Translations> = {
     youLose: 'YOU LOSE',
     tieGame: 'TIE GAME',
     opponentWantsRematch: 'OPPONENT WANTS A REMATCH!',
+    opponentResigned: 'OPPONENT RESIGNED',
     rematch: 'REMATCH',
     playAgain: 'PLAY AGAIN',
     menu: 'MENU',
@@ -251,8 +289,26 @@ export const translations: Record<Language, Translations> = {
     leaderboardNamePrompt: 'Skor tablosunda görünmek için adını gir.',
     login: 'GİRİŞ YAP',
     save: 'KAYDET',
-    leaderboard: 'İLK 3',
+    leaderboard: 'İLK 10',
+    leaderboardTop3: 'İLK 3',
+    leaderboardToday: 'BUGÜN',
+    leaderboardTodayHome: 'BUGÜNÜN REKORLARI',
+    leaderboardWeekly: 'BU HAFTA',
+    leaderboardAllTime: 'TÜM ZAMANLAR',
     leaderboardEmpty: 'Henüz skor yok',
+    navHome: 'Ana Sayfa',
+    navLeaderboard: 'Sıralama',
+    navFriends: 'Arkadaşlar',
+    startNavLabel: 'Ana menü',
+    friendsEmpty: 'Henüz arkadaş yok. Özel maç oyna ve rakibini ekle.',
+    friendsHint: 'Profilin bu cihazda kalır — farklı cihazda yeni hesap oluşur.',
+    friendsRecord: '{wins}G · {losses}M · {ties}B',
+    challenge: 'Davet Et',
+    challenging: 'Gönderiliyor…',
+    gameRequestTitle: 'OYUN DAVETİ',
+    gameRequestMessage: '{name} oynamak istiyor. Kabul ediyor musun?',
+    accept: 'KABUL',
+    decline: 'REDDET',
     play: 'OYNA',
     easy: 'KOLAY',
     normal: 'NORMAL',
@@ -303,7 +359,7 @@ export const translations: Record<Language, Translations> = {
     newBest: 'YENİ REKOR!',
     newBestHonor: 'Kişisel rekorunu ({prev}) geçtin — {score} puanla muhteşem bir oyun.',
     newBestHonorFirst: 'İlk skorun: {score} puan. Serüven şimdi başlıyor.',
-    leaderboardHonor: 'İlk üçe giren bir skor. Tablo bunu unutmayacak.',
+    leaderboardHonor: 'İlk ona giren bir skor. Tablo bunu unutmayacak.',
     epicHonorBoth: 'Yeni rekor ve ilk üç. Tam anlamıyla efsanevi.',
     point: 'puan',
     points: 'puan',
@@ -311,6 +367,7 @@ export const translations: Record<Language, Translations> = {
     youLose: 'KAYBETTİN',
     tieGame: 'BERABERE',
     opponentWantsRematch: 'RAKİP RÖVANŞ İSTİYOR!',
+    opponentResigned: 'RAKİP PES ETTİ',
     rematch: 'RÖVANŞ',
     playAgain: 'TEKRAR OYNA',
     menu: 'MENÜ',

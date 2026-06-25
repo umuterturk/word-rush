@@ -9,8 +9,11 @@ import { FirebaseWordReportAdapter } from './adapters/FirebaseWordReportAdapter'
 import { NoopWordReportAdapter } from './adapters/NoopWordReportAdapter';
 import { FirebaseAnalyticsAdapter } from './adapters/FirebaseAnalyticsAdapter';
 import { NoopAnalyticsAdapter } from './adapters/NoopAnalyticsAdapter';
+import { FirebaseFriendsAdapter } from './adapters/FirebaseFriendsAdapter';
+import { NoopFriendsAdapter } from './adapters/NoopFriendsAdapter';
 import { isFirebaseConfigured } from './firebase/config';
 import type { SoloDifficulty } from './domain/types';
+import type { FriendEntry } from './ports';
 import type { SavedGameSession } from './domain/savedGameSession';
 import { useGameSession, type GameSessionExtras } from './app/useGameSession';
 import { useMultiplayer } from './app/useMultiplayer';
@@ -24,9 +27,12 @@ import { ProfilePopup } from './app/ProfilePopup';
 import { MultiplayerLobbyScreen } from './app/MultiplayerLobbyScreen';
 import { FriendMatchOverlay } from './app/FriendMatchOverlay';
 import { RoomUnavailableScreen } from './app/RoomUnavailableScreen';
+import { GameRequestModal } from './app/GameRequestModal';
 import { useAppUpdate } from './app/useAppUpdate';
 import { usePlayerProfile } from './app/usePlayerProfile';
 import { useLeaderboard } from './app/useLeaderboard';
+import { useFriends } from './app/useFriends';
+import { useUserPresence } from './app/useUserPresence';
 import {
   clearJoinGameParam,
   clearSoloGameParam,
@@ -44,6 +50,7 @@ const multiplayer = firebaseReady ? new FirebaseMultiplayerAdapter() : new NoopM
 const leaderboard = firebaseReady ? new FirebaseLeaderboardAdapter() : new NoopLeaderboardAdapter();
 const wordReport = firebaseReady ? new FirebaseWordReportAdapter() : new NoopWordReportAdapter();
 const analytics = firebaseReady ? new FirebaseAnalyticsAdapter() : new NoopAnalyticsAdapter();
+const friends = firebaseReady ? new FirebaseFriendsAdapter() : new NoopFriendsAdapter();
 
 type AppMode = 'solo' | 'multiplayer';
 type LobbyMode = 'quick' | 'create' | 'join';
@@ -52,9 +59,26 @@ type FriendMatchPhase = 'creating' | 'sharing' | 'waiting' | 'found';
 export default function App() {
   const { t, language } = useI18n();
   const { username, saveUsername } = usePlayerProfile(storage);
-  const { entries: leaderboardEntries, loading: leaderboardLoading, refresh: refreshLeaderboard } =
-    useLeaderboard(leaderboard);
+  const {
+    allTimeEntries: leaderboardEntries,
+    todayEntries: todayLeaderboardEntries,
+    weeklyEntries: weeklyLeaderboardEntries,
+    loading: leaderboardLoading,
+    refresh: refreshLeaderboard,
+  } = useLeaderboard(leaderboard);
   const mp = useMultiplayer(multiplayer, firebaseReady);
+  const {
+    friendList,
+    loading: friendsLoading,
+    incomingRequest,
+    refresh: refreshFriends,
+    addFriend,
+    isFriend,
+    recordMatchResult,
+    sendChallenge,
+    acceptRequest,
+    declineRequest,
+  } = useFriends(friends, firebaseReady);
 
   const [appMode, setAppMode] = useState<AppMode>('solo');
   const [lobbyMode, setLobbyMode] = useState<LobbyMode>('quick');
@@ -67,6 +91,7 @@ export default function App() {
   const [shuffleSignal, setShuffleSignal] = useState(0);
   const [endProfileDismissed, setEndProfileDismissed] = useState(false);
   const [loadedWordLanguage, setLoadedWordLanguage] = useState<WordLanguage | null>(null);
+  const [challengingUid, setChallengingUid] = useState<string | null>(null);
 
   const activeMatchIdRef = useRef<string | undefined>(undefined);
   const prevScoreRef = useRef(0);
@@ -75,6 +100,8 @@ export default function App() {
   const lastShuffleNonceRef = useRef(0);
   const matchEndedAtRef = useRef(0);
   const wasPlayingRef = useRef(false);
+  const rivalRecordedKeyRef = useRef<string | null>(null);
+  const addFriendCheckedRef = useRef<string | null>(null);
 
   const isMultiplayer = appMode === 'multiplayer';
 
@@ -125,6 +152,16 @@ export default function App() {
       getSessionExtras,
       onRestored: handleSessionRestored,
     },
+  );
+
+  const presenceMatchId = isMultiplayer ? mp.matchConfig?.matchId : undefined;
+
+  useUserPresence(
+    friends,
+    username,
+    gameState.matchStatus === 'playing',
+    presenceMatchId,
+    firebaseReady,
   );
 
   const isMainMenu = gameState.matchStatus === 'idle' && !showCountdown;
@@ -189,6 +226,7 @@ export default function App() {
         mode: isMultiplayer ? 'multiplayer' : 'solo',
         language,
         difficulty: isMultiplayer ? undefined : soloDifficulty,
+        matchDuration: isMultiplayer ? mp.matchConfig?.matchDuration : undefined,
       });
       setShowCountdown(false);
       if (isMultiplayer) {
@@ -202,7 +240,7 @@ export default function App() {
       prevScoreRef.current = 0;
       lastShuffleNonceRef.current = 0;
     },
-    [dispatchAction, isMultiplayer, language, mp, soloDifficulty],
+    [dispatchAction, isMultiplayer, language, mp.matchConfig?.matchDuration, mp, soloDifficulty],
   );
 
   const handlePlaySolo = useCallback((difficulty: SoloDifficulty) => {
@@ -298,6 +336,9 @@ export default function App() {
     setGameUnavailable(false);
     setFriendMatchPhase(null);
     setInviteCopied(false);
+    setChallengingUid(null);
+    rivalRecordedKeyRef.current = null;
+    addFriendCheckedRef.current = null;
     void mp.reset();
     setAppMode('solo');
     dispatchAction({ type: 'RESET' });
@@ -341,7 +382,7 @@ export default function App() {
     clearSoloGameParam();
     clearJoinGameParam();
     if (isMultiplayer) {
-      void mp.reset();
+      void mp.reset(true);
     }
     roundRef.current = 0;
     setIsRematching(false);
@@ -355,6 +396,89 @@ export default function App() {
   const handleReportWord = useCallback(
     (word: string, wordLanguage: 'tr' | 'en') => wordReport.reportWord(word, wordLanguage),
     [],
+  );
+
+  const handleChallengeFriend = useCallback(
+    async (friend: FriendEntry) => {
+      setChallengingUid(friend.uid);
+      setGameUnavailable(false);
+      analytics.track('friend_challenge_sent');
+      setAppMode('multiplayer');
+      setLobbyMode('create');
+      setFriendMatchPhase('waiting');
+
+      try {
+        const code = await mp.createRoom();
+        const matchId = multiplayer.getActiveMatchId();
+        if (!code || !matchId) {
+          setFriendMatchPhase(null);
+          setAppMode('solo');
+          return;
+        }
+        await sendChallenge(friend.uid, matchId, code);
+      } catch {
+        setFriendMatchPhase(null);
+        void mp.cancel();
+        setAppMode('solo');
+      } finally {
+        setChallengingUid(null);
+      }
+    },
+    [mp, sendChallenge],
+  );
+
+  const handleAcceptGameRequest = useCallback(async () => {
+    const request = incomingRequest;
+    if (!request) return;
+
+    if (showCountdown) {
+      setShowCountdown(false);
+      dispatchAction({ type: 'RESET' });
+    } else if (gameState.matchStatus === 'playing') {
+      handleQuitGame();
+    } else if (gameState.matchStatus === 'ended') {
+      handleBackToMenu();
+    }
+
+    await acceptRequest(request.id);
+    await mp.reset();
+    setAppMode('multiplayer');
+    setLobbyMode('join');
+    setGameUnavailable(false);
+    analytics.track('friend_challenge_accepted');
+    try {
+      await mp.joinRoom(request.inviteCode);
+    } catch {
+      setGameUnavailable(true);
+    }
+  }, [
+    incomingRequest,
+    showCountdown,
+    gameState.matchStatus,
+    dispatchAction,
+    handleQuitGame,
+    handleBackToMenu,
+    acceptRequest,
+    mp,
+  ]);
+
+  const handleDeclineGameRequest = useCallback(async () => {
+    const request = incomingRequest;
+    if (!request) return;
+    await declineRequest(request.id);
+    analytics.track('friend_challenge_declined');
+  }, [incomingRequest, declineRequest]);
+
+  const globalOverlays = (
+    <>
+      {incomingRequest && (
+        <GameRequestModal
+          request={incomingRequest}
+          onAccept={() => void handleAcceptGameRequest()}
+          onDecline={() => void handleDeclineGameRequest()}
+        />
+      )}
+    </>
   );
 
   useEffect(() => {
@@ -447,6 +571,13 @@ export default function App() {
     }
   }, [isMultiplayer, mp.round, dispatchAction]);
 
+  // End the local game when the opponent resigns mid-match.
+  useEffect(() => {
+    if (!isMultiplayer || !mp.opponentResigned) return;
+    if (gameState.matchStatus !== 'playing') return;
+    dispatchAction({ type: 'END_MATCH', at: clock.now() });
+  }, [isMultiplayer, mp.opponentResigned, gameState.matchStatus, dispatchAction]);
+
   // If the opponent leaves while we're waiting for a rematch, bail to the menu.
   useEffect(() => {
     if (isRematching && isMultiplayer && mp.matchConfig && !mp.opponentPresent) {
@@ -496,6 +627,70 @@ export default function App() {
     }
   }, [gameState.matchStatus]);
 
+  useEffect(() => {
+    if (gameState.matchStatus !== 'ended' || !isMultiplayer) return;
+
+    const opponentUid = mp.matchConfig?.opponentUid;
+    const matchId = mp.matchConfig?.matchId;
+    if (!opponentUid || !matchId) return;
+
+    const key = `${matchId}-r${mp.round}`;
+    if (rivalRecordedKeyRef.current === key) return;
+    rivalRecordedKeyRef.current = key;
+
+    const score = gameState.players['local']?.score ?? 0;
+    const result = mp.getResult(score);
+    if (!result) return;
+
+    void recordMatchResult(opponentUid, mp.opponentName, result, matchId).then(() =>
+      refreshFriends(),
+    );
+  }, [
+    gameState.matchStatus,
+    gameState.players,
+    isMultiplayer,
+    mp.matchConfig?.opponentUid,
+    mp.matchConfig?.matchId,
+    mp.opponentName,
+    mp.round,
+    mp,
+    recordMatchResult,
+    refreshFriends,
+  ]);
+
+  useEffect(() => {
+    if (gameState.matchStatus !== 'ended' || !isMultiplayer) return;
+    if (lobbyMode !== 'create' && lobbyMode !== 'join') return;
+
+    const opponentUid = mp.matchConfig?.opponentUid;
+    const matchId = mp.matchConfig?.matchId;
+    if (!opponentUid || !matchId) return;
+
+    const checkKey = `${matchId}-${opponentUid}`;
+    if (addFriendCheckedRef.current === checkKey) return;
+    addFriendCheckedRef.current = checkKey;
+
+    void isFriend(opponentUid).then(already => {
+      if (already) return;
+      const opponentName =
+        mp.opponentName || `Player ${opponentUid.slice(-4).toUpperCase()}`;
+      void addFriend(opponentUid, opponentName).then(() => {
+        analytics.track('friend_added');
+        void refreshFriends();
+      });
+    });
+  }, [
+    gameState.matchStatus,
+    isMultiplayer,
+    lobbyMode,
+    mp.matchConfig?.opponentUid,
+    mp.matchConfig?.matchId,
+    mp.opponentName,
+    isFriend,
+    addFriend,
+    refreshFriends,
+  ]);
+
   const localScore = gameState.players['local']?.score ?? 0;
   const qualifiesForLeaderboardNamePrompt =
     localScore > 0 &&
@@ -525,10 +720,13 @@ export default function App() {
 
   if (gameUnavailable) {
     return (
-      <RoomUnavailableScreen
-        onInviteFriend={handleCreateRoom}
-        onMainMenu={handleDismissUnavailable}
-      />
+      <>
+        <RoomUnavailableScreen
+          onInviteFriend={handleCreateRoom}
+          onMainMenu={handleDismissUnavailable}
+        />
+        {globalOverlays}
+      </>
     );
   }
 
@@ -539,25 +737,31 @@ export default function App() {
       (lobbyMode !== 'create' && lobbyMode !== 'join' && (mp.phase === 'searching' || mp.phase === 'waiting')))
   ) {
     return (
-      <MultiplayerLobbyScreen
-        mode={lobbyMode}
-        opponentName={mp.opponentName}
-        error={mp.error}
-        isSearching={isRematching || mp.phase === 'searching'}
-        isRematch={isRematching}
-        onCancel={handleCancelLobby}
-        onJoin={handleJoinRoom}
-      />
+      <>
+        <MultiplayerLobbyScreen
+          mode={lobbyMode}
+          opponentName={mp.opponentName}
+          error={mp.error}
+          isSearching={isRematching || mp.phase === 'searching'}
+          isRematch={isRematching}
+          onCancel={handleCancelLobby}
+          onJoin={handleJoinRoom}
+        />
+        {globalOverlays}
+      </>
     );
   }
 
   if (showCountdown) {
     return (
-      <CountdownScreen
-        onComplete={handleCountdownComplete}
-        opponentName={isMultiplayer ? mp.opponentName : undefined}
-        paused={!wordsReady}
-      />
+      <>
+        <CountdownScreen
+          onComplete={handleCountdownComplete}
+          opponentName={isMultiplayer ? mp.opponentName : undefined}
+          paused={!wordsReady}
+        />
+        {globalOverlays}
+      </>
     );
   }
 
@@ -574,11 +778,18 @@ export default function App() {
           bestScore={bestScore}
           username={username}
           onSaveUsername={saveUsername}
-          leaderboard={leaderboardEntries}
+          weeklyLeaderboard={weeklyLeaderboardEntries}
+          todayLeaderboard={todayLeaderboardEntries}
+          allTimeLeaderboard={leaderboardEntries}
           leaderboardLoading={leaderboardLoading}
           multiplayerAvailable={firebaseReady}
+          friendsAvailable={firebaseReady}
+          friends={friendList}
+          friendsLoading={friendsLoading}
+          challengingUid={challengingUid}
           onPlaySolo={handlePlaySolo}
           onPlayWithFriend={handleCreateRoom}
+          onChallengeFriend={handleChallengeFriend}
         />
         {showFriendMatchOverlay && friendMatchPhase && (
           <FriendMatchOverlay
@@ -588,6 +799,7 @@ export default function App() {
             onCancel={handleCancelLobby}
           />
         )}
+        {globalOverlays}
       </>
     );
   }
@@ -596,27 +808,30 @@ export default function App() {
     if (!wordsReady) return null;
 
     return (
-      <GameScreen
-        gameState={gameState}
-        logicalTime={logicalTime}
-        gameClockNow={gameClockNow}
-        onDispatch={dispatchAction}
-        clock={clock}
-        isMultiplayer={isMultiplayer}
-        opponentScore={mp.opponentScore}
-        opponentName={mp.opponentName}
-        onScoreChange={handleScoreChange}
-        onShuffle={handleShuffleAttack}
-        shuffleSignal={shuffleSignal}
-        onQuit={handleQuitGame}
-        bestScore={bestScore}
-        leaderboardEntries={leaderboardEntries}
-        username={username}
-        onVictoryUsernameSave={isMultiplayer ? undefined : handleVictoryUsernameSave}
-        onSoloVictoryDone={isMultiplayer ? undefined : handleSoloVictoryDone}
-        onReportWord={firebaseReady ? handleReportWord : undefined}
-        setGamePaused={setGamePaused}
-      />
+      <>
+        <GameScreen
+          gameState={gameState}
+          logicalTime={logicalTime}
+          gameClockNow={gameClockNow}
+          onDispatch={dispatchAction}
+          clock={clock}
+          isMultiplayer={isMultiplayer}
+          opponentScore={mp.opponentScore}
+          opponentName={mp.opponentName}
+          onScoreChange={handleScoreChange}
+          onShuffle={handleShuffleAttack}
+          shuffleSignal={shuffleSignal}
+          onQuit={handleQuitGame}
+          bestScore={bestScore}
+          leaderboardEntries={leaderboardEntries}
+          username={username}
+          onVictoryUsernameSave={isMultiplayer ? undefined : handleVictoryUsernameSave}
+          onSoloVictoryDone={isMultiplayer ? undefined : handleSoloVictoryDone}
+          onReportWord={firebaseReady ? handleReportWord : undefined}
+          setGamePaused={setGamePaused}
+        />
+        {globalOverlays}
+      </>
     );
   }
 
@@ -631,6 +846,7 @@ export default function App() {
         opponentScore={mp.opponentScore}
         opponentName={mp.opponentName}
         opponentWantsRematch={isMultiplayer && mp.opponentWantsRematch}
+        opponentResigned={isMultiplayer && mp.opponentResigned}
         result={isMultiplayer ? mp.getResult(gameState.players['local']?.score ?? 0) : null}
       />
       {showEndProfilePopup && (
@@ -641,6 +857,7 @@ export default function App() {
           onClose={() => setEndProfileDismissed(true)}
         />
       )}
+      {globalOverlays}
     </>
   );
 }

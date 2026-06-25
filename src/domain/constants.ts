@@ -1,3 +1,9 @@
+/** Number of players shown on weekly and all-time leaderboards. */
+export const LEADERBOARD_TOP_COUNT = 10;
+
+/** Today's top scores preview shown on the home screen. */
+export const LEADERBOARD_HOME_PREVIEW_COUNT = 3;
+
 export const MIN_WORD_LENGTH = 3;
 export const MAX_WORD_LENGTH = 8;
 /** Selection cap = max word length. */
@@ -6,6 +12,9 @@ export const MAX_BUFFER_SIZE = MAX_WORD_LENGTH;
 import type { MatchMode, SoloDifficulty } from './types';
 
 export const MATCH_DURATION_MS = 120_000;
+
+/** Shorter multiplayer rounds in dev for faster iteration. */
+export const MULTIPLAYER_MATCH_DURATION_MS = import.meta.env.DEV ? 30_000 : MATCH_DURATION_MS;
 
 /** Solo: board refills allowed after correct words. */
 export const SOLO_REFILL_LIMIT = 10;

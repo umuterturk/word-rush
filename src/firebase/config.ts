@@ -27,6 +27,18 @@ export const LEADERBOARD_COLLECTION =
 export const WORD_REPORTS_COLLECTION =
   import.meta.env.VITE_FIREBASE_WORD_REPORTS_COLLECTION ?? 'word-rush-word-reports';
 
+export const USERS_COLLECTION =
+  import.meta.env.VITE_FIREBASE_USERS_COLLECTION ?? 'word-rush-users';
+
+export const FRIEND_RIVALS_COLLECTION =
+  import.meta.env.VITE_FIREBASE_FRIEND_RIVALS_COLLECTION ?? 'word-rush-friend-rivals';
+
+export const GAME_REQUESTS_COLLECTION =
+  import.meta.env.VITE_FIREBASE_GAME_REQUESTS_COLLECTION ?? 'word-rush-game-requests';
+
+/** Incoming game requests older than this are ignored client-side. */
+export const GAME_REQUEST_TTL_MS = 5 * 60 * 1000;
+
 export function isFirebaseConfigured(): boolean {
   return true;
 }

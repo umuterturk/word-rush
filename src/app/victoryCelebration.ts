@@ -1,4 +1,5 @@
 import type { LeaderboardEntry } from '../ports';
+import { LEADERBOARD_TOP_COUNT } from '../domain/constants';
 
 export const SOLO_VICTORY_WAIT_MS = 300;
 export const CELEBRATION_EXTRA_MS = 500;
@@ -11,10 +12,10 @@ export function brokeLocalRecord(score: number, previousBest: number): boolean {
   return score > 0 && score > previousBest;
 }
 
-/** True when the score would place on the current top-3 board. */
+/** True when the score would place on the current leaderboard. */
 export function wouldQualifyForLeaderboard(score: number, entries: LeaderboardEntry[]): boolean {
   if (score <= 0) return false;
-  if (entries.length < 3) return true;
+  if (entries.length < LEADERBOARD_TOP_COUNT) return true;
   return score >= entries[entries.length - 1].score;
 }
 
@@ -28,27 +29,27 @@ export function isEpicVictoryCelebration(
   return brokeLocalRecord(score, previousBest) || wouldQualifyForLeaderboard(score, leaderboardEntries);
 }
 
-/** Dev preview: high enough to beat personal best and top-3 when the real score is 0. */
+/** Dev preview: high enough to beat personal best and the leaderboard cutoff when the real score is 0. */
 export function devVictoryPreviewScore(
   storedBest: number,
   leaderboardEntries: LeaderboardEntry[],
 ): number {
   const beatStoredBest = Math.max(storedBest + 42, 128);
-  if (leaderboardEntries.length >= 3) {
-    const thirdPlace = leaderboardEntries[leaderboardEntries.length - 1].score;
-    return Math.max(beatStoredBest, thirdPlace + 15);
+  if (leaderboardEntries.length >= LEADERBOARD_TOP_COUNT) {
+    const cutoff = leaderboardEntries[leaderboardEntries.length - 1].score;
+    return Math.max(beatStoredBest, cutoff + 15);
   }
   return beatStoredBest;
 }
 
-/** Dev preview: top-3 qualifying score that may stay below a high personal best. */
+/** Dev preview: leaderboard-qualifying score that may stay below a high personal best. */
 export function devLeaderboardPreviewScore(
   storedBest: number,
   leaderboardEntries: LeaderboardEntry[],
 ): number {
-  if (leaderboardEntries.length >= 3) {
-    const thirdPlace = leaderboardEntries[leaderboardEntries.length - 1].score;
-    return thirdPlace + 15;
+  if (leaderboardEntries.length >= LEADERBOARD_TOP_COUNT) {
+    const cutoff = leaderboardEntries[leaderboardEntries.length - 1].score;
+    return cutoff + 15;
   }
   return Math.max(128, storedBest > 0 ? storedBest - 1 : 128);
 }

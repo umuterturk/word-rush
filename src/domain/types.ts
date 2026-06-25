@@ -63,7 +63,15 @@ export interface GameState {
 }
 
 export type GameAction =
-  | { type: 'START_MATCH'; seed: string; at: number; mode: MatchMode; language?: GameLanguage; difficulty?: SoloDifficulty }
+  | {
+      type: 'START_MATCH';
+      seed: string;
+      at: number;
+      mode: MatchMode;
+      language?: GameLanguage;
+      difficulty?: SoloDifficulty;
+      matchDuration?: number;
+    }
   | { type: 'END_MATCH'; at: number }
   | { type: 'RESET' }
   | { type: 'SELECT_LETTER'; playerId: string; letterId: string }

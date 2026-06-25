@@ -1,5 +1,6 @@
 import type { MatchSnapshot } from '../multiplayer/types';
 import type { SavedGameSession } from '../domain/savedGameSession';
+import type { FriendEntry, GameRequest } from '../friends/types';
 
 /**
  * Abstracts wall-clock time and the animation frame scheduler.
@@ -33,9 +34,11 @@ export interface LeaderboardEntry {
   score: number;
 }
 
+export type LeaderboardPeriod = 'all-time' | 'weekly' | 'today';
+
 export interface LeaderboardPort {
   submitScore(name: string, score: number): Promise<void>;
-  fetchTop(limit: number): Promise<LeaderboardEntry[]>;
+  fetchTop(limit: number, period?: LeaderboardPeriod): Promise<LeaderboardEntry[]>;
 }
 
 /**
@@ -55,7 +58,9 @@ export interface MultiplayerPort {
   requestRematch(): Promise<void>;
   /** Reconnect to an in-progress match after a page reload. */
   rejoinMatch(matchId: string): Promise<void>;
-  leave(): Promise<void>;
+  leave(forfeit?: boolean): Promise<void>;
+  /** Active match document id, if any. */
+  getActiveMatchId(): string | null;
 }
 
 /**
@@ -67,4 +72,25 @@ export interface AnalyticsPort {
 
 export interface WordReportPort {
   reportWord(word: string, language: 'tr' | 'en'): Promise<void>;
+}
+
+export type { FriendEntry, GameRequest, GameRequestStatus } from '../friends/types';
+
+export interface FriendsPort {
+  syncProfile(displayName: string): Promise<void>;
+  setPresence(inMatch: boolean, matchId?: string): Promise<void>;
+  listFriends(): Promise<FriendEntry[]>;
+  addFriend(friendUid: string, friendDisplayName: string): Promise<void>;
+  isFriend(friendUid: string): Promise<boolean>;
+  recordMatchResult(
+    opponentUid: string,
+    opponentName: string,
+    result: 'win' | 'lose' | 'tie',
+    matchId?: string,
+  ): Promise<void>;
+  sendGameRequest(toUid: string, matchId: string, inviteCode: string): Promise<GameRequest>;
+  subscribeIncomingRequests(handler: (request: GameRequest | null) => void): () => void;
+  acceptGameRequest(requestId: string): Promise<void>;
+  declineGameRequest(requestId: string): Promise<void>;
+  cancelOutgoingRequest(requestId: string): Promise<void>;
 }

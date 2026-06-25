@@ -146,7 +146,7 @@ describe('refillEmptySlots', () => {
     for (let seed = 0; seed < 20; seed++) {
       const rng = createSeededRng(`sim-${seed}`);
       let { columns, wordPool } = fillGrid(rng);
-      let usedWords = [...wordPool];
+      const usedWords = [...wordPool];
       let wordsCompleted = 0;
 
       for (let round = 0; round < 12; round++) {

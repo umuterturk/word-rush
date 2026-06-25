@@ -58,7 +58,10 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         matchMode: action.mode,
         language,
         matchStartedAt: action.at,
-        matchDuration: MATCH_DURATION_MS,
+        matchDuration:
+          action.mode === 'multiplayer' && action.matchDuration != null
+            ? action.matchDuration
+            : MATCH_DURATION_MS,
         seed: action.seed,
         soloDifficulty: difficulty,
         gridCols: grid.cols,

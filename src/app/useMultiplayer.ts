@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { MatchConfig, MatchPhase, MatchResult, MatchSnapshot } from '../multiplayer/types';
+import { resolveMatchResult } from '../multiplayer/types';
 import type { MultiplayerPort } from '../ports';
 
 interface MultiplayerSession {
@@ -8,6 +9,7 @@ interface MultiplayerSession {
   opponentScore: number;
   opponentName: string;
   opponentWantsRematch: boolean;
+  opponentResigned: boolean;
   opponentPresent: boolean;
   round: number;
   inviteCode: string | null;
@@ -26,7 +28,7 @@ interface MultiplayerSession {
   markPlaying: () => void;
   markEnded: () => void;
   getResult: (localScore: number) => MatchResult | null;
-  reset: () => Promise<void>;
+  reset: (forfeit?: boolean) => Promise<void>;
 }
 
 function snapshotToConfig(snapshot: MatchSnapshot): MatchConfig {
@@ -49,6 +51,7 @@ export function useMultiplayer(multiplayer: MultiplayerPort, available: boolean)
   const [opponentScore, setOpponentScore] = useState(0);
   const [opponentName, setOpponentName] = useState('');
   const [opponentWantsRematch, setOpponentWantsRematch] = useState(false);
+  const [opponentResigned, setOpponentResigned] = useState(false);
   const [opponentPresent, setOpponentPresent] = useState(false);
   const [round, setRound] = useState(0);
   const [inviteCode, setInviteCode] = useState<string | null>(null);
@@ -72,7 +75,8 @@ export function useMultiplayer(multiplayer: MultiplayerPort, available: boolean)
       setOpponentScore(snapshot.opponentScore);
       setOpponentName(snapshot.opponentName);
       setOpponentWantsRematch(snapshot.opponentWantsRematch);
-      setOpponentPresent(Boolean(snapshot.opponentUid));
+      setOpponentResigned(snapshot.opponentResigned);
+      setOpponentPresent(Boolean(snapshot.opponentUid) && !snapshot.opponentResigned);
       setRound(snapshot.round);
       setIncomingShuffleNonce(snapshot.incomingShuffleNonce);
       if (snapshot.inviteCode) setInviteCode(snapshot.inviteCode);
@@ -81,6 +85,7 @@ export function useMultiplayer(multiplayer: MultiplayerPort, available: boolean)
       console.log('[useMultiplayer] matchReady=', matchReady);
       setPhase(prev => {
         const next = (() => {
+          if (snapshot.opponentResigned && prev === 'playing') return 'ended';
           if (prev === 'playing' || prev === 'ended') return prev;
           if (matchReady) return 'ready';
           if (prev === 'searching' || prev === 'waiting') return 'waiting';
@@ -147,6 +152,7 @@ export function useMultiplayer(multiplayer: MultiplayerPort, available: boolean)
     setOpponentScore(0);
     setOpponentName('');
     setOpponentWantsRematch(false);
+    setOpponentResigned(false);
     setOpponentPresent(false);
     setRound(0);
     setInviteCode(null);
@@ -180,26 +186,26 @@ export function useMultiplayer(multiplayer: MultiplayerPort, available: boolean)
     // non-zero opponent score into the new game.
     setOpponentScore(0);
     setOpponentWantsRematch(false);
+    setOpponentResigned(false);
     setPhase('playing');
   }, []);
   const markEnded = useCallback(() => setPhase('ended'), []);
 
   const getResult = useCallback(
     (localScore: number): MatchResult | null => {
-      if (localScore > opponentScore) return 'win';
-      if (localScore < opponentScore) return 'lose';
-      return 'tie';
+      return resolveMatchResult(localScore, opponentScore, opponentResigned);
     },
-    [opponentScore],
+    [opponentScore, opponentResigned],
   );
 
-  const reset = useCallback(async () => {
-    await multiplayer.leave();
+  const reset = useCallback(async (forfeit = false) => {
+    await multiplayer.leave(forfeit);
     setPhase('idle');
     setMatchConfig(null);
     setOpponentScore(0);
     setOpponentName('');
     setOpponentWantsRematch(false);
+    setOpponentResigned(false);
     setOpponentPresent(false);
     setRound(0);
     setInviteCode(null);
@@ -214,6 +220,7 @@ export function useMultiplayer(multiplayer: MultiplayerPort, available: boolean)
       opponentScore,
       opponentName,
       opponentWantsRematch,
+      opponentResigned,
       opponentPresent,
       round,
       inviteCode,
@@ -241,6 +248,7 @@ export function useMultiplayer(multiplayer: MultiplayerPort, available: boolean)
       round,
       opponentName,
       opponentWantsRematch,
+      opponentResigned,
       inviteCode,
       error,
       available,
