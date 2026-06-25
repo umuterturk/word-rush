@@ -171,21 +171,29 @@ export default function App() {
     multiplayer.setDisplayName(username);
   }, [username]);
 
-  const deepLinkHandled = useRef(false);
   useEffect(() => {
     analytics.track('app_open');
+  }, []);
 
-    // Handle deep link: ?join=CODE (only once)
-    if (deepLinkHandled.current) return;
+  const deepLinkHandled = useRef(false);
+  useEffect(() => {
+    // Handle the ?join=CODE deep link exactly once, on first load. We must
+    // claim the guard *before* reading the URL: once a match starts, our own
+    // game writes ?join=<our code> into the URL (see setJoinGameParam below),
+    // and this effect re-runs whenever `mp` changes (e.g. on every score
+    // snapshot). Without the early guard the creator would re-read that param
+    // and try to join their own already-started room, which fails and trips
+    // the GAME UNAVAILABLE screen.
+    if (deepLinkHandled.current || !firebaseReady) return;
+    deepLinkHandled.current = true;
+
     const joinCode = getJoinCodeFromUrl();
-    if (joinCode && firebaseReady) {
-      deepLinkHandled.current = true;
-      roundRef.current = 0;
-      setAppMode('multiplayer');
-      setLobbyMode('join');
-      analytics.track('mp_room_joined', { via: 'deep_link' });
-      void mp.joinRoom(joinCode);
-    }
+    if (!joinCode) return;
+    roundRef.current = 0;
+    setAppMode('multiplayer');
+    setLobbyMode('join');
+    analytics.track('mp_room_joined', { via: 'deep_link' });
+    void mp.joinRoom(joinCode);
   }, [mp]);
 
   useEffect(() => {

@@ -257,8 +257,8 @@ export const translations: Record<Language, Translations> = {
     cancel: 'CANCEL',
 
     // Share
-    shareTitle: 'Word Rush 1v1',
-    shareText: 'Join my game!',
+    shareTitle: 'YazYaz — 1v1 Challenge',
+    shareText: "Think you can beat me? Prove it. 😏🔥",
 
     // Install
     installEyebrow: 'GET THE APP',
@@ -394,8 +394,8 @@ export const translations: Record<Language, Translations> = {
     cancel: 'İPTAL',
 
     // Share
-    shareTitle: 'YazYaz 1\'e 1',
-    shareText: 'Oyunuma katıl!',
+    shareTitle: 'YazYaz — 1\'e 1 Meydan Okuma',
+    shareText: 'Beni geçebileceğini mi sanıyorsun? Hadi göster kendini. 😏🔥',
 
     // Install
     installEyebrow: 'UYGULAMAYI İNDİR',
