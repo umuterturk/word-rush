@@ -5,7 +5,6 @@ type LobbyMode = 'quick' | 'create' | 'join';
 
 interface Props {
   mode: LobbyMode;
-  opponentName: string;
   error: string | null;
   isSearching?: boolean;
   isRematch?: boolean;
@@ -15,7 +14,6 @@ interface Props {
 
 export function MultiplayerLobbyScreen({
   mode,
-  opponentName,
   error,
   isSearching = false,
   isRematch = false,
@@ -24,9 +22,6 @@ export function MultiplayerLobbyScreen({
 }: Props) {
   const [joinCode, setJoinCode] = useState('');
   const { t } = useI18n();
-
-  const isWaiting = mode === 'quick';
-  const opponentFound = Boolean(opponentName);
 
   return (
     <div className="screen lobby-screen">
@@ -37,14 +32,6 @@ export function MultiplayerLobbyScreen({
             <div className="lobby-spinner" aria-hidden="true" />
             <h2 className="lobby-title">{t.waitingForOpponent}</h2>
             <p className="lobby-subtitle">{t.challengingAgain}</p>
-          </>
-        )}
-
-        {!isRematch && mode === 'quick' && (
-          <>
-            <div className="lobby-spinner" aria-hidden="true" />
-            <h2 className="lobby-title">{t.findingOpponent}</h2>
-            <p className="lobby-subtitle">{t.searchingForRival}</p>
           </>
         )}
 
@@ -77,12 +64,6 @@ export function MultiplayerLobbyScreen({
             <h2 className="lobby-title">{t.joiningRoom}</h2>
             <p className="lobby-subtitle">{t.connecting}</p>
           </>
-        )}
-
-        {isWaiting && opponentFound && (
-          <div className="opponent-found">
-            <span className="opponent-found-name">{t.opponentFound}</span>
-          </div>
         )}
 
         {error && <p className="lobby-error">{error}</p>}

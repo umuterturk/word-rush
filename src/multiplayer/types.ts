@@ -1,4 +1,4 @@
-export type MatchMode = 'quick' | 'private';
+export type MatchMode = 'private';
 
 export type FirestoreMatchStatus = 'waiting' | 'ready' | 'ended';
 
@@ -16,7 +16,13 @@ export interface MatchPlayer {
   name: string;
   score: number;
   joinedAt: number;
+  /** Wall-clock ms of this player's last heartbeat; used to detect abandoned rooms. */
+  lastSeen?: number;
   resigned?: boolean;
+  /** Set once this player's local timer expires and their final score is published. */
+  done?: boolean;
+  /** Set when this player leaves an already-ended match (entry kept so the final score survives). */
+  left?: boolean;
 }
 
 export interface MatchConfig {
@@ -44,6 +50,10 @@ export interface MatchSnapshot {
   opponentScore: number;
   opponentWantsRematch: boolean;
   opponentResigned: boolean;
+  /** True once the opponent's timer has expired and their final score is settled. */
+  opponentDone: boolean;
+  /** True once the opponent has left the (ended) match. */
+  opponentLeft: boolean;
   /** Nonce of the latest shuffle attack the opponent sent at us (0 = none). */
   incomingShuffleNonce: number;
 }

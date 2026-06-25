@@ -101,8 +101,6 @@ export interface Translations {
   rematchBadge: string;
   waitingForOpponent: string;
   challengingAgain: string;
-  findingOpponent: string;
-  searchingForRival: string;
   yourRoom: string;
   linkCopied: string;
   shareInviteLink: string;
@@ -241,8 +239,6 @@ export const translations: Record<Language, Translations> = {
     rematchBadge: 'REMATCH',
     waitingForOpponent: 'WAITING FOR OPPONENT',
     challengingAgain: 'Challenging your rival again...',
-    findingOpponent: 'FINDING OPPONENT',
-    searchingForRival: 'Searching for a rival...',
     yourRoom: 'YOUR ROOM',
     linkCopied: 'LINK COPIED!',
     shareInviteLink: 'SHARE INVITE LINK',
@@ -378,8 +374,6 @@ export const translations: Record<Language, Translations> = {
     rematchBadge: 'RÖVANŞ',
     waitingForOpponent: 'RAKİP BEKLENİYOR',
     challengingAgain: 'Rakibine yeniden meydan okuyorsun...',
-    findingOpponent: 'RAKİP ARANIYOR',
-    searchingForRival: 'Rakip aranıyor...',
     yourRoom: 'ODAN',
     linkCopied: 'LINK KOPYALANDI!',
     shareInviteLink: 'DAVETİYE LİNKİNİ PAYLAŞ',

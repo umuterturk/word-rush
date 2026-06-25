@@ -18,6 +18,24 @@ import type { MultiplayerPort } from '../ports';
 
 const INVITE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
+/** How often each client refreshes its lastSeen heartbeat while in a match. */
+const HEARTBEAT_INTERVAL_MS = 12_000;
+/**
+ * A `waiting` room whose only player hasn't refreshed within this window is
+ * treated as abandoned (creator closed the tab) and skipped/cleaned up — this
+ * is the serverless substitute for a presence check, so joiners aren't trapped
+ * waiting for an opponent who will never appear.
+ */
+const ROOM_STALE_MS = 40_000;
+
+/** True when a waiting room's participants all went silent past the stale window. */
+function isWaitingRoomStale(data: MatchDoc, now: number): boolean {
+  if (data.status !== 'waiting') return false;
+  const players = Object.values(data.players);
+  if (players.length === 0) return true;
+  return players.every(p => (p.lastSeen ?? p.joinedAt) < now - ROOM_STALE_MS);
+}
+
 function generateInviteCode(length = 6): string {
   let code = '';
   for (let i = 0; i < length; i++) {
@@ -56,6 +74,8 @@ function parseSnapshot(matchId: string, data: MatchDoc, localUid: string): Match
       opponentScore: 0,
       opponentWantsRematch: false,
       opponentResigned: false,
+      opponentDone: false,
+      opponentLeft: false,
       incomingShuffleNonce: 0,
     };
   }
@@ -75,6 +95,8 @@ function parseSnapshot(matchId: string, data: MatchDoc, localUid: string): Match
     opponentScore: opponent.score,
     opponentWantsRematch: Boolean(data.rematchReady && data.rematchReady[opponentUid]),
     opponentResigned,
+    opponentDone: Boolean(opponent.done),
+    opponentLeft: Boolean(opponent.left),
     // An attack TARGETING us is one the opponent sent, i.e. keyed by their uid.
     incomingShuffleNonce: data.shuffleAttacks?.[opponentUid] ?? 0,
   };
@@ -88,6 +110,7 @@ export class FirebaseMultiplayerAdapter implements MultiplayerPort {
   private displayName = '';
   private unsubscribe: (() => void) | null = null;
   private handler: ((snapshot: MatchSnapshot | null) => void) | null = null;
+  private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
 
   setDisplayName(name: string): void {
     this.displayName = name.trim();
@@ -109,11 +132,46 @@ export class FirebaseMultiplayerAdapter implements MultiplayerPort {
     return doc(getFirebaseDb(), MATCHES_COLLECTION, this.matchId);
   }
 
+  private startHeartbeat(): void {
+    this.stopHeartbeat();
+    if (!this.matchId || !this.localUid) return;
+    const ping = () => void this.heartbeat();
+    ping();
+    this.heartbeatTimer = setInterval(ping, HEARTBEAT_INTERVAL_MS);
+  }
+
+  private stopHeartbeat(): void {
+    if (this.heartbeatTimer !== null) {
+      clearInterval(this.heartbeatTimer);
+      this.heartbeatTimer = null;
+    }
+  }
+
+  private async heartbeat(): Promise<void> {
+    if (!this.matchId || !this.localUid) return;
+    try {
+      await updateDoc(this.matchRef, {
+        [`players.${this.localUid}.lastSeen`]: Date.now(),
+      });
+    } catch {
+      // Doc may be gone (match cleaned up) — let the snapshot handler react.
+    }
+  }
+
   private startListening(): void {
     this.stopListening();
     console.log('[MP:startListening] handler=', !!this.handler, 'matchId=', this.matchId, 'uid=', this.localUid);
-    if (!this.handler || !this.matchId || !this.localUid) {
-      console.warn('[MP:startListening] BAILED — missing handler, matchId, or uid');
+    if (!this.matchId || !this.localUid) {
+      console.warn('[MP:startListening] BAILED — missing matchId or uid');
+      return;
+    }
+
+    // Heartbeat runs whenever we hold an active match, even before React wires
+    // up the snapshot handler, so a just-created room is immediately "alive".
+    this.startHeartbeat();
+
+    if (!this.handler) {
+      console.warn('[MP:startListening] no handler yet — heartbeat only');
       return;
     }
 
@@ -142,6 +200,7 @@ export class FirebaseMultiplayerAdapter implements MultiplayerPort {
   private stopListening(): void {
     this.unsubscribe?.();
     this.unsubscribe = null;
+    this.stopHeartbeat();
   }
 
   subscribe(handler: (snapshot: MatchSnapshot | null) => void): () => void {
@@ -153,76 +212,6 @@ export class FirebaseMultiplayerAdapter implements MultiplayerPort {
       this.handler = null;
       this.stopListening();
     };
-  }
-
-  async quickMatch(): Promise<void> {
-    const uid = await this.getUid();
-    console.log('[MP:quickMatch] uid=', uid);
-    const db = getFirebaseDb();
-
-    const openQuery = query(
-      collection(db, MATCHES_COLLECTION),
-      where('status', '==', 'waiting'),
-      where('mode', '==', 'quick'),
-      limit(5),
-    );
-    const openMatches = await getDocs(openQuery);
-
-    for (const candidate of openMatches.docs) {
-      try {
-        await runTransaction(db, async transaction => {
-          const snap = await transaction.get(candidate.ref);
-          if (!snap.exists()) throw new Error('gone');
-
-          const data = snap.data() as MatchDoc;
-          const playerCount = Object.keys(data.players).length;
-          if (data.status !== 'waiting' || playerCount >= 2 || data.players[uid]) {
-            throw new Error('unavailable');
-          }
-
-          const newCount = playerCount + 1;
-          transaction.update(candidate.ref, {
-            [`players.${uid}`]: {
-              name: this.playerName(uid),
-              score: 0,
-              joinedAt: Date.now(),
-            },
-            status: newCount >= 2 ? 'ready' : 'waiting',
-          });
-        });
-
-        this.matchId = candidate.id;
-        console.log('[MP:quickMatch] joined existing match', candidate.id);
-        this.startListening();
-        return;
-      } catch (e) {
-        console.log('[MP:quickMatch] candidate unavailable:', e);
-      }
-    }
-
-    console.log('[MP:quickMatch] no candidates, creating new match');
-    const newRef = doc(collection(db, MATCHES_COLLECTION));
-    await setDoc(newRef, {
-      mode: 'quick',
-      inviteCode: null,
-      status: 'waiting',
-      seed: String(Date.now()),
-      matchDuration: MULTIPLAYER_MATCH_DURATION_MS,
-      round: 1,
-      createdBy: uid,
-      createdAt: serverTimestamp(),
-      players: {
-        [uid]: {
-          name: this.playerName(uid),
-          score: 0,
-          joinedAt: Date.now(),
-        },
-      },
-    } satisfies Omit<MatchDoc, 'createdAt'> & { createdAt: ReturnType<typeof serverTimestamp> });
-
-    this.matchId = newRef.id;
-    console.log('[MP:quickMatch] created new match', newRef.id);
-    this.startListening();
   }
 
   async createRoom(): Promise<string> {
@@ -245,6 +234,7 @@ export class FirebaseMultiplayerAdapter implements MultiplayerPort {
           name: this.playerName(uid),
           score: 0,
           joinedAt: Date.now(),
+          lastSeen: Date.now(),
         },
       },
     } satisfies Omit<MatchDoc, 'createdAt'> & { createdAt: ReturnType<typeof serverTimestamp> });
@@ -288,6 +278,12 @@ export class FirebaseMultiplayerAdapter implements MultiplayerPort {
         console.log('[MP:joinRoom] already in room, skipping write');
         return;
       }
+      if (isWaitingRoomStale(data, Date.now())) {
+        // Creator abandoned the room — clean it up and report it as gone so the
+        // joiner sees "unavailable" instead of waiting forever for a no-show.
+        transaction.delete(roomRef);
+        throw new Error('Room not found or already started.');
+      }
 
       const newCount = playerCount + 1;
       const newStatus = newCount >= 2 ? 'ready' : 'waiting';
@@ -297,6 +293,7 @@ export class FirebaseMultiplayerAdapter implements MultiplayerPort {
           name: this.playerName(uid),
           score: 0,
           joinedAt: Date.now(),
+          lastSeen: Date.now(),
         },
         status: newStatus,
       });
@@ -308,19 +305,43 @@ export class FirebaseMultiplayerAdapter implements MultiplayerPort {
   }
 
   async publishScore(score: number): Promise<void> {
-    if (import.meta.env.DEV) return;
     if (!this.matchId || !this.localUid) return;
-    await updateDoc(this.matchRef, {
-      [`players.${this.localUid}.score`]: score,
-    });
+    try {
+      await updateDoc(this.matchRef, {
+        [`players.${this.localUid}.score`]: score,
+      });
+    } catch {
+      // The match doc may have been deleted (opponent left) — ignore.
+    }
+  }
+
+  /**
+   * Publish the final score and mark this player done. The opponent only
+   * resolves the match result once both players are done, so end times can
+   * differ between clients without producing inconsistent win/loss outcomes.
+   */
+  async markDone(finalScore: number): Promise<void> {
+    if (!this.matchId || !this.localUid) return;
+    try {
+      await updateDoc(this.matchRef, {
+        [`players.${this.localUid}.score`]: finalScore,
+        [`players.${this.localUid}.done`]: true,
+      });
+    } catch {
+      // The match doc may have been deleted (opponent left) — ignore.
+    }
   }
 
   async sendShuffle(): Promise<void> {
     if (!this.matchId || !this.localUid) return;
     // Key the attack by our own uid; the opponent reads the entry not keyed by them.
-    await updateDoc(this.matchRef, {
-      [`shuffleAttacks.${this.localUid}`]: Date.now(),
-    });
+    try {
+      await updateDoc(this.matchRef, {
+        [`shuffleAttacks.${this.localUid}`]: Date.now(),
+      });
+    } catch {
+      // The match doc may have been deleted (opponent left) — ignore.
+    }
   }
 
   async requestRematch(): Promise<void> {
@@ -401,6 +422,20 @@ export class FirebaseMultiplayerAdapter implements MultiplayerPort {
             status: 'ended',
             resignedBy: uid,
           });
+          return;
+        }
+
+        if (data.status === 'ended' && players[uid]) {
+          // Leaving an already-ended match: keep our score entry so the
+          // opponent's result stays correct. Mark ourselves as left; only
+          // delete the doc once both players have left.
+          players[uid] = { ...players[uid], left: true };
+          const allLeft = Object.values(players).every(p => p.left);
+          if (allLeft) {
+            transaction.delete(ref);
+          } else {
+            transaction.update(ref, { players });
+          }
           return;
         }
 

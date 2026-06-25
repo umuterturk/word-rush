@@ -56,6 +56,13 @@ type AppMode = 'solo' | 'multiplayer';
 type LobbyMode = 'quick' | 'create' | 'join';
 type FriendMatchPhase = 'creating' | 'sharing' | 'waiting' | 'found';
 
+/**
+ * How long to wait for the opponent to publish their final score after our own
+ * match ends before resolving the result anyway. Covers a closed tab / lost
+ * connection so the winner isn't stuck on a "waiting" screen forever.
+ */
+const END_SETTLE_TIMEOUT_MS = 6_000;
+
 export default function App() {
   const { t, language } = useI18n();
   const { username, saveUsername } = usePlayerProfile(storage);
@@ -92,6 +99,7 @@ export default function App() {
   const [endProfileDismissed, setEndProfileDismissed] = useState(false);
   const [loadedWordLanguage, setLoadedWordLanguage] = useState<WordLanguage | null>(null);
   const [challengingUid, setChallengingUid] = useState<string | null>(null);
+  const [endSettleTimedOut, setEndSettleTimedOut] = useState(false);
 
   const activeMatchIdRef = useRef<string | undefined>(undefined);
   const prevScoreRef = useRef(0);
@@ -495,22 +503,18 @@ export default function App() {
     }
   }, [gameState.matchStatus]);
 
-  // When match ends, track analytics and publish final score
+  // When the match ends locally, publish our final score immediately. In
+  // multiplayer we mark ourselves "done" rather than reporting the result yet —
+  // the result is only resolved once BOTH players are done (see resultSettled),
+  // so clients that finish a beat apart still agree on win/lose.
   useEffect(() => {
     if (gameState.matchStatus !== 'ended' || !matchStartedRef.current) return;
 
     const localScore = gameState.players['local']?.score ?? 0;
 
     if (isMultiplayer) {
-      void mp.publishScore(localScore);
+      void mp.markDone(localScore);
       mp.markEnded();
-      const result = mp.getResult(localScore);
-      analytics.track('match_ended', {
-        mode: 'multiplayer',
-        score: localScore,
-        opponent_score: mp.opponentScore,
-        result: result ?? 'tie',
-      });
     } else {
       analytics.track('match_ended', { mode: 'solo', score: localScore });
       if (localScore > 0 && username.trim()) {
@@ -526,6 +530,36 @@ export default function App() {
     mp,
     username,
     refreshLeaderboard,
+  ]);
+
+  // The multiplayer result is "settled" once the opponent has also finished
+  // (done), resigned, left, or we've waited long enough for a silent opponent.
+  // Until then we don't record W/L or show a result, because the opponent's
+  // score may still climb in the final second of their (slightly later) timer.
+  const matchEnded = gameState.matchStatus === 'ended';
+  const resultSettled =
+    !isMultiplayer ||
+    !matchEnded ||
+    mp.opponentDone ||
+    mp.opponentResigned ||
+    !mp.opponentPresent ||
+    endSettleTimedOut;
+
+  useEffect(() => {
+    if (!isMultiplayer || !matchEnded) {
+      setEndSettleTimedOut(false);
+      return;
+    }
+    if (endSettleTimedOut || mp.opponentDone || mp.opponentResigned || !mp.opponentPresent) return;
+    const timer = window.setTimeout(() => setEndSettleTimedOut(true), END_SETTLE_TIMEOUT_MS);
+    return () => window.clearTimeout(timer);
+  }, [
+    isMultiplayer,
+    matchEnded,
+    endSettleTimedOut,
+    mp.opponentDone,
+    mp.opponentResigned,
+    mp.opponentPresent,
   ]);
 
   // Apply an incoming shuffle attack: the opponent scrambled our board.
@@ -637,6 +671,8 @@ export default function App() {
 
   useEffect(() => {
     if (gameState.matchStatus !== 'ended' || !isMultiplayer) return;
+    // Wait for both players' final scores before recording the outcome.
+    if (!resultSettled) return;
 
     const opponentUid = mp.matchConfig?.opponentUid;
     const matchId = mp.matchConfig?.matchId;
@@ -650,6 +686,13 @@ export default function App() {
     const result = mp.getResult(score);
     if (!result) return;
 
+    analytics.track('match_ended', {
+      mode: 'multiplayer',
+      score,
+      opponent_score: mp.opponentScore,
+      result,
+    });
+
     void recordMatchResult(opponentUid, mp.opponentName, result, matchId).then(() =>
       refreshFriends(),
     );
@@ -657,9 +700,11 @@ export default function App() {
     gameState.matchStatus,
     gameState.players,
     isMultiplayer,
+    resultSettled,
     mp.matchConfig?.opponentUid,
     mp.matchConfig?.matchId,
     mp.opponentName,
+    mp.opponentScore,
     mp.round,
     mp,
     recordMatchResult,
@@ -741,14 +786,12 @@ export default function App() {
   if (
     isMultiplayer &&
     (isRematching ||
-      (lobbyMode === 'join' && (mp.phase === 'searching' || mp.phase === 'waiting')) ||
-      (lobbyMode !== 'create' && lobbyMode !== 'join' && (mp.phase === 'searching' || mp.phase === 'waiting')))
+      (lobbyMode === 'join' && (mp.phase === 'searching' || mp.phase === 'waiting')))
   ) {
     return (
       <>
         <MultiplayerLobbyScreen
           mode={lobbyMode}
-          opponentName={mp.opponentName}
           error={mp.error}
           isSearching={isRematching || mp.phase === 'searching'}
           isRematch={isRematching}
@@ -856,6 +899,7 @@ export default function App() {
         opponentWantsRematch={isMultiplayer && mp.opponentWantsRematch}
         opponentResigned={isMultiplayer && mp.opponentResigned}
         result={isMultiplayer ? mp.getResult(gameState.players['local']?.score ?? 0) : null}
+        resolving={isMultiplayer && !resultSettled}
       />
       {showEndProfilePopup && (
         <ProfilePopup

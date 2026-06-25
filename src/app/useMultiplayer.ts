@@ -11,17 +11,19 @@ interface MultiplayerSession {
   opponentWantsRematch: boolean;
   opponentResigned: boolean;
   opponentPresent: boolean;
+  /** True once the opponent's timer has expired and their final score is settled. */
+  opponentDone: boolean;
   round: number;
   inviteCode: string | null;
   error: string | null;
   isAvailable: boolean;
   /** Latest shuffle attack nonce aimed at us (0 = none). Increases on each attack. */
   incomingShuffleNonce: number;
-  quickMatch: () => Promise<void>;
   createRoom: () => Promise<string | null>;
   joinRoom: (code: string) => Promise<void>;
   cancel: () => Promise<void>;
   publishScore: (score: number) => Promise<void>;
+  markDone: (finalScore: number) => Promise<void>;
   sendShuffle: () => Promise<void>;
   requestRematch: () => Promise<void>;
   rejoinMatch: (matchId: string) => Promise<void>;
@@ -53,6 +55,7 @@ export function useMultiplayer(multiplayer: MultiplayerPort, available: boolean)
   const [opponentWantsRematch, setOpponentWantsRematch] = useState(false);
   const [opponentResigned, setOpponentResigned] = useState(false);
   const [opponentPresent, setOpponentPresent] = useState(false);
+  const [opponentDone, setOpponentDone] = useState(false);
   const [round, setRound] = useState(0);
   const [inviteCode, setInviteCode] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -76,7 +79,10 @@ export function useMultiplayer(multiplayer: MultiplayerPort, available: boolean)
       setOpponentName(snapshot.opponentName);
       setOpponentWantsRematch(snapshot.opponentWantsRematch);
       setOpponentResigned(snapshot.opponentResigned);
-      setOpponentPresent(Boolean(snapshot.opponentUid) && !snapshot.opponentResigned);
+      setOpponentPresent(
+        Boolean(snapshot.opponentUid) && !snapshot.opponentResigned && !snapshot.opponentLeft,
+      );
+      setOpponentDone(snapshot.opponentDone);
       setRound(snapshot.round);
       setIncomingShuffleNonce(snapshot.incomingShuffleNonce);
       if (snapshot.inviteCode) setInviteCode(snapshot.inviteCode);
@@ -119,11 +125,6 @@ export function useMultiplayer(multiplayer: MultiplayerPort, available: boolean)
     [],
   );
 
-  const quickMatch = useCallback(
-    () => runAction(() => multiplayer.quickMatch(), 'searching'),
-    [multiplayer, runAction],
-  );
-
   const createRoom = useCallback(async (): Promise<string | null> => {
     setError(null);
     setPhase('waiting');
@@ -154,6 +155,7 @@ export function useMultiplayer(multiplayer: MultiplayerPort, available: boolean)
     setOpponentWantsRematch(false);
     setOpponentResigned(false);
     setOpponentPresent(false);
+    setOpponentDone(false);
     setRound(0);
     setInviteCode(null);
     setError(null);
@@ -162,6 +164,11 @@ export function useMultiplayer(multiplayer: MultiplayerPort, available: boolean)
 
   const publishScore = useCallback(
     (score: number) => multiplayer.publishScore(score),
+    [multiplayer],
+  );
+
+  const markDone = useCallback(
+    (finalScore: number) => multiplayer.markDone(finalScore),
     [multiplayer],
   );
 
@@ -187,6 +194,7 @@ export function useMultiplayer(multiplayer: MultiplayerPort, available: boolean)
     setOpponentScore(0);
     setOpponentWantsRematch(false);
     setOpponentResigned(false);
+    setOpponentDone(false);
     setPhase('playing');
   }, []);
   const markEnded = useCallback(() => setPhase('ended'), []);
@@ -207,6 +215,7 @@ export function useMultiplayer(multiplayer: MultiplayerPort, available: boolean)
     setOpponentWantsRematch(false);
     setOpponentResigned(false);
     setOpponentPresent(false);
+    setOpponentDone(false);
     setRound(0);
     setInviteCode(null);
     setError(null);
@@ -222,16 +231,17 @@ export function useMultiplayer(multiplayer: MultiplayerPort, available: boolean)
       opponentWantsRematch,
       opponentResigned,
       opponentPresent,
+      opponentDone,
       round,
       inviteCode,
       error,
       isAvailable: available,
       incomingShuffleNonce,
-      quickMatch,
       createRoom,
       joinRoom,
       cancel,
       publishScore,
+      markDone,
       sendShuffle,
       requestRematch,
       rejoinMatch,
@@ -245,6 +255,7 @@ export function useMultiplayer(multiplayer: MultiplayerPort, available: boolean)
       matchConfig,
       opponentScore,
       opponentPresent,
+      opponentDone,
       round,
       opponentName,
       opponentWantsRematch,
@@ -253,11 +264,11 @@ export function useMultiplayer(multiplayer: MultiplayerPort, available: boolean)
       error,
       available,
       incomingShuffleNonce,
-      quickMatch,
       createRoom,
       joinRoom,
       cancel,
       publishScore,
+      markDone,
       sendShuffle,
       requestRematch,
       rejoinMatch,

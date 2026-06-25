@@ -4,10 +4,6 @@ import type { MultiplayerPort } from '../ports';
 export class NoopMultiplayerAdapter implements MultiplayerPort {
   setDisplayName(_name: string): void {}
 
-  async quickMatch(): Promise<void> {
-    throw new Error('Multiplayer is not available.');
-  }
-
   async createRoom(): Promise<string> {
     throw new Error('Multiplayer is not available.');
   }
@@ -23,6 +19,8 @@ export class NoopMultiplayerAdapter implements MultiplayerPort {
   }
 
   async publishScore(_score: number): Promise<void> {}
+
+  async markDone(_finalScore: number): Promise<void> {}
 
   async sendShuffle(): Promise<void> {}
 

@@ -47,12 +47,13 @@ export interface LeaderboardPort {
  */
 export interface MultiplayerPort {
   setDisplayName(name: string): void;
-  quickMatch(): Promise<void>;
   createRoom(): Promise<string>;
   joinRoom(code: string): Promise<void>;
   cancel(): Promise<void>;
   subscribe(handler: (snapshot: MatchSnapshot | null) => void): () => void;
   publishScore(score: number): Promise<void>;
+  /** Publish the final score and mark this player done so the result can settle. */
+  markDone(finalScore: number): Promise<void>;
   /** Send a one-time "shuffle attack" at the opponent's board. */
   sendShuffle(): Promise<void>;
   requestRematch(): Promise<void>;

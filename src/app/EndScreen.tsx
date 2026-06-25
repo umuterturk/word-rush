@@ -16,6 +16,8 @@ interface Props {
   opponentWantsRematch?: boolean;
   opponentResigned?: boolean;
   result?: MatchResult | null;
+  /** Multiplayer: opponent hasn't reported their final score yet — hold the result. */
+  resolving?: boolean;
 }
 
 export function EndScreen({
@@ -29,6 +31,7 @@ export function EndScreen({
   opponentWantsRematch = false,
   opponentResigned = false,
   result = null,
+  resolving = false,
 }: Props) {
   const { t } = useI18n();
   const [actionsEnabled, setActionsEnabled] = useState(false);
@@ -54,12 +57,18 @@ export function EndScreen({
   return (
     <div className="screen end-screen">
       <div className="end-content">
-        {isMultiplayer && result ? (
+        {isMultiplayer ? (
           <>
-            <h2 className={`end-title end-result ${RESULT_CLASSES[result]}`}>
-              {RESULT_LABELS[result]}
-            </h2>
-            {opponentResigned && (
+            {resolving ? (
+              <h2 className="end-title end-result end-result--resolving">
+                {t.waitingForOpponent}
+              </h2>
+            ) : (
+              <h2 className={`end-title end-result ${result ? RESULT_CLASSES[result] : ''}`}>
+                {result ? RESULT_LABELS[result] : ''}
+              </h2>
+            )}
+            {opponentResigned && !resolving && (
               <div className="end-resign-note">{t.opponentResigned}</div>
             )}
             <div className="end-vs-scores">
@@ -101,7 +110,7 @@ export function EndScreen({
           {!(isMultiplayer && opponentResigned) && (
             <button
               className="play-btn"
-              disabled={!actionsEnabled}
+              disabled={!actionsEnabled || resolving}
               onPointerDown={e => e.preventDefault()}
               onClick={onPlayAgain}
             >
