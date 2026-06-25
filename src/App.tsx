@@ -176,6 +176,12 @@ export default function App() {
     multiplayer.setDisplayName(username);
   }, [username]);
 
+  // Stamp rooms we create with the current language so both players share a
+  // word list (the joiner adopts the creator's language from the match doc).
+  useEffect(() => {
+    multiplayer.setLanguage(language);
+  }, [language]);
+
   useEffect(() => {
     analytics.track('app_open');
   }, []);
@@ -230,6 +236,10 @@ export default function App() {
     }
   }, [hydrated, gameState.matchStatus, isMultiplayer, mp.inviteCode]);
 
+  // In multiplayer both players must use the creator's language (stored on the
+  // match doc) so they generate the same board; solo uses the local language.
+  const matchLanguage = isMultiplayer ? (mp.matchConfig?.language ?? language) : language;
+
   const startMatch = useCallback(
     (seed: string) => {
       dispatchAction({
@@ -237,7 +247,7 @@ export default function App() {
         seed,
         at: clock.now(),
         mode: isMultiplayer ? 'multiplayer' : 'solo',
-        language,
+        language: matchLanguage,
         difficulty: isMultiplayer ? undefined : soloDifficulty,
         matchDuration: isMultiplayer ? mp.matchConfig?.matchDuration : undefined,
       });
@@ -253,7 +263,7 @@ export default function App() {
       prevScoreRef.current = 0;
       lastShuffleNonceRef.current = 0;
     },
-    [dispatchAction, isMultiplayer, language, mp.matchConfig?.matchDuration, mp, soloDifficulty],
+    [dispatchAction, isMultiplayer, matchLanguage, mp.matchConfig?.matchDuration, mp, soloDifficulty],
   );
 
   const handlePlaySolo = useCallback((difficulty: SoloDifficulty) => {
@@ -626,15 +636,15 @@ export default function App() {
   }, [isMultiplayer, mp.matchConfig?.seed]);
 
   const handleCountdownComplete = useCallback(async () => {
-    await ensureWordListLoaded(language);
+    await ensureWordListLoaded(matchLanguage);
     startMatch(getMatchSeed());
-  }, [startMatch, getMatchSeed, language]);
+  }, [startMatch, getMatchSeed, matchLanguage]);
 
   const requiredWordLanguage: WordLanguage | null =
     gameState.matchStatus === 'playing'
       ? gameState.language
       : showCountdown
-        ? language
+        ? matchLanguage
         : null;
 
   useEffect(() => {

@@ -39,6 +39,7 @@ function snapshotToConfig(snapshot: MatchSnapshot): MatchConfig {
     mode: snapshot.mode,
     inviteCode: snapshot.inviteCode,
     seed: snapshot.seed,
+    language: snapshot.language,
     matchDuration: snapshot.matchDuration,
     status: snapshot.status,
     round: snapshot.round,

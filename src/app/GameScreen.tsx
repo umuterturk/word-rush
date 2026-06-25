@@ -246,6 +246,11 @@ export function GameScreen({
   onSoloVictoryDone,
 }: Props) {
   const { t, language } = useI18n();
+  // Board content (tile letters, target word) must follow the MATCH's language,
+  // not the viewer's UI language — otherwise a Turkish match shown to an
+  // English-set opponent mis-cases Turkish letters (e.g. 'i' → 'I' instead of
+  // 'İ'). UI chrome (labels, tooltips) still uses the UI `language`.
+  const gameLanguage = gameState.language ?? language;
   const player = gameState.players['local'];
   const gridCols = gameState.gridCols;
   const gridRows = gameState.gridRows;
@@ -731,7 +736,7 @@ export function GameScreen({
       {!showVictoryPopup && (
       <div
         className={`target-word-banner notranslate${submitFeedback === 'valid' ? ' target-word-banner--valid' : ''}${submitFeedback === 'invalid' ? ' target-word-banner--invalid' : ''}${wordMatchesTarget ? ' target-word-banner--complete' : ''}${isSoloVictory ? ' target-word-banner--victory' : ''}`}
-        lang={language}
+        lang={gameLanguage}
         translate="no"
       >
         {isSoloVictory && !showVictoryPopup ? (
@@ -753,7 +758,7 @@ export function GameScreen({
                     className={`target-word-letter target-word-letter--${letterState}`}
                   >
                     <span className="letter-glyph" translate="no">
-                      {upperByLanguage(ch, language)}
+                      {upperByLanguage(ch, gameLanguage)}
                     </span>
                   </span>
                 );
@@ -797,7 +802,7 @@ export function GameScreen({
         {/* Grid arena */}
         <div
           className={`arena grid-arena notranslate${isShuffling ? ' grid-arena--shuffling' : ''}${isCelebrating ? ' grid-arena--celebration' : ''}${celebrationEpic ? ' grid-arena--celebration-epic' : ''}`}
-          lang={language}
+          lang={gameLanguage}
           translate="no"
           style={{
             '--grid-cols': gridCols,
@@ -840,7 +845,7 @@ export function GameScreen({
                       '--celebration-delay': `${delay}ms`,
                     } as React.CSSProperties}
                   >
-                    <LetterGlyph letter={cell.letter} language={language} />
+                    <LetterGlyph letter={cell.letter} language={gameLanguage} />
                   </div>
                 );
               }),
@@ -864,7 +869,7 @@ export function GameScreen({
                 onPointerDown={e => handleTapTile(cell.id, e)}
                 {...TILE_BUTTON_ATTRS}
               >
-                <LetterGlyph letter={cell.letter} language={language} />
+                <LetterGlyph letter={cell.letter} language={gameLanguage} />
                 {hintCellId === cell.id && (
                   <span className="grid-tile__hint-badge">{t.hintBadge}</span>
                 )}

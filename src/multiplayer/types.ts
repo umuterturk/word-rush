@@ -1,3 +1,5 @@
+import type { GameLanguage } from '../domain/types';
+
 export type MatchMode = 'private';
 
 export type FirestoreMatchStatus = 'waiting' | 'ready' | 'ended';
@@ -30,6 +32,8 @@ export interface MatchConfig {
   mode: MatchMode;
   inviteCode: string | null;
   seed: string;
+  /** Word-list language fixed by the match creator; both players use it. */
+  language: GameLanguage;
   matchDuration: number;
   status: FirestoreMatchStatus;
   round: number;
@@ -42,6 +46,8 @@ export interface MatchSnapshot {
   mode: MatchMode;
   inviteCode: string | null;
   seed: string;
+  /** Word-list language fixed by the match creator; both players use it. */
+  language: GameLanguage;
   matchDuration: number;
   status: FirestoreMatchStatus;
   round: number;
@@ -75,6 +81,8 @@ export interface MatchDoc {
   inviteCode: string | null;
   status: FirestoreMatchStatus;
   seed: string;
+  /** Word-list language fixed by the match creator; both players use it. */
+  language: GameLanguage;
   matchDuration: number;
   round: number;
   createdBy: string;

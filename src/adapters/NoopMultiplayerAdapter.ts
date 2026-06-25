@@ -1,8 +1,11 @@
 import type { MatchSnapshot } from '../multiplayer/types';
+import type { GameLanguage } from '../domain/types';
 import type { MultiplayerPort } from '../ports';
 
 export class NoopMultiplayerAdapter implements MultiplayerPort {
   setDisplayName(_name: string): void {}
+
+  setLanguage(_language: GameLanguage): void {}
 
   async createRoom(): Promise<string> {
     throw new Error('Multiplayer is not available.');

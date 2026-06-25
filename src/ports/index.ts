@@ -1,4 +1,5 @@
 import type { MatchSnapshot } from '../multiplayer/types';
+import type { GameLanguage } from '../domain/types';
 import type { SavedGameSession } from '../domain/savedGameSession';
 import type { FriendEntry, GameRequest } from '../friends/types';
 
@@ -47,6 +48,8 @@ export interface LeaderboardPort {
  */
 export interface MultiplayerPort {
   setDisplayName(name: string): void;
+  /** Set the word-list language stamped onto rooms this client creates. */
+  setLanguage(language: GameLanguage): void;
   createRoom(): Promise<string>;
   joinRoom(code: string): Promise<void>;
   cancel(): Promise<void>;

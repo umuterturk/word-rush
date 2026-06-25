@@ -14,6 +14,7 @@ import {
 import { MULTIPLAYER_MATCH_DURATION_MS } from '../domain/constants';
 import { ensureAnonymousAuth, getFirebaseDb, MATCHES_COLLECTION } from '../firebase/config';
 import type { MatchDoc, MatchSnapshot } from '../multiplayer/types';
+import type { GameLanguage } from '../domain/types';
 import type { MultiplayerPort } from '../ports';
 
 const INVITE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -66,6 +67,7 @@ function parseSnapshot(matchId: string, data: MatchDoc, localUid: string): Match
       mode: data.mode,
       inviteCode: data.inviteCode,
       seed: data.seed,
+      language: data.language ?? 'en',
       matchDuration: data.matchDuration,
       status: data.status,
       round: data.round ?? 1,
@@ -87,6 +89,7 @@ function parseSnapshot(matchId: string, data: MatchDoc, localUid: string): Match
     mode: data.mode,
     inviteCode: data.inviteCode,
     seed: data.seed,
+    language: data.language ?? 'en',
     matchDuration: data.matchDuration,
     status: data.status,
     round: data.round ?? 1,
@@ -108,12 +111,17 @@ export class FirebaseMultiplayerAdapter implements MultiplayerPort {
   private matchId: string | null = null;
   private localUid: string | null = null;
   private displayName = '';
+  private language: GameLanguage = 'en';
   private unsubscribe: (() => void) | null = null;
   private handler: ((snapshot: MatchSnapshot | null) => void) | null = null;
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
 
   setDisplayName(name: string): void {
     this.displayName = name.trim();
+  }
+
+  setLanguage(language: GameLanguage): void {
+    this.language = language;
   }
 
   private playerName(uid: string): string {
@@ -225,6 +233,7 @@ export class FirebaseMultiplayerAdapter implements MultiplayerPort {
       inviteCode,
       status: 'waiting',
       seed: String(Date.now()),
+      language: this.language,
       matchDuration: MULTIPLAYER_MATCH_DURATION_MS,
       round: 1,
       createdBy: uid,
