@@ -26,6 +26,7 @@ function playingState(overrides: Partial<GameState> = {}): GameState {
         selectedIds: [],
         targetWord: 'AT',
         wordsCompleted: 1,
+        wordStreak: 1,
         doubleBonusStreak: 0,
         wordPool: ['AT'],
         usedWords: ['AT'],
@@ -88,9 +89,18 @@ describe('parseSavedGameSession', () => {
     expect(parsed?.inviteCode).toBe('ABCD12');
   });
 
-  it('rejects idle or ended matches', () => {
+  it('rejects idle matches', () => {
     expect(parseSavedGameSession({ gameState: INITIAL_GAME_STATE })).toBeNull();
-    expect(parseSavedGameSession({ gameState: playingState({ matchStatus: 'ended' }) })).toBeNull();
+  });
+
+  it('accepts ended matches for end-screen restore', () => {
+    const parsed = parseSavedGameSession({
+      gameState: playingState({ matchStatus: 'ended' }),
+      sessionBadges: { fast_1: 2, fast_2: 0, rare_1: 1, rare_2: 0, double: 0 },
+      lifetimeBadgeBefore: { fast_1: 5, fast_2: 0, rare_1: 0, rare_2: 0, double: 0 },
+    });
+    expect(parsed?.gameState.matchStatus).toBe('ended');
+    expect(parsed?.sessionBadges?.fast_1).toBe(2);
   });
 });
 

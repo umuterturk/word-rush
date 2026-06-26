@@ -1,11 +1,21 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { GameAction, GameState } from '../domain/types';
+import type { GameAction, GameState, LandedCell } from '../domain/types';
 import { SKIP_PENALTY, LETTER_HINT_DELAY_MS } from '../domain/constants';
 import type { ClockPort, LeaderboardEntry } from '../ports';
 import { useI18n } from '../i18n';
-import { getPlayerWordDuration, formatDoubleBonusMultiplierLabel, findHintCellId, getCellById, isCorrectNextLetter, computeWordPoints, buildVictoryAlphabetGrid } from '../domain/gridUtils';
+import { getPlayerWordDuration, formatDoubleBonusMultiplierLabel, findHintCellId, getCellById, isCorrectNextLetter, computeWordPoints, buildVictoryAlphabetGrid, type WordScoreBreakdown } from '../domain/gridUtils';
 import { createSeededRng } from '../domain/seededRng';
 import { upperByLanguage } from '../domain/turkishText';
+import {
+  badgeIdFromBonus,
+  EMPTY_BADGE_COUNTS,
+  resolveFastBadgeTier,
+  resolveRareBadgeTier,
+  totalBadgeCount,
+  type BadgeCounts,
+  type BadgeId,
+} from '../domain/badges';
+import { BadgeReveal } from './BadgeReveal';
 import {
   SOLO_VICTORY_WAIT_MS,
   CELEBRATION_STAGGER_MS,
@@ -42,6 +52,10 @@ interface Props {
   username?: string;
   onVictoryUsernameSave?: (name: string, score: number) => void;
   onSoloVictoryDone?: (action: 'playAgain' | 'menu') => void;
+  onBadgesEarned?: (ids: BadgeId[]) => void;
+  badgeCounts?: BadgeCounts;
+  sessionBadges?: BadgeCounts;
+  lifetimeBadgeBefore?: BadgeCounts;
 }
 
 function formatTime(ms: number): string {
@@ -81,6 +95,41 @@ const TILE_BUTTON_ATTRS = {
 } as const;
 
 const CONFETTI_COLORS = ['#ffd54f', '#81c784', '#ce93d8', '#4fc3f7', '#ff8a65', '#fff176'];
+
+const WORD_COMPLETE_FX_MS = 2000;
+const SCORE_COUNT_MS = 500;
+const HUD_FX_HIDE_DELAY_MS = 1400;
+const TAP_OK_MS = 150;
+
+interface BonusCallout {
+  kind: 'fast' | 'rare' | 'double';
+  tier: 1 | 2;
+  label: string;
+}
+
+interface BonusLabels {
+  fastBonus1: string;
+  fastBonus2: string;
+  rareBonus1: string;
+  rareBonus2: string;
+  doubleBonusActive: string;
+}
+
+interface WordCompleteFx {
+  runId: number;
+  scoreBefore: number;
+  total: number;
+  streak: number;
+  bonusCallouts: BonusCallout[];
+  hasBurst: boolean;
+  leftPct: number;
+  topPct: number;
+  widthPct: number;
+  heightPct: number;
+  letter: string;
+  color: string;
+  bigBurst: boolean;
+}
 
 interface ConfettiPiece {
   id: number;
@@ -226,6 +275,186 @@ function celebrationTileDelay(
   return Math.round(Math.hypot(col - centerCol, rowFromTop - centerRow) * CELEBRATION_STAGGER_MS);
 }
 
+function getTilePositionPct(
+  columns: LandedCell[][],
+  tileId: string,
+  gridRows: number,
+  gridCols: number,
+): { leftPct: number; topPct: number; widthPct: number; heightPct: number } | null {
+  const colPct = gridCols > 0 ? 100 / gridCols : 0;
+  const rowPct = gridRows > 0 ? 100 / gridRows : 0;
+  for (let col = 0; col < columns.length; col++) {
+    const column = columns[col] ?? [];
+    for (let rowFromBottom = 0; rowFromBottom < column.length; rowFromBottom++) {
+      const cell = column[rowFromBottom];
+      if (cell?.id === tileId) {
+        const rowFromTop = gridRows - 1 - rowFromBottom;
+        return {
+          leftPct: col * colPct,
+          topPct: rowFromTop * rowPct,
+          widthPct: colPct,
+          heightPct: rowPct,
+        };
+      }
+    }
+  }
+  return null;
+}
+
+function getWordStreakTier(streak: number): 0 | 1 | 2 | 3 | 4 {
+  if (streak >= 10) return 4;
+  if (streak >= 7) return 3;
+  if (streak >= 5) return 2;
+  if (streak >= 3) return 1;
+  return 0;
+}
+
+function resolveFastCallout(
+  elapsedMs: number,
+  wordLength: number,
+  labels: BonusLabels,
+): BonusCallout | null {
+  const tier = resolveFastBadgeTier(elapsedMs, wordLength);
+  if (!tier) return null;
+  return { kind: 'fast', tier, label: tier === 1 ? labels.fastBonus1 : labels.fastBonus2 };
+}
+
+function resolveRareCallout(scarcityMultiplier: number, labels: BonusLabels): BonusCallout | null {
+  const tier = resolveRareBadgeTier(scarcityMultiplier);
+  if (!tier) return null;
+  return { kind: 'rare', tier, label: tier === 1 ? labels.rareBonus1 : labels.rareBonus2 };
+}
+
+function buildBonusCallouts(
+  breakdown: WordScoreBreakdown,
+  elapsedMs: number,
+  wordLength: number,
+  doubleBonusActive: boolean,
+  labels: BonusLabels,
+): BonusCallout[] {
+  const callouts: BonusCallout[] = [];
+  const fast = resolveFastCallout(elapsedMs, wordLength, labels);
+  if (fast) callouts.push(fast);
+  const rare = resolveRareCallout(breakdown.scarcityMultiplier, labels);
+  if (rare) callouts.push(rare);
+  if (doubleBonusActive) {
+    callouts.push({ kind: 'double', tier: 1, label: labels.doubleBonusActive });
+  }
+  return callouts;
+}
+
+function HudFloatingBadges({
+  fx,
+  hidden,
+  badgeCounts,
+  streakLabel,
+  streakAria,
+}: {
+  fx: WordCompleteFx;
+  hidden: boolean;
+  badgeCounts: BadgeCounts;
+  streakLabel: string;
+  streakAria: string;
+}) {
+  const hasContent = fx.total > 0 || fx.streak > 0 || fx.bonusCallouts.length > 0;
+  if (!hasContent) return null;
+
+  return (
+    <div
+      className={`hud-floating-badges${hidden ? ' hud-floating-badges--hidden' : ''}`}
+      aria-live="polite"
+    >
+      {fx.total > 0 && (
+        <span className="hud-floating-badges__score">+{fx.total}</span>
+      )}
+      {fx.streak > 0 && (
+        <WordStreakBadge
+          streak={fx.streak}
+          label={streakLabel}
+          bump={!hidden}
+          ariaLabel={streakAria}
+          className="word-streak-badge--float"
+        />
+      )}
+      {fx.bonusCallouts.map((bonus, index) => {
+        const badgeId = badgeIdFromBonus(bonus.kind, bonus.tier);
+        const count = badgeCounts[badgeId] ?? 0;
+        return (
+          <span
+            key={`${bonus.kind}-${bonus.tier}-${index}`}
+            className={`hud-bonus-callout hud-bonus-callout--${bonus.kind} hud-bonus-callout--tier-${bonus.tier}`}
+            style={{ animationDelay: `${index * 45}ms` }}
+          >
+            <span className="hud-bonus-callout__label">{bonus.label}</span>
+            {count > 0 && <span className="hud-bonus-callout__count">{count}</span>}
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
+function WordStreakBadge({
+  streak,
+  label,
+  bump = false,
+  className = '',
+  ariaLabel,
+}: {
+  streak: number;
+  label: string;
+  bump?: boolean;
+  className?: string;
+  ariaLabel: string;
+}) {
+  if (streak <= 0) return null;
+  const tier = getWordStreakTier(streak);
+  return (
+    <span
+      key={streak}
+      className={`word-streak-badge word-streak-badge--tier-${tier}${bump ? ' word-streak-badge--bump' : ''}${className ? ` ${className}` : ''}`}
+      aria-label={ariaLabel}
+    >
+      {label}
+    </span>
+  );
+}
+
+function WordCompleteBurst({ fx, language }: { fx: WordCompleteFx; language: 'tr' | 'en' }) {
+  const particleCount = fx.bigBurst ? 8 : 4;
+  const ringScale = fx.bigBurst ? 2.8 : 2.0;
+  return (
+    <div
+      className={`word-complete-burst${fx.bigBurst ? ' word-complete-burst--big' : ''}`}
+      style={{
+        left: `${fx.leftPct + fx.widthPct / 2}%`,
+        top: `${fx.topPct + fx.heightPct / 2}%`,
+        '--burst-size': `${fx.widthPct}%`,
+        '--ring-scale': ringScale,
+      } as React.CSSProperties}
+      aria-hidden="true"
+    >
+      <span
+        className="word-complete-burst__bubble"
+        style={{ background: fx.color }}
+      >
+        <LetterGlyph letter={fx.letter} language={language} />
+      </span>
+      <span className="word-complete-burst__ring" style={{ borderColor: fx.color }} />
+      {Array.from({ length: particleCount }, (_, i) => (
+        <span
+          key={i}
+          className="word-complete-burst__particle"
+          style={{
+            '--angle': `${(360 / particleCount) * i}deg`,
+            background: fx.color,
+          } as React.CSSProperties}
+        />
+      ))}
+    </div>
+  );
+}
+
 export function GameScreen({
   gameState,
   logicalTime,
@@ -244,6 +473,10 @@ export function GameScreen({
   username = '',
   onVictoryUsernameSave,
   onSoloVictoryDone,
+  onBadgesEarned,
+  badgeCounts = EMPTY_BADGE_COUNTS,
+  sessionBadges = EMPTY_BADGE_COUNTS,
+  lifetimeBadgeBefore = EMPTY_BADGE_COUNTS,
 }: Props) {
   const { t, language } = useI18n();
   // Board content (tile letters, target word) must follow the MATCH's language,
@@ -275,6 +508,8 @@ export function GameScreen({
   const wordElapsed = wordStartedAt > 0 ? Math.max(0, currentTime - wordStartedAt) : 0;
   const wordTimeLeft = Math.max(0, wordDuration - wordElapsed);
   const wordTimerKey = `${targetWord}-${wordStartedAt}`;
+  const isWordTimerUrgent =
+    wordDuration > 0 && (wordTimeLeft / wordDuration < 0.25 || wordTimeLeft <= 3000);
   const initialWordElapsed = useMemo(
     () => Math.min(wordDuration, Math.max(0, clock.now() - wordStartedAt)),
     [wordTimerKey, wordDuration, clock, wordStartedAt],
@@ -290,22 +525,14 @@ export function GameScreen({
 
   const formedWord = selectedIds.map(id => letterMap.get(id) ?? '').join('');
   const wordMatchesTarget = formedWord === targetWord && formedWord.length >= 3;
-  const wordScore =
-    wordMatchesTarget && player && targetWord
-      ? computeWordPoints({
-          word: targetWord,
-          columns: player.columns,
-          submittedAt: currentTime,
-          wordStartedAt: player.wordStartedAt,
-          matchMode: gameState.matchMode,
-          player,
-          soloDifficulty: gameState.soloDifficulty,
-          grid: matchGrid,
-        }).total
-      : 0;
 
   const [submitFeedback, setSubmitFeedback] = useState<'valid' | 'invalid' | null>(null);
+  const [wordCompleteFx, setWordCompleteFx] = useState<WordCompleteFx | null>(null);
+  const [hudScoreDisplay, setHudScoreDisplay] = useState<number | null>(null);
+  const [hudFxHidden, setHudFxHidden] = useState(false);
+  const wordCompleteFxRunRef = useRef(0);
   const [errorTileId, setErrorTileId] = useState<string | null>(null);
+  const [tapOkTileId, setTapOkTileId] = useState<string | null>(null);
   const [hintCellId, setHintCellId] = useState<string | null>(null);
   const [isShuffling, setIsShuffling] = useState(false);
   const [showResignConfirm, setShowResignConfirm] = useState(false);
@@ -323,6 +550,10 @@ export function GameScreen({
   const [victoryActionsEnabled, setVictoryActionsEnabled] = useState(false);
   const [victoryNameDraft, setVictoryNameDraft] = useState('');
   const victoryNameInputRef = useRef<HTMLInputElement>(null);
+  const prevDoubleBonusActiveRef = useRef(false);
+  const prevDoubleBonusStreakRef = useRef(0);
+  const [doubleChipFlash, setDoubleChipFlash] = useState(false);
+  const [streakChipPop, setStreakChipPop] = useState(false);
 
   const isSoloVictory = !isMultiplayer && gameState.soloVictoryPending === true;
   const isCelebrating = celebrationPhase === 'celebrate';
@@ -341,6 +572,7 @@ export function GameScreen({
     !username.trim() &&
     snapshotScore > 0 &&
     (isNewBest || qualifiesForLeaderboard);
+  const hasVictoryBadges = totalBadgeCount(sessionBadges) > 0;
   const honorFocus = victorySnapshot
     ? resolveVictoryHonorFocus(victorySnapshot.forceRecord, victorySnapshot.forceEpic)
     : 'both';
@@ -371,17 +603,156 @@ export function GameScreen({
     if (
       formedWord === targetWord &&
       formedWord.length >= 3 &&
-      formedWord !== prevFormedRef.current
+      formedWord !== prevFormedRef.current &&
+      player &&
+      targetWord
     ) {
       prevFormedRef.current = formedWord;
+      const lastTileId = selectedIds[selectedIds.length - 1];
+      const submittedAt = clock.now();
+      const breakdown = computeWordPoints({
+        word: targetWord,
+        columns: player.columns,
+        submittedAt,
+        wordStartedAt: player.wordStartedAt,
+        matchMode: gameState.matchMode,
+        player,
+        soloDifficulty: gameState.soloDifficulty,
+        grid: matchGrid,
+      });
+      const elapsedMs = Math.max(0, submittedAt - player.wordStartedAt);
+      const nextStreak = (player.wordStreak ?? 0) + 1;
+      const pos = lastTileId
+        ? getTilePositionPct(player.columns, lastTileId, gridRows, gridCols)
+        : null;
+      const lastCell = lastTileId ? getCellById(player.columns, lastTileId) : null;
+      const scoreBefore = player.score;
+      wordCompleteFxRunRef.current += 1;
+      const bonusCallouts = buildBonusCallouts(
+        breakdown,
+        elapsedMs,
+        targetWord.length,
+        player.doubleBonusActive,
+        {
+          fastBonus1: t.fastBonus1,
+          fastBonus2: t.fastBonus2,
+          rareBonus1: t.rareBonus1,
+          rareBonus2: t.rareBonus2,
+          doubleBonusActive: t.doubleBonusActive,
+        },
+      );
+      onBadgesEarned?.(
+        bonusCallouts.map(callout => badgeIdFromBonus(callout.kind, callout.tier)),
+      );
+      const fxBase = {
+        runId: wordCompleteFxRunRef.current,
+        scoreBefore,
+        total: breakdown.total,
+        streak: nextStreak,
+        bonusCallouts,
+      };
+      if (pos && lastCell) {
+        setWordCompleteFx({
+          ...fxBase,
+          hasBurst: true,
+          leftPct: pos.leftPct,
+          topPct: pos.topPct,
+          widthPct: pos.widthPct,
+          heightPct: pos.heightPct,
+          letter: lastCell.letter,
+          color: tileColor(lastCell.letter),
+          bigBurst: breakdown.total >= 7,
+        });
+      } else {
+        setWordCompleteFx({
+          ...fxBase,
+          hasBurst: false,
+          leftPct: 0,
+          topPct: 0,
+          widthPct: 0,
+          heightPct: 0,
+          letter: '',
+          color: '',
+          bigBurst: false,
+        });
+      }
       setSubmitFeedback('valid');
-      onDispatch({ type: 'SUBMIT_WORD', playerId: 'local', at: clock.now() });
-      setTimeout(() => {
+      if (nextStreak >= 7) {
+        navigator.vibrate?.([15, 40, 15, 40, 50]);
+      } else if (nextStreak >= 4) {
+        navigator.vibrate?.([20, 40, 60]);
+      } else {
+        navigator.vibrate?.([20, 30, 50]);
+      }
+      onDispatch({ type: 'SUBMIT_WORD', playerId: 'local', at: submittedAt });
+      const timerId = window.setTimeout(() => {
         setSubmitFeedback(null);
+        setWordCompleteFx(null);
+        setHudScoreDisplay(null);
+        setHudFxHidden(false);
         prevFormedRef.current = '';
-      }, 500);
+      }, WORD_COMPLETE_FX_MS);
+      return () => window.clearTimeout(timerId);
     }
-  }, [formedWord, targetWord, onDispatch, clock]);
+  }, [
+    formedWord,
+    targetWord,
+    onDispatch,
+    clock,
+    player,
+    selectedIds,
+    gameState.matchMode,
+    gameState.soloDifficulty,
+    matchGrid,
+    gridRows,
+    gridCols,
+    t.fastBonus1,
+    t.fastBonus2,
+    t.rareBonus1,
+    t.rareBonus2,
+    t.doubleBonusActive,
+    onBadgesEarned,
+  ]);
+
+  useEffect(() => {
+    if (!wordCompleteFx || submitFeedback !== 'valid') {
+      setHudScoreDisplay(null);
+      return;
+    }
+
+    const from = wordCompleteFx.scoreBefore;
+    const to = from + wordCompleteFx.total;
+    if (to <= from) {
+      setHudScoreDisplay(to);
+      return;
+    }
+
+    const steps = to - from;
+    const stepMs = SCORE_COUNT_MS / steps;
+    let current = from;
+    setHudScoreDisplay(from);
+
+    const intervalId = window.setInterval(() => {
+      current += 1;
+      setHudScoreDisplay(current);
+      if (current >= to) {
+        window.clearInterval(intervalId);
+      }
+    }, stepMs);
+
+    return () => window.clearInterval(intervalId);
+  }, [wordCompleteFx?.runId, wordCompleteFx?.scoreBefore, wordCompleteFx?.total, submitFeedback]);
+
+  useEffect(() => {
+    if (!wordCompleteFx) {
+      setHudFxHidden(false);
+      return;
+    }
+
+    setHudFxHidden(false);
+    const timerId = window.setTimeout(() => setHudFxHidden(true), HUD_FX_HIDE_DELAY_MS);
+    return () => window.clearTimeout(timerId);
+  }, [wordCompleteFx?.runId, wordCompleteFx]);
 
   const prevScoreRef = useRef(displayScore);
   useEffect(() => {
@@ -390,6 +761,28 @@ export function GameScreen({
       prevScoreRef.current = displayScore;
     }
   }, [displayScore, onScoreChange]);
+
+  useEffect(() => {
+    const active = player?.doubleBonusActive ?? false;
+    if (active && !prevDoubleBonusActiveRef.current) {
+      setDoubleChipFlash(true);
+      const id = window.setTimeout(() => setDoubleChipFlash(false), 600);
+      prevDoubleBonusActiveRef.current = active;
+      return () => window.clearTimeout(id);
+    }
+    prevDoubleBonusActiveRef.current = active;
+  }, [player?.doubleBonusActive]);
+
+  useEffect(() => {
+    const streak = player?.doubleBonusStreak ?? 0;
+    if (streak > prevDoubleBonusStreakRef.current && (player?.doubleBonusActive ?? false)) {
+      setStreakChipPop(true);
+      const id = window.setTimeout(() => setStreakChipPop(false), 400);
+      prevDoubleBonusStreakRef.current = streak;
+      return () => window.clearTimeout(id);
+    }
+    prevDoubleBonusStreakRef.current = streak;
+  }, [player?.doubleBonusStreak, player?.doubleBonusActive]);
 
   // When the opponent shuffles OUR board, play the spin animation.
   const prevShuffleSignalRef = useRef(shuffleSignal);
@@ -540,13 +933,71 @@ export function GameScreen({
     onSoloVictoryDone(action);
   }
 
+  const grantDebugBadges = useCallback(
+    (ids: BadgeId[], callouts: BonusCallout[]) => {
+      if (!import.meta.env.DEV || ids.length === 0) return;
+      onBadgesEarned?.(ids);
+      wordCompleteFxRunRef.current += 1;
+      setSubmitFeedback('valid');
+      setHudFxHidden(false);
+      setWordCompleteFx({
+        runId: wordCompleteFxRunRef.current,
+        scoreBefore: displayScore,
+        total: 0,
+        streak: player?.wordStreak ?? 0,
+        bonusCallouts: callouts,
+        hasBurst: false,
+        leftPct: 0,
+        topPct: 0,
+        widthPct: 0,
+        heightPct: 0,
+        letter: '',
+        color: '',
+        bigBurst: false,
+      });
+      window.setTimeout(() => {
+        setSubmitFeedback(null);
+        setWordCompleteFx(null);
+        setHudScoreDisplay(null);
+        setHudFxHidden(false);
+      }, WORD_COMPLETE_FX_MS);
+    },
+    [onBadgesEarned, displayScore, player?.wordStreak],
+  );
+
   useEffect(() => {
-    if (!import.meta.env.DEV || isMultiplayer || isSoloVictory) return;
+    if (!import.meta.env.DEV) return;
 
     function onKeyDown(e: KeyboardEvent) {
       if (e.repeat) return;
       const target = e.target;
       if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) return;
+
+      if (!e.shiftKey && (e.key === 'r' || e.code === 'KeyR')) {
+        e.preventDefault();
+        grantDebugBadges(
+          ['rare_1', 'rare_2'],
+          [
+            { kind: 'rare', tier: 1, label: t.rareBonus1 },
+            { kind: 'rare', tier: 2, label: t.rareBonus2 },
+          ],
+        );
+        return;
+      }
+
+      if (!e.shiftKey && (e.key === 'e' || e.code === 'KeyE')) {
+        e.preventDefault();
+        grantDebugBadges(
+          ['fast_1', 'fast_2'],
+          [
+            { kind: 'fast', tier: 1, label: t.fastBonus1 },
+            { kind: 'fast', tier: 2, label: t.fastBonus2 },
+          ],
+        );
+        return;
+      }
+
+      if (isMultiplayer || isSoloVictory) return;
 
       if (e.key === 'v' || e.code === 'KeyV') {
         e.preventDefault();
@@ -557,7 +1008,7 @@ export function GameScreen({
         return;
       }
 
-      if (e.key === 'r' || e.code === 'KeyR') {
+      if (e.shiftKey && (e.key === 'R' || e.code === 'KeyR')) {
         e.preventDefault();
         forceEpicRef.current = false;
         forceRecordRef.current = true;
@@ -566,7 +1017,7 @@ export function GameScreen({
         return;
       }
 
-      if (e.key === 'e' || e.code === 'KeyE') {
+      if (e.shiftKey && (e.key === 'E' || e.code === 'KeyE')) {
         e.preventDefault();
         forceEpicRef.current = true;
         forceRecordRef.current = false;
@@ -577,10 +1028,32 @@ export function GameScreen({
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [isMultiplayer, isSoloVictory, onDispatch, clock]);
+  }, [isMultiplayer, isSoloVictory, onDispatch, clock, grantDebugBadges, t]);
+
+  useEffect(() => {
+    if (!import.meta.env.DEV || isSoloVictory) return;
+
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.repeat) return;
+      if (e.key !== '1' && e.code !== 'Digit1') return;
+      const target = e.target;
+      if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) return;
+
+      e.preventDefault();
+      onDispatch({ type: 'DEV_INCREMENT_WORD_STREAK', playerId: 'local' });
+    }
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isSoloVictory, onDispatch]);
 
   const isLeading = isMultiplayer && displayScore > opponentScore;
   const isBehind = isMultiplayer && displayScore < opponentScore;
+
+  const doubleStreakLabel =
+    player?.doubleBonusActive && (player.doubleBonusStreak ?? 0) > 0
+      ? `2× ×${player.doubleBonusStreak}`
+      : '2×';
 
   const triggerInvalidTap = useCallback((id: string) => {
     setSubmitFeedback('invalid');
@@ -611,6 +1084,8 @@ export function GameScreen({
       }
 
       onDispatch({ type: 'SELECT_LETTER', playerId: 'local', letterId: id });
+      setTapOkTileId(id);
+      window.setTimeout(() => setTapOkTileId(current => (current === id ? null : current)), TAP_OK_MS);
     },
     [onDispatch, player, selectedIds, targetWord, triggerInvalidTap],
   );
@@ -630,6 +1105,20 @@ export function GameScreen({
     }
     onDispatch({ type: 'ACTIVATE_DOUBLE', playerId: 'local', at: clock.now() });
   }
+
+  const isScoreCounting = hudScoreDisplay !== null;
+  const shownScore = isScoreCounting ? hudScoreDisplay : displayScore;
+  const activeWordCompleteFx =
+    wordCompleteFx && submitFeedback === 'valid' ? wordCompleteFx : null;
+  const hudFloatingBadges = activeWordCompleteFx ? (
+    <HudFloatingBadges
+      fx={activeWordCompleteFx}
+      hidden={hudFxHidden}
+      badgeCounts={badgeCounts}
+      streakLabel={t.wordStreakPop.replace('{count}', String(activeWordCompleteFx.streak))}
+      streakAria={t.wordStreakAria.replace('{count}', String(activeWordCompleteFx.streak))}
+    />
+  ) : null;
 
   // Pre-compute which columns the clock doesn't need — just render grid cells
   // columns[col][rowIndex], rowIndex 0 = bottom → visual row = gridRows - 1 - rowIndex
@@ -689,51 +1178,74 @@ export function GameScreen({
 
       {/* HUD */}
       {isMultiplayer ? (
-        <div className="vs-hud">
-          <div
-            className={`vs-card vs-card--you${isLeading ? ' vs-card--leading' : ''}${isBehind ? ' vs-card--behind' : ''}`}
-          >
-            <span className="vs-card-label">{t.you}</span>
-            <span key={displayScore} className="vs-card-score">
-              {displayScore}
-            </span>
-            {isLeading && <span className="vs-lead-badge">{t.winning}</span>}
-          </div>
-          <div className="vs-center">
-            <span className={`vs-time${isUrgent ? ' vs-time--urgent' : ''}`}>
-              {formatTime(timeLeft)}
-            </span>
-            <span className="vs-versus">{t.vs}</span>
-          </div>
-          <div
-            className={`vs-card vs-card--opp${!isLeading && !isBehind ? '' : isLeading ? ' vs-card--behind' : ' vs-card--leading'}`}
-          >
-            <span className="vs-card-label">{t.them}</span>
-            <span key={opponentScore} className="vs-card-score vs-card-score--opp">
-              {opponentScore}
-            </span>
-            {isBehind && <span className="vs-lead-badge vs-lead-badge--danger">{t.winning}</span>}
+        <div className="hud-bar">
+          <div className="vs-hud">
+            <div
+              className={`vs-card vs-card--you${isLeading ? ' vs-card--leading' : ''}${isBehind ? ' vs-card--behind' : ''}`}
+            >
+              <span className="vs-card-label">{t.you}</span>
+              <span className={`vs-card-score${isScoreCounting ? ' vs-card-score--counting' : ''}`}>
+                {shownScore}
+              </span>
+              {player?.doubleBonusActive && (
+                <span
+                  className={`double-streak-chip${doubleChipFlash ? ' double-streak-chip--flash' : ''}${streakChipPop ? ' double-streak-chip--pop' : ''}`}
+                >
+                  {doubleStreakLabel}
+                </span>
+              )}
+              {isLeading && <span className="vs-lead-badge">{t.winning}</span>}
+            </div>
+            <div className="vs-center">
+              <span className={`vs-time${isUrgent ? ' vs-time--urgent' : ''}`}>
+                {formatTime(timeLeft)}
+              </span>
+              <span className="vs-versus">{t.vs}</span>
+            </div>
+            <div
+              className={`vs-card vs-card--opp${!isLeading && !isBehind ? '' : isLeading ? ' vs-card--behind' : ' vs-card--leading'}`}
+            >
+              <span className="vs-card-label">{t.them}</span>
+              <span key={opponentScore} className="vs-card-score vs-card-score--opp">
+                {opponentScore}
+              </span>
+              {isBehind && <span className="vs-lead-badge vs-lead-badge--danger">{t.winning}</span>}
+            </div>
           </div>
         </div>
       ) : (
-        <div className="hud">
-          <div className="hud-item">
-            <span className="hud-label">{t.score}</span>
-            <span key={displayScore} className="hud-value hud-score">
-              {displayScore}
-            </span>
-          </div>
-          <div className="hud-item">
-            <span className="hud-label">{t.elapsed}</span>
-            <span className="hud-value">
-              {formatTime(elapsedTime)}
-            </span>
+        <div className="hud-bar">
+          <div className="hud">
+            <div className="hud-item">
+              <span className="hud-label">{t.score}</span>
+              <span
+                className={`hud-value hud-score${isScoreCounting ? ' hud-score--counting' : ''}`}
+              >
+                {shownScore}
+              </span>
+              {player?.doubleBonusActive && (
+                <span
+                  className={`double-streak-chip double-streak-chip--solo${doubleChipFlash ? ' double-streak-chip--flash' : ''}${streakChipPop ? ' double-streak-chip--pop' : ''}`}
+                >
+                  {doubleStreakLabel}
+                </span>
+              )}
+            </div>
+            <div className="hud-item">
+              <span className="hud-label">{t.elapsed}</span>
+              <span className="hud-value">
+                {formatTime(elapsedTime)}
+              </span>
+            </div>
           </div>
         </div>
       )}
 
+      {hudFloatingBadges}
+
       {/* Target word banner */}
       {!showVictoryPopup && (
+      <>
       <div
         className={`target-word-banner notranslate${submitFeedback === 'valid' ? ' target-word-banner--valid' : ''}${submitFeedback === 'invalid' ? ' target-word-banner--invalid' : ''}${wordMatchesTarget ? ' target-word-banner--complete' : ''}${isSoloVictory ? ' target-word-banner--victory' : ''}`}
         lang={gameLanguage}
@@ -755,7 +1267,7 @@ export function GameScreen({
                 return (
                   <span
                     key={i}
-                    className={`target-word-letter target-word-letter--${letterState}`}
+                    className={`target-word-letter target-word-letter--${letterState}${letterState === 'current' && isWordTimerUrgent ? ' target-word-letter--urgent' : ''}`}
                   >
                     <span className="letter-glyph" translate="no">
                       {upperByLanguage(ch, gameLanguage)}
@@ -764,9 +1276,6 @@ export function GameScreen({
                 );
               })}
             </span>
-            {wordMatchesTarget && formedWord.length > 0 && (
-              <span className="target-word-score">+{wordScore}</span>
-            )}
           </>
         ) : (
           <span className="target-word-label" style={{ opacity: 0.5 }}>
@@ -774,13 +1283,14 @@ export function GameScreen({
           </span>
         )}
       </div>
+      </>
       )}
 
       {/* Grid arena container with timer */}
       <div className="arena-container">
         {/* Vertical word timer bar */}
         {targetWord && wordDuration > 0 && !isSoloVictory && (
-          <div className="word-timer-bar word-timer-bar--vertical">
+          <div className={`word-timer-bar word-timer-bar--vertical${isWordTimerUrgent ? ' word-timer-bar--urgent' : ''}`}>
             <div className="word-timer-bar__fill-track">
               <div
                 key={wordTimerKey}
@@ -793,7 +1303,7 @@ export function GameScreen({
                 }
               />
             </div>
-            <div className="word-timer-bar__text">
+            <div className={`word-timer-bar__text${isWordTimerUrgent ? ' word-timer-bar__text--urgent' : ''}`}>
               {Math.ceil(wordTimeLeft / 1000)}s
             </div>
           </div>
@@ -854,11 +1364,10 @@ export function GameScreen({
           col.map((cell, rowFromBottom) => {
             const rowFromTop = gridRows - 1 - rowFromBottom;
             const isSelected = selectedSet.has(cell.id);
-            const selOrder = selectedIds.indexOf(cell.id);
             return (
               <button
                 key={cell.id}
-                className={`grid-tile grid-tile--landed${isSelected ? ' grid-tile--selected' : ''}${errorTileId === cell.id ? ' grid-tile--error' : ''}${hintCellId === cell.id ? ' grid-tile--hint' : ''}`}
+                className={`grid-tile grid-tile--landed${isSelected ? ' grid-tile--selected' : ''}${errorTileId === cell.id ? ' grid-tile--error' : ''}${hintCellId === cell.id ? ' grid-tile--hint' : ''}${tapOkTileId === cell.id ? ' grid-tile--tap-ok' : ''}`}
                 style={{
                   left: `${colIdx * colPct}%`,
                   top: `${rowFromTop * rowPct}%`,
@@ -873,12 +1382,13 @@ export function GameScreen({
                 {hintCellId === cell.id && (
                   <span className="grid-tile__hint-badge">{t.hintBadge}</span>
                 )}
-                {isSelected && selOrder >= 0 && (
-                  <span className="grid-tile__order">{selOrder + 1}</span>
-                )}
               </button>
             );
           }),
+        )}
+
+        {wordCompleteFx?.hasBurst && (
+          <WordCompleteBurst key={wordCompleteFx.runId} fx={wordCompleteFx} language={gameLanguage} />
         )}
       </div>
       </div>
@@ -982,6 +1492,19 @@ export function GameScreen({
             <div className="victory-popup__score-label">
               {snapshotScore === 1 ? t.point : t.points}
             </div>
+            {!isNewBest && snapshotPreviousBest > 0 && (
+              <div className="best-score-chip victory-popup__best">
+                <span className="best-score-chip__label">{t.yourBest}</span>
+                <span className="best-score-chip__value">{snapshotPreviousBest}</span>
+              </div>
+            )}
+            {hasVictoryBadges && (
+              <BadgeReveal
+                sessionBadges={sessionBadges}
+                lifetimeBefore={lifetimeBadgeBefore}
+                embedded
+              />
+            )}
             {victoryHonorMessage && (
               <p
                 className={`victory-popup__honor${
@@ -992,12 +1515,6 @@ export function GameScreen({
               >
                 {victoryHonorMessage}
               </p>
-            )}
-            {!isNewBest && snapshotPreviousBest > 0 && (
-              <div className="best-score-chip">
-                <span className="best-score-chip__label">{t.yourBest}</span>
-                <span className="best-score-chip__value">{snapshotPreviousBest}</span>
-              </div>
             )}
             {needsNamePrompt && (
               <div className="victory-popup__name">

@@ -1,5 +1,13 @@
 import type { GameAction, GameState, PlayerState, LandedCell } from './types';
-import { MAX_BUFFER_SIZE, MATCH_DURATION_MS, SKIP_PENALTY, SOLO_REFILL_LIMIT, getMatchGridDimensions, type GridDimensions } from './constants';
+import {
+  MAX_BUFFER_SIZE,
+  MATCH_DURATION_MS,
+  SKIP_PENALTY,
+  getMatchGridDimensions,
+  getSoloMatchDurationMs,
+  getSoloRefillLimit,
+  type GridDimensions,
+} from './constants';
 import { createSeededRng } from './seededRng';
 import { fillGrid, pickTargetWord, isBoardEmpty, getCellById, isCorrectNextLetter, refillEmptySlots, computeWordPoints, getPlayerWordDuration, updateSoloAdaptiveMultiplier } from './gridUtils';
 
@@ -10,6 +18,7 @@ export function createInitialPlayerState(): PlayerState {
     selectedIds: [],
     targetWord: '',
     wordsCompleted: 0,
+    wordStreak: 0,
     doubleBonusStreak: 0,
     wordPool: [],
     usedWords: [],
@@ -61,7 +70,9 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         matchDuration:
           action.mode === 'multiplayer' && action.matchDuration != null
             ? action.matchDuration
-            : MATCH_DURATION_MS,
+            : isSolo
+              ? getSoloMatchDurationMs()
+              : MATCH_DURATION_MS,
         seed: action.seed,
         soloDifficulty: difficulty,
         gridCols: grid.cols,
@@ -73,6 +84,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
             selectedIds: [],
             targetWord,
             wordsCompleted: 0,
+            wordStreak: 0,
             doubleBonusStreak: 0,
             wordPool,
             usedWords: [...wordPool],
@@ -81,7 +93,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
             doubleBonusActive: false,
             doubleBonusUsed: false,
             pityTimeouts: 0,
-            refillsRemaining: isSolo ? SOLO_REFILL_LIMIT : 0,
+            refillsRemaining: isSolo ? getSoloRefillLimit() : 0,
             soloAdaptiveMultiplier: 1,
           },
         },
@@ -113,6 +125,22 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
             selectedIds: [],
             targetWord: '',
             wordPool: [],
+          },
+        },
+      };
+    }
+
+    case 'DEV_INCREMENT_WORD_STREAK': {
+      if (!import.meta.env.DEV) return state;
+      const player = state.players[action.playerId];
+      if (!player || state.matchStatus !== 'playing') return state;
+      return {
+        ...state,
+        players: {
+          ...state.players,
+          [action.playerId]: {
+            ...player,
+            wordStreak: (player.wordStreak ?? 0) + 1,
           },
         },
       };
@@ -280,6 +308,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
             selectedIds: [],
             targetWord: nextWord ?? '',
             wordsCompleted: newWordsCompleted,
+            wordStreak: player.wordStreak + 1,
             doubleBonusStreak: newDoubleBonusStreak,
             wordPool: finalWordPool,
             usedWords: finalUsedWords,
@@ -329,6 +358,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
             selectedIds: [],
             targetWord: nextWord ?? '',
             wordsCompleted: newWordsCompleted,
+            wordStreak: 0,
             doubleBonusStreak: player.doubleBonusActive ? 0 : player.doubleBonusStreak,
             wordStartedAt: action.at,
             pityTimeouts: player.pityTimeouts,
@@ -378,6 +408,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
             selectedIds: [],
             targetWord: nextWord ?? '',
             wordsCompleted: newWordsCompleted,
+            wordStreak: 0,
             doubleBonusStreak: player.doubleBonusActive ? 0 : player.doubleBonusStreak,
             wordStartedAt: action.at,
             pityTimeouts: newPityTimeouts,

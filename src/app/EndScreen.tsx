@@ -1,6 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { MatchResult } from '../multiplayer/types';
+import { totalBadgeCount, type BadgeCounts } from '../domain/badges';
 import { useI18n } from '../i18n';
+import { BadgeReveal } from './BadgeReveal';
 
 /** Ignore taps briefly after mount so a lift from the game grid/skip bar cannot hit Play Again. */
 const END_ACTION_DELAY_MS = 500;
@@ -8,6 +10,8 @@ const END_ACTION_DELAY_MS = 500;
 interface Props {
   score: number;
   bestScore: number;
+  sessionBadges: BadgeCounts;
+  lifetimeBefore: BadgeCounts;
   onPlayAgain: () => void;
   onBackToMenu?: () => void;
   isMultiplayer?: boolean;
@@ -18,11 +22,15 @@ interface Props {
   result?: MatchResult | null;
   /** Multiplayer: opponent hasn't reported their final score yet — hold the result. */
   resolving?: boolean;
+  /** Badges were already shown (e.g. solo victory popup) — skip the loot reveal. */
+  skipBadgeReveal?: boolean;
 }
 
 export function EndScreen({
   score,
   bestScore,
+  sessionBadges,
+  lifetimeBefore,
   onPlayAgain,
   onBackToMenu,
   isMultiplayer = false,
@@ -32,15 +40,42 @@ export function EndScreen({
   opponentResigned = false,
   result = null,
   resolving = false,
+  skipBadgeReveal = false,
 }: Props) {
   const { t } = useI18n();
   const [actionsEnabled, setActionsEnabled] = useState(false);
+  const [badgeRevealDone, setBadgeRevealDone] = useState(false);
+  const prevShowBadgeRevealRef = useRef(false);
+  const hasSessionBadges = totalBadgeCount(sessionBadges) > 0;
+  const showBadgeReveal = hasSessionBadges && !skipBadgeReveal;
   const isNewBest = !isMultiplayer && score > 0 && score >= bestScore;
 
+  const handleBadgeRevealComplete = useCallback(() => {
+    setBadgeRevealDone(true);
+  }, []);
+
   useEffect(() => {
+    if (showBadgeReveal && !prevShowBadgeRevealRef.current) {
+      setBadgeRevealDone(false);
+      setActionsEnabled(false);
+    }
+    if (!showBadgeReveal) {
+      setBadgeRevealDone(true);
+    }
+    prevShowBadgeRevealRef.current = showBadgeReveal;
+  }, [showBadgeReveal]);
+
+  useEffect(() => {
+    if (!showBadgeReveal) return;
+    const fallback = window.setTimeout(() => setBadgeRevealDone(true), 12_000);
+    return () => window.clearTimeout(fallback);
+  }, [showBadgeReveal]);
+
+  useEffect(() => {
+    if (!badgeRevealDone) return;
     const timer = window.setTimeout(() => setActionsEnabled(true), END_ACTION_DELAY_MS);
     return () => window.clearTimeout(timer);
-  }, []);
+  }, [badgeRevealDone]);
 
   const RESULT_LABELS: Record<MatchResult, string> = {
     win: t.youWin,
@@ -55,8 +90,9 @@ export function EndScreen({
   };
 
   return (
-    <div className="screen end-screen">
-      <div className="end-content">
+    <div className={`screen end-screen${showBadgeReveal && !badgeRevealDone ? ' end-screen--badge-loot' : ''}${badgeRevealDone && showBadgeReveal ? ' end-screen--badges-done' : ''}`}>
+      <div className={`end-content${showBadgeReveal ? ' end-content--with-badges' : ''}`}>
+        <div className="end-content__summary">
         {isMultiplayer ? (
           <>
             {resolving ? (
@@ -92,7 +128,7 @@ export function EndScreen({
               {score === 1 ? t.point : t.points}
             </div>
             {!isNewBest && bestScore > 0 && (
-              <div className="best-score-chip">
+              <div className="best-score-chip end-content__best">
                 <span className="best-score-chip__label">{t.yourBest}</span>
                 <span className="best-score-chip__value">{bestScore}</span>
               </div>
@@ -100,6 +136,16 @@ export function EndScreen({
           </>
         )}
 
+        {showBadgeReveal && (
+          <BadgeReveal
+            sessionBadges={sessionBadges}
+            lifetimeBefore={lifetimeBefore}
+            onComplete={handleBadgeRevealComplete}
+          />
+        )}
+        </div>
+
+        <div className="end-content__footer">
         {opponentWantsRematch && (
           <div className="rematch-nudge">
             {t.opponentWantsRematch}
@@ -127,6 +173,7 @@ export function EndScreen({
               {t.menu}
             </button>
           )}
+        </div>
         </div>
       </div>
     </div>

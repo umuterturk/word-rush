@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { LEADERBOARD_HOME_PREVIEW_COUNT } from '../domain/constants';
 import type { SoloDifficulty } from '../domain/types';
 import type { FriendEntry, LeaderboardEntry } from '../ports';
+import type { BadgeCounts } from '../domain/badges';
 import { useI18n } from '../i18n';
 import { FriendsPage } from './FriendsPage';
 import { InstallBanner } from './InstallBanner';
@@ -11,6 +12,7 @@ import { ProfilePopup } from './ProfilePopup';
 interface Props {
   bestScore: number;
   username: string;
+  badgeStats: BadgeCounts;
   onSaveUsername: (name: string) => void;
   weeklyLeaderboard: LeaderboardEntry[];
   todayLeaderboard: LeaderboardEntry[];
@@ -89,6 +91,7 @@ function LeaderboardList({ entries }: { entries: LeaderboardEntry[] }) {
 export function StartScreen({
   bestScore,
   username,
+  badgeStats,
   onSaveUsername,
   weeklyLeaderboard,
   todayLeaderboard,
@@ -265,6 +268,7 @@ export function StartScreen({
       {showProfile && (
         <ProfilePopup
           username={username}
+          badgeStats={badgeStats}
           onSave={onSaveUsername}
           onClose={() => setShowProfile(false)}
         />

@@ -1,4 +1,5 @@
 import type { GameAction, GameState } from './types';
+import { IS_DEV_GAMEPLAY } from './constants';
 import { gameReducer } from './gameReducer';
 
 /**
@@ -20,7 +21,12 @@ export function updateGame(
 
   const logicalTime = wallClockTime - state.matchStartedAt;
 
-  if (logicalTime >= state.matchDuration && state.matchMode !== 'solo') {
+  const soloTimedOut =
+    state.matchMode === 'solo'
+    && IS_DEV_GAMEPLAY
+    && !state.soloVictoryPending
+    && logicalTime >= state.matchDuration;
+  if (logicalTime >= state.matchDuration && (state.matchMode !== 'solo' || soloTimedOut)) {
     return { ...state, matchStatus: 'ended' };
   }
 

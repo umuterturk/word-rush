@@ -18,6 +18,8 @@ export interface GameSessionExtras {
   inviteCode?: string;
   lastShuffleNonce?: number;
   prevPublishedScore?: number;
+  sessionBadges?: SavedGameSession['sessionBadges'];
+  lifetimeBadgeBefore?: SavedGameSession['lifetimeBadgeBefore'];
 }
 
 interface GameSessionOptions {
@@ -35,6 +37,7 @@ interface GameSession {
   hydrated: boolean;
   dispatchAction: (action: GameAction) => void;
   setGamePaused: (paused: boolean) => void;
+  persistSession: (state: GameState) => void;
 }
 
 /**
@@ -81,7 +84,7 @@ export function useGameSession(
 
   const persistSession = useCallback(
     (state: GameState) => {
-      if (state.matchStatus !== 'playing') return;
+      if (state.matchStatus !== 'playing' && state.matchStatus !== 'ended') return;
       const extras = getSessionExtrasRef.current();
       void storage.saveGameSession({
         gameState: state,
@@ -89,6 +92,8 @@ export function useGameSession(
         inviteCode: extras.inviteCode,
         lastShuffleNonce: extras.lastShuffleNonce,
         prevPublishedScore: extras.prevPublishedScore,
+        sessionBadges: extras.sessionBadges,
+        lifetimeBadgeBefore: extras.lifetimeBadgeBefore,
       });
     },
     [storage],
@@ -101,7 +106,11 @@ export function useGameSession(
     storage.loadGameSession().then(saved => {
       if (!active) return;
 
-      if (saved?.gameState.matchStatus === 'playing') {
+      if (saved?.gameState.matchStatus === 'ended') {
+        stateRef.current = saved.gameState;
+        setGameState(saved.gameState);
+        onRestoredRef.current?.(saved);
+      } else if (saved?.gameState.matchStatus === 'playing') {
         if (shouldRestoreSavedSession(saved)) {
           stateRef.current = saved.gameState;
           setGameState(saved.gameState);
@@ -147,7 +156,7 @@ export function useGameSession(
   useEffect(() => {
     if (!hydrated) return;
 
-    if (gameState.matchStatus !== 'playing') {
+    if (gameState.matchStatus === 'idle') {
       void storage.clearGameSession();
       return;
     }
@@ -158,7 +167,10 @@ export function useGameSession(
   // Flush the latest state when the page is hidden (refresh, tab switch, etc.).
   useEffect(() => {
     const onPageHide = () => {
-      if (stateRef.current.matchStatus === 'playing') {
+      if (
+        stateRef.current.matchStatus === 'playing'
+        || stateRef.current.matchStatus === 'ended'
+      ) {
         persistSession(stateRef.current);
       }
     };
@@ -287,5 +299,14 @@ export function useGameSession(
     actionQueueRef.current.push(action);
   }, []);
 
-  return { gameState, logicalTime, gameClockNow, bestScore, hydrated, dispatchAction, setGamePaused };
+  return {
+    gameState,
+    logicalTime,
+    gameClockNow,
+    bestScore,
+    hydrated,
+    dispatchAction,
+    setGamePaused,
+    persistSession,
+  };
 }

@@ -21,6 +21,8 @@ export interface PlayerState {
   targetWord: string;
   /** Number of words successfully completed (used for difficulty scaling). */
   wordsCompleted: number;
+  /** Consecutive words found without skip or timeout. */
+  wordStreak: number;
   /** Multiplayer 2× mode: consecutive finds while 2× is active; compounds timer/score until a miss. */
   doubleBonusStreak: number;
   /** Pool of words that were used to create this grid (these are the only findable words). */
@@ -83,4 +85,6 @@ export type GameAction =
   | { type: 'MARK_SHUFFLE_USED'; playerId: string }
   | { type: 'ACTIVATE_DOUBLE'; playerId: string; at: number }
   /** Dev/testing: jump to solo victory celebration (empty board + pending flag). */
-  | { type: 'TRIGGER_SOLO_VICTORY'; playerId: string; at: number };
+  | { type: 'TRIGGER_SOLO_VICTORY'; playerId: string; at: number }
+  /** Dev only: bump word streak for UI testing. */
+  | { type: 'DEV_INCREMENT_WORD_STREAK'; playerId: string };

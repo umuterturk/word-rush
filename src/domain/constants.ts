@@ -11,13 +11,30 @@ export const MAX_BUFFER_SIZE = MAX_WORD_LENGTH;
 
 import type { MatchMode, SoloDifficulty } from './types';
 
+/** True in the Vite dev server — not during unit tests (MODE=test) or production builds. */
+export const IS_DEV_GAMEPLAY = import.meta.env.MODE === 'development';
+
 export const MATCH_DURATION_MS = 120_000;
 
 /** Shorter multiplayer rounds in dev for faster iteration. */
-export const MULTIPLAYER_MATCH_DURATION_MS = import.meta.env.DEV ? 30_000 : MATCH_DURATION_MS;
+export const MULTIPLAYER_MATCH_DURATION_MS = IS_DEV_GAMEPLAY ? 30_000 : MATCH_DURATION_MS;
 
 /** Solo: board refills allowed after correct words. */
 export const SOLO_REFILL_LIMIT = 10;
+
+/** Dev solo: no refills — clear the initial board only. */
+const DEV_SOLO_REFILL_LIMIT = 0;
+
+/** Dev solo: short overall timer so matches end quickly even if the board isn't cleared. */
+const DEV_SOLO_MATCH_DURATION_MS = 30_000;
+
+export function getSoloMatchDurationMs(): number {
+  return IS_DEV_GAMEPLAY ? DEV_SOLO_MATCH_DURATION_MS : MATCH_DURATION_MS;
+}
+
+export function getSoloRefillLimit(): number {
+  return IS_DEV_GAMEPLAY ? DEV_SOLO_REFILL_LIMIT : SOLO_REFILL_LIMIT;
+}
 
 export interface GridDimensions {
   cols: number;
@@ -39,6 +56,9 @@ export function getMatchGridDimensions(
   soloDifficulty?: SoloDifficulty,
 ): GridDimensions {
   if (matchMode === 'solo') {
+    if (IS_DEV_GAMEPLAY) {
+      return SOLO_GRID_BY_DIFFICULTY.easy;
+    }
     return SOLO_GRID_BY_DIFFICULTY[soloDifficulty ?? 'hard'];
   }
   return MULTIPLAYER_GRID;

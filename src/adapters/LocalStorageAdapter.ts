@@ -1,9 +1,11 @@
 import type { StoragePort } from '../ports';
+import { EMPTY_BADGE_COUNTS, parseBadgeCounts, type BadgeCounts } from '../domain/badges';
 import { parseSavedGameSession, type SavedGameSession } from '../domain/savedGameSession';
 
 const BEST_SCORE_KEY = 'word-rush:bestScore';
 const USERNAME_KEY = 'word-rush:username';
 const ACTIVE_SESSION_KEY = 'word-rush:activeSession';
+const BADGE_STATS_KEY = 'word-rush:badgeStats';
 
 export class LocalStorageAdapter implements StoragePort {
   async saveBestScore(score: number): Promise<void> {
@@ -64,6 +66,24 @@ export class LocalStorageAdapter implements StoragePort {
       localStorage.removeItem(ACTIVE_SESSION_KEY);
     } catch {
       // Silently ignore — storage may be unavailable
+    }
+  }
+
+  async saveBadgeStats(counts: BadgeCounts): Promise<void> {
+    try {
+      localStorage.setItem(BADGE_STATS_KEY, JSON.stringify(counts));
+    } catch {
+      // Silently ignore — storage may be unavailable
+    }
+  }
+
+  async loadBadgeStats(): Promise<BadgeCounts> {
+    try {
+      const raw = localStorage.getItem(BADGE_STATS_KEY);
+      if (raw === null) return { ...EMPTY_BADGE_COUNTS };
+      return parseBadgeCounts(JSON.parse(raw));
+    } catch {
+      return { ...EMPTY_BADGE_COUNTS };
     }
   }
 }

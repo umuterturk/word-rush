@@ -1,3 +1,5 @@
+import type { BadgeCounts } from './badges';
+import { BADGE_IDS } from './badges';
 import type { GameState, LandedCell, MatchMode, MatchStatus, PlayerState, SoloDifficulty } from './types';
 import { getMatchGridDimensions } from './constants';
 
@@ -11,6 +13,19 @@ export interface SavedGameSession {
   lastShuffleNonce?: number;
   /** Score at last publish (multiplayer). */
   prevPublishedScore?: number;
+  /** Badges earned during this match (for end-screen restore after refresh). */
+  sessionBadges?: BadgeCounts;
+  /** Lifetime badge totals before this match's badges were merged in. */
+  lifetimeBadgeBefore?: BadgeCounts;
+}
+
+function isBadgeCounts(value: unknown): value is BadgeCounts {
+  if (!value || typeof value !== 'object') return false;
+  const counts = value as Record<string, unknown>;
+  return BADGE_IDS.every(id => {
+    const n = counts[id];
+    return n === undefined || (typeof n === 'number' && Number.isFinite(n) && n >= 0);
+  });
 }
 
 function isMatchStatus(value: unknown): value is MatchStatus {
@@ -44,6 +59,7 @@ function isPlayerState(value: unknown): value is PlayerState {
   }
   if (typeof player.targetWord !== 'string') return false;
   if (typeof player.wordsCompleted !== 'number') return false;
+  if (player.wordStreak !== undefined && typeof player.wordStreak !== 'number') return false;
   if (typeof player.doubleBonusStreak !== 'number') return false;
   if (!Array.isArray(player.wordPool) || !player.wordPool.every(word => typeof word === 'string')) {
     return false;
@@ -89,7 +105,12 @@ export function parseSavedGameSession(raw: unknown): SavedGameSession | null {
   if (!raw || typeof raw !== 'object') return null;
   const session = raw as SavedGameSession;
   if (!isGameState(session.gameState)) return null;
-  if (session.gameState.matchStatus !== 'playing') return null;
+  const status = session.gameState.matchStatus;
+  if (status !== 'playing' && status !== 'ended') return null;
+  if (session.sessionBadges !== undefined && !isBadgeCounts(session.sessionBadges)) return null;
+  if (session.lifetimeBadgeBefore !== undefined && !isBadgeCounts(session.lifetimeBadgeBefore)) {
+    return null;
+  }
   if (session.matchId !== undefined && typeof session.matchId !== 'string') return null;
   if (session.inviteCode !== undefined && typeof session.inviteCode !== 'string') return null;
   if (session.lastShuffleNonce !== undefined && typeof session.lastShuffleNonce !== 'number') {
@@ -104,6 +125,9 @@ export function parseSavedGameSession(raw: unknown): SavedGameSession | null {
   }
   if (session.gameState.players.local.soloAdaptiveMultiplier === undefined) {
     session.gameState.players.local.soloAdaptiveMultiplier = 1;
+  }
+  if (session.gameState.players.local.wordStreak === undefined) {
+    session.gameState.players.local.wordStreak = 0;
   }
   if (!session.gameState.gridCols || !session.gameState.gridRows) {
     const grid = getMatchGridDimensions(

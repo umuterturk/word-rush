@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BrowserClockAdapter } from './adapters/BrowserClockAdapter';
 import { LocalStorageAdapter } from './adapters/LocalStorageAdapter';
 import { FirebaseMultiplayerAdapter } from './adapters/FirebaseMultiplayerAdapter';
@@ -11,6 +11,14 @@ import { FirebaseFriendsAdapter } from './adapters/FirebaseFriendsAdapter';
 import { NoopFriendsAdapter } from './adapters/NoopFriendsAdapter';
 import { isFirebaseConfigured } from './firebase/config';
 import type { SoloDifficulty } from './domain/types';
+import {
+  EMPTY_BADGE_COUNTS,
+  addBadgeIds,
+  mergeBadgeCounts,
+  totalBadgeCount,
+  type BadgeCounts,
+  type BadgeId,
+} from './domain/badges';
 import type { FriendEntry } from './ports';
 import type { SavedGameSession } from './domain/savedGameSession';
 import { useGameSession, type GameSessionExtras } from './app/useGameSession';
@@ -28,6 +36,7 @@ import { RoomUnavailableScreen } from './app/RoomUnavailableScreen';
 import { GameRequestModal } from './app/GameRequestModal';
 import { useAppUpdate } from './app/useAppUpdate';
 import { usePlayerProfile } from './app/usePlayerProfile';
+import { useBadgeStats } from './app/useBadgeStats';
 import { useLeaderboard } from './app/useLeaderboard';
 import { useFriends } from './app/useFriends';
 import { useUserPresence } from './app/useUserPresence';
@@ -63,6 +72,7 @@ const END_SETTLE_TIMEOUT_MS = 6_000;
 export default function App() {
   const { t, language } = useI18n();
   const { username, saveUsername } = usePlayerProfile(storage);
+  const { badges, addBadges } = useBadgeStats(storage);
   const {
     allTimeEntries: leaderboardEntries,
     todayEntries: todayLeaderboardEntries,
@@ -97,10 +107,24 @@ export default function App() {
   const [loadedWordLanguage, setLoadedWordLanguage] = useState<WordLanguage | null>(null);
   const [challengingUid, setChallengingUid] = useState<string | null>(null);
   const [endSettleTimedOut, setEndSettleTimedOut] = useState(false);
+  const [sessionBadges, setSessionBadges] = useState<BadgeCounts>(EMPTY_BADGE_COUNTS);
+  const [endBadgeSnapshot, setEndBadgeSnapshot] = useState<{
+    session: BadgeCounts;
+    before: BadgeCounts;
+  } | null>(null);
+  const [skipEndBadgeReveal, setSkipEndBadgeReveal] = useState(false);
+
+  const displayBadgeCounts = useMemo(
+    () => mergeBadgeCounts(badges, sessionBadges),
+    [badges, sessionBadges],
+  );
 
   const activeMatchIdRef = useRef<string | undefined>(undefined);
   const prevScoreRef = useRef(0);
   const matchStartedRef = useRef(false);
+  const sessionBadgesRef = useRef<BadgeCounts>(EMPTY_BADGE_COUNTS);
+  const lifetimeBadgeBeforeRef = useRef<BadgeCounts>(EMPTY_BADGE_COUNTS);
+  const badgesPersistedRef = useRef(false);
   const roundRef = useRef(0);
   const lastShuffleNonceRef = useRef(0);
   const matchEndedAtRef = useRef(0);
@@ -116,9 +140,27 @@ export default function App() {
       inviteCode: isMultiplayer ? (mp.inviteCode ?? undefined) : undefined,
       lastShuffleNonce: lastShuffleNonceRef.current,
       prevPublishedScore: prevScoreRef.current,
+      sessionBadges: sessionBadgesRef.current,
+      lifetimeBadgeBefore: lifetimeBadgeBeforeRef.current,
     }),
     [isMultiplayer, mp.matchConfig?.matchId, mp.inviteCode],
   );
+
+  const restoreSessionBadges = useCallback((session: SavedGameSession) => {
+    const restored = session.sessionBadges ?? EMPTY_BADGE_COUNTS;
+    sessionBadgesRef.current = restored;
+    setSessionBadges({ ...restored });
+
+    if (session.gameState.matchStatus !== 'ended') return;
+
+    const before = session.lifetimeBadgeBefore ?? EMPTY_BADGE_COUNTS;
+    lifetimeBadgeBeforeRef.current = { ...before };
+    badgesPersistedRef.current = true;
+    setEndBadgeSnapshot({
+      session: { ...restored },
+      before: { ...before },
+    });
+  }, []);
 
   const handleSessionRestored = useCallback(
     (session: SavedGameSession) => {
@@ -132,7 +174,7 @@ export default function App() {
       if (session.prevPublishedScore !== undefined) {
         prevScoreRef.current = session.prevPublishedScore;
       }
-      matchStartedRef.current = true;
+      restoreSessionBadges(session);
       setShowCountdown(false);
       setIsRematching(false);
       setFriendMatchPhase(null);
@@ -140,16 +182,26 @@ export default function App() {
       setGameUnavailable(false);
       activeMatchIdRef.current = session.matchId;
 
+      if (session.gameState.matchStatus === 'ended') {
+        matchStartedRef.current = false;
+        if (session.matchId && firebaseReady) {
+          void mp.rejoinMatch(session.matchId);
+        }
+        return;
+      }
+
+      matchStartedRef.current = true;
+
       if (session.matchId && firebaseReady) {
         void mp.rejoinMatch(session.matchId).then(() => {
           mp.markPlaying();
         });
       }
     },
-    [mp],
+    [mp, restoreSessionBadges],
   );
 
-  const { gameState, logicalTime, gameClockNow, bestScore, hydrated, dispatchAction } =
+  const { gameState, logicalTime, gameClockNow, bestScore, hydrated, dispatchAction, persistSession } =
     useGameSession(
     clock,
     storage,
@@ -158,6 +210,22 @@ export default function App() {
       onRestored: handleSessionRestored,
     },
   );
+
+  const resolvedEndBadges = useMemo((): { session: BadgeCounts; before: BadgeCounts } | null => {
+    if (endBadgeSnapshot) return endBadgeSnapshot;
+    if (gameState.matchStatus !== 'ended') return null;
+
+    const session =
+      totalBadgeCount(sessionBadges) > 0 ? sessionBadges : sessionBadgesRef.current;
+    if (totalBadgeCount(session) === 0) return null;
+
+    const before =
+      totalBadgeCount(lifetimeBadgeBeforeRef.current) > 0
+        ? lifetimeBadgeBeforeRef.current
+        : badges;
+
+    return { session: { ...session }, before: { ...before } };
+  }, [endBadgeSnapshot, gameState.matchStatus, sessionBadges, badges]);
 
   const presenceMatchId = isMultiplayer ? mp.matchConfig?.matchId : undefined;
 
@@ -242,6 +310,11 @@ export default function App() {
 
   const startMatch = useCallback(
     (seed: string) => {
+      sessionBadgesRef.current = EMPTY_BADGE_COUNTS;
+      lifetimeBadgeBeforeRef.current = EMPTY_BADGE_COUNTS;
+      setSessionBadges(EMPTY_BADGE_COUNTS);
+      badgesPersistedRef.current = false;
+      setEndBadgeSnapshot(null);
       dispatchAction({
         type: 'START_MATCH',
         seed,
@@ -334,6 +407,27 @@ export default function App() {
     analytics.track('mp_shuffle_sent');
   }, [isMultiplayer, gameState.players, dispatchAction, mp]);
 
+  const handleBadgesEarned = useCallback((ids: BadgeId[]) => {
+    if (ids.length === 0) return;
+    sessionBadgesRef.current = addBadgeIds(sessionBadgesRef.current, ids);
+    setSessionBadges({ ...sessionBadgesRef.current });
+  }, []);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    if (gameState.matchStatus !== 'playing' && gameState.matchStatus !== 'ended') return;
+    persistSession(gameState);
+  }, [sessionBadges, gameState, hydrated, persistSession]);
+
+  const clearBadgeSessionState = useCallback(() => {
+    setEndBadgeSnapshot(null);
+    setSkipEndBadgeReveal(false);
+    sessionBadgesRef.current = EMPTY_BADGE_COUNTS;
+    lifetimeBadgeBeforeRef.current = EMPTY_BADGE_COUNTS;
+    setSessionBadges(EMPTY_BADGE_COUNTS);
+    badgesPersistedRef.current = false;
+  }, []);
+
   const handlePlayAgain = useCallback(() => {
     if (clock.now() - matchEndedAtRef.current < 500) return;
 
@@ -345,10 +439,11 @@ export default function App() {
       analytics.track('mp_rematch_requested');
       void mp.requestRematch();
     } else {
+      clearBadgeSessionState();
       dispatchAction({ type: 'RESET' });
       setShowCountdown(true);
     }
-  }, [isMultiplayer, mp, dispatchAction]);
+  }, [isMultiplayer, mp, dispatchAction, clearBadgeSessionState]);
 
   const handleBackToMenu = useCallback(() => {
     roundRef.current = 0;
@@ -368,25 +463,25 @@ export default function App() {
   }, [mp, dispatchAction]);
 
   const completeSoloVictoryExit = useCallback(
-    (action: 'playAgain' | 'menu') => {
+    (_action: 'playAgain' | 'menu') => {
       dispatchAction({ type: 'END_MATCH', at: clock.now() });
-      window.setTimeout(() => {
-        if (action === 'playAgain') {
-          dispatchAction({ type: 'RESET' });
-          setShowCountdown(true);
-        } else {
-          handleBackToMenu();
-        }
-      }, 0);
     },
-    [clock, dispatchAction, handleBackToMenu],
+    [clock, dispatchAction],
   );
 
   const handleSoloVictoryDone = useCallback(
     (action: 'playAgain' | 'menu') => {
-      completeSoloVictoryExit(action);
+      if (action === 'playAgain') {
+        // Badges were already revealed on the victory popup — end the match for
+        // persistence/analytics, but skip EndScreen and go straight to countdown.
+        dispatchAction({ type: 'END_MATCH', at: clock.now() });
+        setShowCountdown(true);
+        return;
+      }
+      setSkipEndBadgeReveal(false);
+      completeSoloVictoryExit('menu');
     },
-    [completeSoloVictoryExit],
+    [clock, completeSoloVictoryExit, dispatchAction],
   );
 
   const handleVictoryUsernameSave = useCallback(
@@ -514,6 +609,18 @@ export default function App() {
 
     const localScore = gameState.players['local']?.score ?? 0;
 
+    if (!badgesPersistedRef.current) {
+      badgesPersistedRef.current = true;
+      lifetimeBadgeBeforeRef.current = { ...badges };
+      const snapshot = {
+        session: { ...sessionBadgesRef.current },
+        before: { ...badges },
+      };
+      setEndBadgeSnapshot(snapshot);
+      void addBadges(sessionBadgesRef.current);
+      persistSession(gameState);
+    }
+
     if (isMultiplayer) {
       void mp.markDone(localScore);
       mp.markEnded();
@@ -532,6 +639,10 @@ export default function App() {
     mp,
     username,
     refreshLeaderboard,
+    badges,
+    addBadges,
+    persistSession,
+    gameState,
   ]);
 
   // The multiplayer result is "settled" once the opponent has also finished
@@ -668,8 +779,9 @@ export default function App() {
   useEffect(() => {
     if (gameState.matchStatus === 'idle') {
       setEndProfileDismissed(false);
+      clearBadgeSessionState();
     }
-  }, [gameState.matchStatus]);
+  }, [gameState.matchStatus, clearBadgeSessionState]);
 
   useEffect(() => {
     if (gameState.matchStatus !== 'ended' || !isMultiplayer) return;
@@ -830,6 +942,7 @@ export default function App() {
         <StartScreen
           bestScore={bestScore}
           username={username}
+          badgeStats={badges}
           onSaveUsername={saveUsername}
           weeklyLeaderboard={weeklyLeaderboardEntries}
           todayLeaderboard={todayLeaderboardEntries}
@@ -880,6 +993,10 @@ export default function App() {
           username={username}
           onVictoryUsernameSave={isMultiplayer ? undefined : handleVictoryUsernameSave}
           onSoloVictoryDone={isMultiplayer ? undefined : handleSoloVictoryDone}
+          onBadgesEarned={handleBadgesEarned}
+          badgeCounts={displayBadgeCounts}
+          sessionBadges={sessionBadges}
+          lifetimeBadgeBefore={badges}
         />
         {globalOverlays}
       </>
@@ -891,6 +1008,9 @@ export default function App() {
       <EndScreen
         score={gameState.players['local']?.score ?? 0}
         bestScore={bestScore}
+        sessionBadges={resolvedEndBadges?.session ?? EMPTY_BADGE_COUNTS}
+        lifetimeBefore={resolvedEndBadges?.before ?? badges}
+        skipBadgeReveal={skipEndBadgeReveal}
         onPlayAgain={handlePlayAgain}
         onBackToMenu={handleBackToMenu}
         isMultiplayer={isMultiplayer}

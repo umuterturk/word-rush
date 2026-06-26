@@ -59,6 +59,12 @@ export interface Translations {
   doubleBonus: string;
   doubleBonusUsed: string;
   doubleBonusActive: string;
+  fastBonus1: string;
+  fastBonus2: string;
+  rareBonus1: string;
+  rareBonus2: string;
+  wordStreakAria: string;
+  wordStreakPop: string;
   hintBadge: string;
   tapToSpell: string;
   paused: string;
@@ -94,6 +100,13 @@ export interface Translations {
   rematch: string;
   playAgain: string;
   menu: string;
+
+  // Badges
+  badgesCollectedTitle: string;
+  badgesCollectedSubtitle: string;
+  profileBadgesTitle: string;
+  profileBadgesEmpty: string;
+  profileBadgesTotal: string;
 
   // Multiplayer lobby
   creatingRoom: string;
@@ -197,6 +210,12 @@ export const translations: Record<Language, Translations> = {
     doubleBonus: 'Half time, double score until you miss!',
     doubleBonusUsed: 'Used',
     doubleBonusActive: '2× active',
+    fastBonus1: 'FAST!',
+    fastBonus2: 'LIGHTNING!',
+    rareBonus1: 'RARE',
+    rareBonus2: 'LEGENDARY',
+    wordStreakAria: '{count} word streak',
+    wordStreakPop: '{count} STREAK',
     hintBadge: 'TAP',
     tapToSpell: 'tap letters to spell the word',
     paused: 'PAUSED',
@@ -232,6 +251,12 @@ export const translations: Record<Language, Translations> = {
     rematch: 'REMATCH',
     playAgain: 'PLAY AGAIN',
     menu: 'MENU',
+
+    badgesCollectedTitle: 'BADGES EARNED',
+    badgesCollectedSubtitle: 'Your collection grows…',
+    profileBadgesTitle: 'BADGE COLLECTION',
+    profileBadgesEmpty: 'Play matches to earn speed, rarity, and 2× badges.',
+    profileBadgesTotal: '{count} total',
 
     // Multiplayer lobby
     creatingRoom: 'CREATING ROOM...',
@@ -332,6 +357,12 @@ export const translations: Record<Language, Translations> = {
     doubleBonus: 'Kaçırana kadar yarı süre, çift puan!',
     doubleBonusUsed: 'Kullanıldı',
     doubleBonusActive: '2× aktif',
+    fastBonus1: 'HIZLI!',
+    fastBonus2: 'YILDIRIM HIZINDA!',
+    rareBonus1: 'NADİR',
+    rareBonus2: 'EŞSİZ',
+    wordStreakAria: '{count} kelime serisi',
+    wordStreakPop: '{count} SERİ',
     hintBadge: 'DOKUN',
     tapToSpell: 'kelimeyi yazmak için harflere dokun',
     paused: 'DURAKLATILDI',
@@ -367,6 +398,12 @@ export const translations: Record<Language, Translations> = {
     rematch: 'RÖVANŞ',
     playAgain: 'TEKRAR OYNA',
     menu: 'MENÜ',
+
+    badgesCollectedTitle: 'ROZETLER KAZANILDI',
+    badgesCollectedSubtitle: 'Koleksiyonun büyüyor…',
+    profileBadgesTitle: 'ROZET KOLEKSİYONU',
+    profileBadgesEmpty: 'Hız, nadirlik ve 2× rozetleri kazanmak için oyna.',
+    profileBadgesTotal: 'toplam {count}',
 
     // Multiplayer lobby
     creatingRoom: 'ODA OLUŞTURULUYOR...',
