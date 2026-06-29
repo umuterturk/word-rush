@@ -37,6 +37,7 @@ import { GameRequestModal } from './app/GameRequestModal';
 import { useAppUpdate } from './app/useAppUpdate';
 import { usePlayerProfile } from './app/usePlayerProfile';
 import { useBadgeStats } from './app/useBadgeStats';
+import { usePlayerLifetimeStats } from './app/usePlayerLifetimeStats';
 import { useLeaderboard } from './app/useLeaderboard';
 import { useFriends } from './app/useFriends';
 import { useUserPresence } from './app/useUserPresence';
@@ -49,6 +50,7 @@ import {
 } from './app/gameUrl';
 import { ensureWordListLoaded, type WordLanguage } from './domain/wordSet';
 import { brokeLocalRecord, wouldQualifyForLeaderboard } from './app/victoryCelebration';
+import { randomDevBadgeDelta } from './app/devGrantRandomBadges';
 
 const clock = new BrowserClockAdapter();
 const storage = new LocalStorageAdapter();
@@ -73,6 +75,7 @@ export default function App() {
   const { t, language } = useI18n();
   const { username, saveUsername } = usePlayerProfile(storage);
   const { badges, addBadges } = useBadgeStats(storage);
+  const { stats: lifetimeStats, recordCompletedMatch } = usePlayerLifetimeStats(storage, addBadges);
   const {
     allTimeEntries: leaderboardEntries,
     todayEntries: todayLeaderboardEntries,
@@ -113,6 +116,8 @@ export default function App() {
     before: BadgeCounts;
   } | null>(null);
   const [skipEndBadgeReveal, setSkipEndBadgeReveal] = useState(false);
+  /** Solo victory popup was dismissed — skip the duplicate EndScreen. */
+  const [soloVictoryExit, setSoloVictoryExit] = useState<'playAgain' | 'menu' | null>(null);
 
   const displayBadgeCounts = useMemo(
     () => mergeBadgeCounts(badges, sessionBadges),
@@ -131,6 +136,7 @@ export default function App() {
   const wasPlayingRef = useRef(false);
   const rivalRecordedKeyRef = useRef<string | null>(null);
   const addFriendCheckedRef = useRef<string | null>(null);
+  const lifetimeStatsRecordedRef = useRef<string | null>(null);
 
   const isMultiplayer = appMode === 'multiplayer';
 
@@ -184,6 +190,11 @@ export default function App() {
 
       if (session.gameState.matchStatus === 'ended') {
         matchStartedRef.current = false;
+        if (session.gameState.matchMode === 'solo') {
+          lifetimeStatsRecordedRef.current = `solo-${session.gameState.matchStartedAt}`;
+        } else if (session.matchId) {
+          lifetimeStatsRecordedRef.current = `${session.matchId}-stats`;
+        }
         if (session.matchId && firebaseReady) {
           void mp.rejoinMatch(session.matchId);
         }
@@ -315,6 +326,7 @@ export default function App() {
       setSessionBadges(EMPTY_BADGE_COUNTS);
       badgesPersistedRef.current = false;
       setEndBadgeSnapshot(null);
+      setSoloVictoryExit(null);
       dispatchAction({
         type: 'START_MATCH',
         seed,
@@ -345,6 +357,10 @@ export default function App() {
     setSoloDifficulty(difficulty);
     setShowCountdown(true);
   }, []);
+
+  const handleDevGrantRandomBadges = useCallback(() => {
+    void addBadges(randomDevBadgeDelta());
+  }, [addBadges]);
 
   const handleCreateRoom = useCallback(async () => {
     setGameUnavailable(false);
@@ -422,6 +438,7 @@ export default function App() {
   const clearBadgeSessionState = useCallback(() => {
     setEndBadgeSnapshot(null);
     setSkipEndBadgeReveal(false);
+    setSoloVictoryExit(null);
     sessionBadgesRef.current = EMPTY_BADGE_COUNTS;
     lifetimeBadgeBeforeRef.current = EMPTY_BADGE_COUNTS;
     setSessionBadges(EMPTY_BADGE_COUNTS);
@@ -455,6 +472,7 @@ export default function App() {
     setFriendMatchPhase(null);
     setInviteCopied(false);
     setChallengingUid(null);
+    setSoloVictoryExit(null);
     rivalRecordedKeyRef.current = null;
     addFriendCheckedRef.current = null;
     void mp.reset();
@@ -462,26 +480,17 @@ export default function App() {
     dispatchAction({ type: 'RESET' });
   }, [mp, dispatchAction]);
 
-  const completeSoloVictoryExit = useCallback(
-    (_action: 'playAgain' | 'menu') => {
-      dispatchAction({ type: 'END_MATCH', at: clock.now() });
-    },
-    [clock, dispatchAction],
-  );
-
   const handleSoloVictoryDone = useCallback(
     (action: 'playAgain' | 'menu') => {
+      // Badges and score were already shown on the victory popup — skip EndScreen.
+      setSkipEndBadgeReveal(true);
+      setSoloVictoryExit(action);
+      dispatchAction({ type: 'END_MATCH', at: clock.now() });
       if (action === 'playAgain') {
-        // Badges were already revealed on the victory popup — end the match for
-        // persistence/analytics, but skip EndScreen and go straight to countdown.
-        dispatchAction({ type: 'END_MATCH', at: clock.now() });
         setShowCountdown(true);
-        return;
       }
-      setSkipEndBadgeReveal(false);
-      completeSoloVictoryExit('menu');
     },
-    [clock, completeSoloVictoryExit, dispatchAction],
+    [clock, dispatchAction],
   );
 
   const handleVictoryUsernameSave = useCallback(
@@ -600,6 +609,12 @@ export default function App() {
     }
   }, [gameState.matchStatus]);
 
+  // Solo victory popup is the end screen — return to menu after END_MATCH side effects.
+  useEffect(() => {
+    if (soloVictoryExit !== 'menu' || gameState.matchStatus !== 'ended') return;
+    handleBackToMenu();
+  }, [soloVictoryExit, gameState.matchStatus, handleBackToMenu]);
+
   // When the match ends locally, publish our final score immediately. In
   // multiplayer we mark ourselves "done" rather than reporting the result yet —
   // the result is only resolved once BOTH players are done (see resultSettled),
@@ -626,6 +641,11 @@ export default function App() {
       mp.markEnded();
     } else {
       analytics.track('match_ended', { mode: 'solo', score: localScore });
+      const statsKey = `solo-${gameState.matchStartedAt}`;
+      if (lifetimeStatsRecordedRef.current !== statsKey) {
+        lifetimeStatsRecordedRef.current = statsKey;
+        recordCompletedMatch({ mode: 'solo' });
+      }
       if (localScore > 0 && username.trim()) {
         void leaderboard.submitScore(username.trim(), localScore).then(() => refreshLeaderboard());
       }
@@ -643,6 +663,7 @@ export default function App() {
     addBadges,
     persistSession,
     gameState,
+    recordCompletedMatch,
   ]);
 
   // The multiplayer result is "settled" once the opponent has also finished
@@ -807,6 +828,12 @@ export default function App() {
       result,
     });
 
+    const statsKey = `${matchId}-r${mp.round}-stats`;
+    if (lifetimeStatsRecordedRef.current !== statsKey) {
+      lifetimeStatsRecordedRef.current = statsKey;
+      recordCompletedMatch({ mode: 'multiplayer', won: result === 'win' });
+    }
+
     void recordMatchResult(opponentUid, mp.opponentName, result, matchId).then(() =>
       refreshFriends(),
     );
@@ -823,6 +850,7 @@ export default function App() {
     mp,
     recordMatchResult,
     refreshFriends,
+    recordCompletedMatch,
   ]);
 
   useEffect(() => {
@@ -867,6 +895,7 @@ export default function App() {
   const showEndProfilePopup =
     gameState.matchStatus === 'ended' &&
     !isMultiplayer &&
+    soloVictoryExit === null &&
     !username.trim() &&
     !endProfileDismissed &&
     qualifiesForLeaderboardNamePrompt;
@@ -943,6 +972,7 @@ export default function App() {
           bestScore={bestScore}
           username={username}
           badgeStats={badges}
+          lifetimeStats={lifetimeStats}
           onSaveUsername={saveUsername}
           weeklyLeaderboard={weeklyLeaderboardEntries}
           todayLeaderboard={todayLeaderboardEntries}
@@ -956,6 +986,9 @@ export default function App() {
           onPlaySolo={handlePlaySolo}
           onPlayWithFriend={handleCreateRoom}
           onChallengeFriend={handleChallengeFriend}
+          onDevGrantRandomBadges={
+            import.meta.env.DEV ? handleDevGrantRandomBadges : undefined
+          }
         />
         {showFriendMatchOverlay && friendMatchPhase && (
           <FriendMatchOverlay
@@ -1001,6 +1034,11 @@ export default function App() {
         {globalOverlays}
       </>
     );
+  }
+
+  // Solo victory popup already served as the end screen — don't show EndScreen again.
+  if (!isMultiplayer && soloVictoryExit !== null) {
+    return null;
   }
 
   return (

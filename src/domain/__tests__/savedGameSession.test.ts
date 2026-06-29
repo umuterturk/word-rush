@@ -96,8 +96,8 @@ describe('parseSavedGameSession', () => {
   it('accepts ended matches for end-screen restore', () => {
     const parsed = parseSavedGameSession({
       gameState: playingState({ matchStatus: 'ended' }),
-      sessionBadges: { fast_1: 2, fast_2: 0, rare_1: 1, rare_2: 0, double: 0 },
-      lifetimeBadgeBefore: { fast_1: 5, fast_2: 0, rare_1: 0, rare_2: 0, double: 0 },
+      sessionBadges: { fast_1: 2, fast_2: 0, streak_3: 1, double: 0 },
+      lifetimeBadgeBefore: { fast_1: 5, fast_2: 0, streak_3: 0, double: 0 },
     });
     expect(parsed?.gameState.matchStatus).toBe('ended');
     expect(parsed?.sessionBadges?.fast_1).toBe(2);

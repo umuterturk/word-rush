@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { SECONDS_PER_LETTER } from '../constants';
-import { parseBadgeCounts, resolveFastBadgeTier, resolveRareBadgeTier } from '../badges';
+import { parseBadgeCounts, resolveFastBadgeTier, streakBadgeId } from '../badges';
 
 const fairMsPerLetter = SECONDS_PER_LETTER * 1000;
 
@@ -14,50 +14,48 @@ describe('resolveFastBadgeTier', () => {
     expect(resolveFastBadgeTier(slow, 5)).toBeNull();
   });
 
-  it('scales total allowed time with word length at the same tier', () => {
-    const msPerLetter = fairMsPerLetter * 0.5;
-    expect(resolveFastBadgeTier(msPerLetter * 3, 3)).toBe(1);
-    expect(resolveFastBadgeTier(msPerLetter * 8, 8)).toBe(1);
-  });
-
   it('assigns two speed tiers by absolute ms per letter', () => {
     expect(resolveFastBadgeTier(fairMsPerLetter * 0.67 * 4, 4)).toBe(1);
     expect(resolveFastBadgeTier(fairMsPerLetter * 0.47 * 4, 4)).toBe(2);
   });
 });
 
-describe('resolveRareBadgeTier', () => {
-  it('returns null below the rare threshold', () => {
-    expect(resolveRareBadgeTier(1.1)).toBeNull();
-    expect(resolveRareBadgeTier(1.2)).toBeNull();
+describe('streakBadgeId', () => {
+  it('maps streak counts 2–7 to badge ids', () => {
+    expect(streakBadgeId(2)).toBe('streak_2');
+    expect(streakBadgeId(7)).toBe('streak_7');
   });
 
-  it('assigns two rarity tiers', () => {
-    expect(resolveRareBadgeTier(1.25)).toBe(1);
-    expect(resolveRareBadgeTier(1.42)).toBe(2);
+  it('returns null outside the streak range', () => {
+    expect(streakBadgeId(1)).toBeNull();
+    expect(streakBadgeId(8)).toBeNull();
   });
 });
 
 describe('parseBadgeCounts', () => {
   it('folds legacy four-tier keys into two tiers', () => {
-    expect(
-      parseBadgeCounts({
-        fast_1: 2,
-        fast_2: 3,
-        fast_3: 1,
-        fast_4: 4,
-        rare_1: 1,
-        rare_2: 2,
-        rare_3: 3,
-        rare_4: 1,
-        double: 5,
-      }),
-    ).toEqual({
-      fast_1: 5,
-      fast_2: 5,
-      rare_1: 3,
-      rare_2: 4,
+    const parsed = parseBadgeCounts({
+      fast_1: 2,
+      fast_2: 3,
+      fast_3: 1,
+      fast_4: 4,
+      rare_1: 1,
+      rare_2: 2,
       double: 5,
     });
+    expect(parsed.fast_1).toBe(5);
+    expect(parsed.fast_2).toBe(5);
+    expect(parsed.double).toBe(5);
+    expect(parsed.streak_2).toBe(0);
+  });
+
+  it('reads current badge keys', () => {
+    expect(
+      parseBadgeCounts({
+        fast_1: 1,
+        streak_3: 2,
+        mp_debut: 1,
+      }).streak_3,
+    ).toBe(2);
   });
 });

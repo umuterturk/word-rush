@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { LEADERBOARD_HOME_PREVIEW_COUNT } from '../domain/constants';
 import type { SoloDifficulty } from '../domain/types';
 import type { FriendEntry, LeaderboardEntry } from '../ports';
 import type { BadgeCounts } from '../domain/badges';
+import type { PlayerLifetimeStats } from '../domain/playerStats';
 import { useI18n } from '../i18n';
 import { FriendsPage } from './FriendsPage';
+import { HomeHub } from './HomeHub';
 import { InstallBanner } from './InstallBanner';
 import { LanguageSwitcher } from './LanguageSwitcher';
 import { ProfilePopup } from './ProfilePopup';
@@ -13,6 +14,7 @@ interface Props {
   bestScore: number;
   username: string;
   badgeStats: BadgeCounts;
+  lifetimeStats: PlayerLifetimeStats;
   onSaveUsername: (name: string) => void;
   weeklyLeaderboard: LeaderboardEntry[];
   todayLeaderboard: LeaderboardEntry[];
@@ -26,6 +28,7 @@ interface Props {
   onPlaySolo: (difficulty: SoloDifficulty) => void;
   onPlayWithFriend: () => void;
   onChallengeFriend: (friend: FriendEntry) => void;
+  onDevGrantRandomBadges?: () => void;
 }
 
 type StartPage = 'home' | 'leaderboard' | 'friends';
@@ -92,6 +95,7 @@ export function StartScreen({
   bestScore,
   username,
   badgeStats,
+  lifetimeStats,
   onSaveUsername,
   weeklyLeaderboard,
   todayLeaderboard,
@@ -105,6 +109,7 @@ export function StartScreen({
   onPlaySolo,
   onPlayWithFriend,
   onChallengeFriend,
+  onDevGrantRandomBadges,
 }: Props) {
   const { t } = useI18n();
   const [showProfile, setShowProfile] = useState(false);
@@ -130,50 +135,18 @@ export function StartScreen({
         <LanguageSwitcher />
       </div>
 
-      <div className="start-page">
+      <div className={`start-page${activePage === 'home' ? ' start-page--home' : ''}`}>
         {activePage === 'home' ? (
-          <>
-            <div className="start-hero">
-              <h1 className="game-title">{t.gameTitle}</h1>
-            </div>
-
-            <div className="start-content">
-              {bestScore > 0 && (
-                <div className="best-score-chip">
-                  <span className="best-score-chip__label">{t.yourBest}</span>
-                  <span className="best-score-chip__value">{bestScore}</span>
-                </div>
-              )}
-
-              <div className="leaderboard leaderboard--home">
-                <div className="leaderboard-title">{t.leaderboardTodayHome}</div>
-                {leaderboardLoading ? (
-                  <div className="leaderboard-empty">…</div>
-                ) : (
-                  <LeaderboardList
-                    entries={todayLeaderboard.slice(0, LEADERBOARD_HOME_PREVIEW_COUNT)}
-                  />
-                )}
-              </div>
-
-              <div className="mode-buttons">
-                <button
-                  className="play-btn play-btn--normal"
-                  onClick={() => onPlaySolo(SOLO_MODE)}
-                >
-                  {t.play}
-                </button>
-
-                {multiplayerAvailable && (
-                  <button className="play-btn play-btn--vs" onClick={onPlayWithFriend}>
-                    {t.playWithFriend}
-                  </button>
-                )}
-              </div>
-
-              <InstallBanner />
-            </div>
-          </>
+          <HomeHub
+            bestScore={bestScore}
+            username={username}
+            badgeStats={badgeStats}
+            lifetimeStats={lifetimeStats}
+            multiplayerAvailable={multiplayerAvailable}
+            onPlaySolo={() => onPlaySolo(SOLO_MODE)}
+            onPlayWithFriend={onPlayWithFriend}
+            onDevGrantRandomBadges={onDevGrantRandomBadges}
+          />
         ) : activePage === 'leaderboard' ? (
           <div className="start-leaderboard-page">
             <h2 className="start-page-title">{t.leaderboard}</h2>
@@ -219,6 +192,8 @@ export function StartScreen({
                 <LeaderboardList entries={activeLeaderboard} />
               )}
             </div>
+
+            <InstallBanner />
           </div>
         ) : (
           friendsAvailable && (

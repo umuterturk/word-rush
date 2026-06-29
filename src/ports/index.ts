@@ -2,6 +2,7 @@ import type { MatchSnapshot } from '../multiplayer/types';
 import type { GameLanguage } from '../domain/types';
 import type { SavedGameSession } from '../domain/savedGameSession';
 import type { BadgeCounts } from '../domain/badges';
+import type { PlayerLifetimeStats } from '../domain/playerStats';
 import type { FriendEntry, GameRequest } from '../friends/types';
 
 /**
@@ -31,6 +32,8 @@ export interface StoragePort {
   clearGameSession(): Promise<void>;
   saveBadgeStats(counts: BadgeCounts): Promise<void>;
   loadBadgeStats(): Promise<BadgeCounts>;
+  savePlayerLifetimeStats(stats: PlayerLifetimeStats): Promise<void>;
+  loadPlayerLifetimeStats(): Promise<PlayerLifetimeStats>;
 }
 
 export interface LeaderboardEntry {

@@ -16,15 +16,24 @@ function easeOutCubic(t: number): number {
   return 1 - (1 - t) ** 3;
 }
 
-function badgeKind(id: BadgeId): 'fast' | 'rare' | 'double' {
+function badgeKind(id: BadgeId): 'fast' | 'streak' | 'double' | 'mp' | 'solo' {
   if (id.startsWith('fast_')) return 'fast';
-  if (id.startsWith('rare_')) return 'rare';
+  if (id.startsWith('streak_')) return 'streak';
+  if (id.startsWith('mp_')) return 'mp';
+  if (id.startsWith('solo_')) return 'solo';
   return 'double';
 }
 
-function badgeTier(id: BadgeId): 1 | 2 {
+function badgeTier(id: BadgeId): 1 | 2 | 3 | 4 {
   if (id === 'double') return 1;
-  return Number(id.split('_')[1]) === 2 ? 2 : 1;
+  if (id.startsWith('streak_')) {
+    const n = Number(id.split('_')[1]);
+    if (n >= 7) return 4;
+    if (n >= 5) return 3;
+    if (n >= 3) return 2;
+    return 1;
+  }
+  return 2;
 }
 
 function revealKindClass(id: BadgeId): string {

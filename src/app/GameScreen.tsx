@@ -3,18 +3,18 @@ import type { GameAction, GameState, LandedCell } from '../domain/types';
 import { SKIP_PENALTY, LETTER_HINT_DELAY_MS } from '../domain/constants';
 import type { ClockPort, LeaderboardEntry } from '../ports';
 import { useI18n } from '../i18n';
-import { getPlayerWordDuration, formatDoubleBonusMultiplierLabel, findHintCellId, getCellById, isCorrectNextLetter, computeWordPoints, buildVictoryAlphabetGrid, type WordScoreBreakdown } from '../domain/gridUtils';
+import { getPlayerWordDuration, formatDoubleBonusMultiplierLabel, findHintCellId, getCellById, isCorrectNextLetter, computeWordPoints, buildVictoryAlphabetGrid } from '../domain/gridUtils';
 import { createSeededRng } from '../domain/seededRng';
 import { upperByLanguage } from '../domain/turkishText';
 import {
   badgeIdFromBonus,
   EMPTY_BADGE_COUNTS,
   resolveFastBadgeTier,
-  resolveRareBadgeTier,
   totalBadgeCount,
   type BadgeCounts,
   type BadgeId,
 } from '../domain/badges';
+import { streakCalloutLabel } from './badgeLabels';
 import { BadgeReveal } from './BadgeReveal';
 import {
   SOLO_VICTORY_WAIT_MS,
@@ -102,16 +102,14 @@ const HUD_FX_HIDE_DELAY_MS = 1400;
 const TAP_OK_MS = 150;
 
 interface BonusCallout {
-  kind: 'fast' | 'rare' | 'double';
-  tier: 1 | 2;
+  kind: 'fast' | 'streak' | 'double';
+  tier: number;
   label: string;
 }
 
 interface BonusLabels {
   fastBonus1: string;
   fastBonus2: string;
-  rareBonus1: string;
-  rareBonus2: string;
   doubleBonusActive: string;
 }
 
@@ -319,24 +317,27 @@ function resolveFastCallout(
   return { kind: 'fast', tier, label: tier === 1 ? labels.fastBonus1 : labels.fastBonus2 };
 }
 
-function resolveRareCallout(scarcityMultiplier: number, labels: BonusLabels): BonusCallout | null {
-  const tier = resolveRareBadgeTier(scarcityMultiplier);
-  if (!tier) return null;
-  return { kind: 'rare', tier, label: tier === 1 ? labels.rareBonus1 : labels.rareBonus2 };
+function resolveStreakCallout(
+  streak: number,
+  labelFor: (streak: number) => string,
+): BonusCallout | null {
+  if (streak < 2 || streak > 7) return null;
+  return { kind: 'streak', tier: streak, label: labelFor(streak) };
 }
 
 function buildBonusCallouts(
-  breakdown: WordScoreBreakdown,
   elapsedMs: number,
   wordLength: number,
   doubleBonusActive: boolean,
+  streak: number,
   labels: BonusLabels,
+  streakLabel: (streak: number) => string,
 ): BonusCallout[] {
   const callouts: BonusCallout[] = [];
   const fast = resolveFastCallout(elapsedMs, wordLength, labels);
   if (fast) callouts.push(fast);
-  const rare = resolveRareCallout(breakdown.scarcityMultiplier, labels);
-  if (rare) callouts.push(rare);
+  const streakCallout = resolveStreakCallout(streak, streakLabel);
+  if (streakCallout) callouts.push(streakCallout);
   if (doubleBonusActive) {
     callouts.push({ kind: 'double', tier: 1, label: labels.doubleBonusActive });
   }
@@ -629,17 +630,16 @@ export function GameScreen({
       const scoreBefore = player.score;
       wordCompleteFxRunRef.current += 1;
       const bonusCallouts = buildBonusCallouts(
-        breakdown,
         elapsedMs,
         targetWord.length,
         player.doubleBonusActive,
+        nextStreak,
         {
           fastBonus1: t.fastBonus1,
           fastBonus2: t.fastBonus2,
-          rareBonus1: t.rareBonus1,
-          rareBonus2: t.rareBonus2,
           doubleBonusActive: t.doubleBonusActive,
         },
+        n => streakCalloutLabel(t, n),
       );
       onBadgesEarned?.(
         bonusCallouts.map(callout => badgeIdFromBonus(callout.kind, callout.tier)),
@@ -708,8 +708,6 @@ export function GameScreen({
     gridCols,
     t.fastBonus1,
     t.fastBonus2,
-    t.rareBonus1,
-    t.rareBonus2,
     t.doubleBonusActive,
     onBadgesEarned,
   ]);
@@ -976,10 +974,10 @@ export function GameScreen({
       if (!e.shiftKey && (e.key === 'r' || e.code === 'KeyR')) {
         e.preventDefault();
         grantDebugBadges(
-          ['rare_1', 'rare_2'],
+          ['streak_2', 'streak_7'],
           [
-            { kind: 'rare', tier: 1, label: t.rareBonus1 },
-            { kind: 'rare', tier: 2, label: t.rareBonus2 },
+            { kind: 'streak', tier: 2, label: streakCalloutLabel(t, 2) },
+            { kind: 'streak', tier: 7, label: streakCalloutLabel(t, 7) },
           ],
         );
         return;

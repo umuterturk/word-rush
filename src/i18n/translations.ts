@@ -107,6 +107,65 @@ export interface Translations {
   profileBadgesTitle: string;
   profileBadgesEmpty: string;
   profileBadgesTotal: string;
+  homeAchievementsTitle: string;
+  homeGamesPlayed: string;
+  homeBadgesUnlocked: string;
+  homeEarnedBadgesLabel: string;
+  homeTagline: string;
+  homeSkillsLabel: string;
+  homeSkillsEmpty: string;
+  homeSkillPoints: string;
+  homeTitlesLabel: string;
+  homeTitleSolo: string;
+  homeTitleRival: string;
+  homeTitleChampion: string;
+  homeNoTitle: string;
+  homePlaySoloHint: string;
+  homePlayRivalHint: string;
+  streakBadge2: string;
+  streakBadge3: string;
+  streakBadge4: string;
+  streakBadge5: string;
+  streakBadge6: string;
+  streakBadge7: string;
+  badgeMpDebut: string;
+  badgeMpSparring: string;
+  badgeMpArena: string;
+  badgeMpGladiator: string;
+  badgeMpLegend: string;
+  badgeMpChampion: string;
+  badgeMpDominator: string;
+  badgeSoloDebut: string;
+  badgeSoloGrinder: string;
+  badgeShortFast1: string;
+  badgeShortFast2: string;
+  badgeShortDouble: string;
+  badgeShortMpDebut: string;
+  badgeShortMpSparring: string;
+  badgeShortMpArena: string;
+  badgeShortMpGladiator: string;
+  badgeShortMpLegend: string;
+  badgeShortMpChampion: string;
+  badgeShortMpDominator: string;
+  badgeShortSoloDebut: string;
+  badgeShortSoloGrinder: string;
+  badgeDetailTypeSkill: string;
+  badgeDetailTypeTitle: string;
+  badgeDetailEarnedCount: string;
+  badgeDetailClose: string;
+  badgeDescFast1: string;
+  badgeDescFast2: string;
+  badgeDescDouble: string;
+  badgeDescStreak: string;
+  badgeDescMpDebut: string;
+  badgeDescMpSparring: string;
+  badgeDescMpArena: string;
+  badgeDescMpGladiator: string;
+  badgeDescMpLegend: string;
+  badgeDescMpChampion: string;
+  badgeDescMpDominator: string;
+  badgeDescSoloDebut: string;
+  badgeDescSoloGrinder: string;
 
   // Multiplayer lobby
   creatingRoom: string;
@@ -255,8 +314,67 @@ export const translations: Record<Language, Translations> = {
     badgesCollectedTitle: 'BADGES EARNED',
     badgesCollectedSubtitle: 'Your collection grows…',
     profileBadgesTitle: 'BADGE COLLECTION',
-    profileBadgesEmpty: 'Play matches to earn speed, rarity, and 2× badges.',
+    profileBadgesEmpty: 'Play matches to earn speed, streak, and rival badges.',
     profileBadgesTotal: '{count} total',
+    homeAchievementsTitle: 'Your achievements',
+    homeGamesPlayed: 'GAMES',
+    homeBadgesUnlocked: 'BADGES',
+    homeEarnedBadgesLabel: 'Earned badges',
+    homeTagline: 'Catch letters · spell words · crush your best',
+    homeSkillsLabel: 'SKILL LOOT',
+    homeSkillsEmpty: 'Speed, streaks & 2× bonuses land here — go play!',
+    homeSkillPoints: 'SKILL PTS',
+    homeTitlesLabel: 'TITLES',
+    homeTitleSolo: 'SOLO',
+    homeTitleRival: 'RIVAL',
+    homeTitleChampion: 'CHAMP',
+    homeNoTitle: 'UNRANKED',
+    homePlaySoloHint: 'Clear the board',
+    homePlayRivalHint: '1v1 challenge',
+    streakBadge2: '2× STREAK',
+    streakBadge3: '3× STREAK',
+    streakBadge4: '4× STREAK',
+    streakBadge5: '5× STREAK',
+    streakBadge6: '6× STREAK',
+    streakBadge7: '7× STREAK',
+    badgeMpDebut: 'FIRST RIVAL',
+    badgeMpSparring: 'BATTLE TESTED',
+    badgeMpArena: 'ARENA REGULAR',
+    badgeMpGladiator: 'GRID GLADIATOR',
+    badgeMpLegend: 'WORD LEGEND',
+    badgeMpChampion: 'CHAMPION',
+    badgeMpDominator: 'DOMINATOR',
+    badgeSoloDebut: 'FIRST RUSH',
+    badgeSoloGrinder: 'SOLO GRINDER',
+    badgeShortFast1: 'FAST',
+    badgeShortFast2: 'BOLT',
+    badgeShortDouble: '2×',
+    badgeShortMpDebut: 'RIVAL',
+    badgeShortMpSparring: 'SPAR',
+    badgeShortMpArena: 'ARENA',
+    badgeShortMpGladiator: 'GLAD',
+    badgeShortMpLegend: 'LEGEND',
+    badgeShortMpChampion: 'CHAMP',
+    badgeShortMpDominator: 'BOSS',
+    badgeShortSoloDebut: 'RUSH',
+    badgeShortSoloGrinder: 'GRIND',
+    badgeDetailTypeSkill: 'SKILL BADGE',
+    badgeDetailTypeTitle: 'TITLE',
+    badgeDetailEarnedCount: 'Collected ×{count}',
+    badgeDetailClose: 'CLOSE',
+    badgeDescFast1: 'Clear words faster than the clock expects.',
+    badgeDescFast2: 'Lightning solves — elite speed on the board.',
+    badgeDescDouble: 'Score doubled while your 2× bonus is burning hot.',
+    badgeDescStreak: 'Chain {count} correct words in a row without missing.',
+    badgeDescMpDebut: 'Your first rival match — welcome to the arena.',
+    badgeDescMpSparring: 'Five multiplayer battles — battle tested.',
+    badgeDescMpArena: 'Ten rival matches — a true arena regular.',
+    badgeDescMpGladiator: 'Twenty-five grid battles fought and logged.',
+    badgeDescMpLegend: 'Fifty multiplayer matches. Legendary dedication.',
+    badgeDescMpChampion: 'Your first multiplayer win — champion status.',
+    badgeDescMpDominator: 'Five rival victories — you own the board.',
+    badgeDescSoloDebut: 'Your first solo rush — the journey begins.',
+    badgeDescSoloGrinder: 'Ten solo boards cleared. Pure grind energy.',
 
     // Multiplayer lobby
     creatingRoom: 'CREATING ROOM...',
@@ -402,8 +520,67 @@ export const translations: Record<Language, Translations> = {
     badgesCollectedTitle: 'ROZETLER KAZANILDI',
     badgesCollectedSubtitle: 'Koleksiyonun büyüyor…',
     profileBadgesTitle: 'ROZET KOLEKSİYONU',
-    profileBadgesEmpty: 'Hız, nadirlik ve 2× rozetleri kazanmak için oyna.',
+    profileBadgesEmpty: 'Hız, seri ve düello rozetleri kazanmak için oyna.',
     profileBadgesTotal: 'toplam {count}',
+    homeAchievementsTitle: 'Başarıların',
+    homeGamesPlayed: 'OYUN',
+    homeBadgesUnlocked: 'ROZET',
+    homeEarnedBadgesLabel: 'Kazanılan rozetler',
+    homeTagline: 'Harfleri yakala · kelime yaz · rekoru kır',
+    homeSkillsLabel: 'YETENEK GANIMETİ',
+    homeSkillsEmpty: 'Hız, seri ve 2× bonuslar burada — hadi oyna!',
+    homeSkillPoints: 'YETENEK',
+    homeTitlesLabel: 'UNVANLAR',
+    homeTitleSolo: 'SOLO',
+    homeTitleRival: 'RAKİP',
+    homeTitleChampion: 'ŞAMP',
+    homeNoTitle: 'ÇIRAK',
+    homePlaySoloHint: 'Tahtayı temizle',
+    homePlayRivalHint: '1v1 meydan oku',
+    streakBadge2: '2× SERİ',
+    streakBadge3: '3× SERİ',
+    streakBadge4: '4× SERİ',
+    streakBadge5: '5× SERİ',
+    streakBadge6: '6× SERİ',
+    streakBadge7: '7× SERİ',
+    badgeMpDebut: 'İLK RAKİP',
+    badgeMpSparring: 'DENENMİŞ',
+    badgeMpArena: 'ARENA MÜDAVİMİ',
+    badgeMpGladiator: 'IZGARA GLADYATÖRÜ',
+    badgeMpLegend: 'KELİME EFSANESİ',
+    badgeMpChampion: 'ŞAMPİYON',
+    badgeMpDominator: 'HAKİM',
+    badgeSoloDebut: 'İLK KOŞU',
+    badgeSoloGrinder: 'SOLO USTASI',
+    badgeShortFast1: 'HIZLI',
+    badgeShortFast2: 'YILDIRIM',
+    badgeShortDouble: '2×',
+    badgeShortMpDebut: 'RAKİP',
+    badgeShortMpSparring: 'DÖĞÜŞ',
+    badgeShortMpArena: 'ARENA',
+    badgeShortMpGladiator: 'GLAD',
+    badgeShortMpLegend: 'EFSANE',
+    badgeShortMpChampion: 'ŞAMP',
+    badgeShortMpDominator: 'HAKİM',
+    badgeShortSoloDebut: 'KOŞU',
+    badgeShortSoloGrinder: 'USTA',
+    badgeDetailTypeSkill: 'YETENEK ROZETİ',
+    badgeDetailTypeTitle: 'UNVAN',
+    badgeDetailEarnedCount: 'Toplam ×{count}',
+    badgeDetailClose: 'KAPAT',
+    badgeDescFast1: 'Kelimeyi saatin beklemediği hızda bitir.',
+    badgeDescFast2: 'Yıldırım hızında çözümler — üst düzey tempo.',
+    badgeDescDouble: '2× bonusun aktifken puanın ikiye katlanır.',
+    badgeDescStreak: 'Arka arkaya {count} kelimeyi hatasız tamamla.',
+    badgeDescMpDebut: 'İlk düello maçın — arenaya hoş geldin.',
+    badgeDescMpSparring: 'Beş çok oyunculu maç — sınanmış savaşçı.',
+    badgeDescMpArena: 'On rakip maçı — gerçek bir arena müdavimi.',
+    badgeDescMpGladiator: 'Yirmi beş ızgara savaşı — gladyatör ruhu.',
+    badgeDescMpLegend: 'Elli çok oyunculu maç. Efsanevi bağlılık.',
+    badgeDescMpChampion: 'İlk çok oyunculu galibiyetin — şampiyonluk.',
+    badgeDescMpDominator: 'Beş rakip galibiyeti — tahtaya hükmediyorsun.',
+    badgeDescSoloDebut: 'İlk solo koşun — serüven başlıyor.',
+    badgeDescSoloGrinder: 'On solo tahta temizlendi. Saf grind enerjisi.',
 
     // Multiplayer lobby
     creatingRoom: 'ODA OLUŞTURULUYOR...',
