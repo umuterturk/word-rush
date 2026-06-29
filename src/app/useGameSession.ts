@@ -5,8 +5,6 @@ import { updateGame } from '../domain/updateGame';
 import type { SavedGameSession } from '../domain/savedGameSession';
 import { shouldRestoreSavedSession } from './gameUrl';
 import type { ClockPort, StoragePort } from '../ports';
-import { AUTO_SKIP_ON_TIMEOUT } from '../domain/constants';
-import { getPlayerWordDuration } from '../domain/gridUtils';
 
 function frozenSoloLogicalTime(state: GameState): number | null {
   if (state.soloVictoryAt == null) return null;
@@ -239,29 +237,7 @@ export function useGameSession(
       const effectiveNow = getEffectiveNow(now);
       const pending = actionQueueRef.current.splice(0);
       const prev = stateRef.current;
-      
-      // Check if word timer has expired (before processing pending actions)
-      if (
-        prev.matchStatus === 'playing' &&
-        !prev.soloVictoryPending &&
-        AUTO_SKIP_ON_TIMEOUT &&
-        prev.players['local']
-      ) {
-        const player = prev.players['local'];
-        if (player.targetWord && player.wordStartedAt > 0) {
-          const wordDuration = getPlayerWordDuration(
-            player,
-            prev.matchMode,
-            'gameplay',
-            { cols: prev.gridCols, rows: prev.gridRows },
-          );
-          const elapsed = Math.max(0, effectiveNow - player.wordStartedAt);
-          if (elapsed >= wordDuration) {
-            pending.push({ type: 'WORD_TIMEOUT', playerId: 'local', at: effectiveNow });
-          }
-        }
-      }
-      
+
       const next = updateGame(prev, effectiveNow, pending);
 
       if (next !== prev) {

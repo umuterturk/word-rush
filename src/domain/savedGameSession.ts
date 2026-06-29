@@ -82,6 +82,12 @@ function isPlayerState(value: unknown): value is PlayerState {
   ) {
     return false;
   }
+  if (
+    player.overtimePenaltyTicks !== undefined
+    && typeof player.overtimePenaltyTicks !== 'number'
+  ) {
+    return false;
+  }
   return true;
 }
 

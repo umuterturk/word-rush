@@ -43,6 +43,8 @@ export interface PlayerState {
   refillsRemaining: number;
   /** Solo only: scales per-word gameplay timer up/down based on solve speed (1 = baseline). */
   soloAdaptiveMultiplier: number;
+  /** 200 ms overtime ticks already charged at -1 pt each. */
+  overtimePenaltyTicks: number;
 }
 
 export interface GameState {
@@ -80,7 +82,7 @@ export type GameAction =
   | { type: 'CLEAR_SELECTION'; playerId: string }
   | { type: 'SUBMIT_WORD'; playerId: string; at: number }
   | { type: 'SKIP_WORD'; playerId: string; at: number }
-  | { type: 'WORD_TIMEOUT'; playerId: string; at: number }
+  | { type: 'WORD_OVERTIME'; playerId: string; at: number; overtimeTicks: number }
   | { type: 'SHUFFLE_BOARD'; playerId: string }
   | { type: 'MARK_SHUFFLE_USED'; playerId: string }
   | { type: 'ACTIVATE_DOUBLE'; playerId: string; at: number }

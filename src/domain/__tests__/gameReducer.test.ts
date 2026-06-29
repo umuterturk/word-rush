@@ -434,7 +434,7 @@ describe('double bonus', () => {
   it('disables 2× only after failing while active', () => {
     const base = startedState('double-fail', 1000, 'multiplayer');
     const activated = gameReducer(base, { type: 'ACTIVATE_DOUBLE', playerId: 'local', at: 2000 });
-    const next = gameReducer(activated, { type: 'WORD_TIMEOUT', playerId: 'local', at: 9000 });
+    const next = gameReducer(activated, { type: 'SKIP_WORD', playerId: 'local', at: 9000 });
     expect(next.players['local'].doubleBonusUsed).toBe(true);
     expect(next.players['local'].doubleBonusActive).toBe(false);
   });
@@ -565,51 +565,82 @@ describe('2× mode streak', () => {
   });
 });
 
-describe('pity timer', () => {
-  it('resets wordStartedAt on manual skip', () => {
-    const state = startedState();
-    const skipped = gameReducer(state, {
-      type: 'SKIP_WORD',
+describe('word overtime penalty', () => {
+  it('charges -1 per overtime tick without changing word or selection', () => {
+    const state = {
+      ...startedState('overtime', 1000),
+      players: {
+        local: { ...startedState('overtime', 1000).players['local'], score: 20 },
+      },
+    };
+    const player = state.players['local'];
+    const next = gameReducer(state, {
+      type: 'WORD_OVERTIME',
       playerId: 'local',
       at: 9000,
+      overtimeTicks: 5,
     });
-    expect(skipped.players['local'].wordStartedAt).toBe(9000);
+    expect(next.players['local'].targetWord).toBe(player.targetWord);
+    expect(next.players['local'].selectedIds).toEqual(player.selectedIds);
+    expect(next.players['local'].score).toBe(15);
+    expect(next.players['local'].overtimePenaltyTicks).toBe(5);
   });
 
-  it('increments pity on auto-skip and keeps it on manual skip', () => {
-    const state = startedState();
-    const afterTimeout = gameReducer(state, {
-      type: 'WORD_TIMEOUT',
+  it('does not let score go below zero', () => {
+    const base = startedState('overtime-floor', 1000);
+    const state = {
+      ...base,
+      players: {
+        local: { ...base.players['local'], score: 3 },
+      },
+    };
+    const next = gameReducer(state, {
+      type: 'WORD_OVERTIME',
+      playerId: 'local',
+      at: 9000,
+      overtimeTicks: 5,
+    });
+    expect(next.players['local'].score).toBe(0);
+  });
+
+  it('only charges newly elapsed overtime ticks', () => {
+    const state = {
+      ...startedState('overtime-partial', 1000),
+      players: {
+        local: { ...startedState('overtime-partial', 1000).players['local'], score: 20 },
+      },
+    };
+    const afterOne = gameReducer(state, {
+      type: 'WORD_OVERTIME',
       playerId: 'local',
       at: 5000,
+      overtimeTicks: 1,
     });
-    expect(afterTimeout.players['local'].pityTimeouts).toBe(1);
-
-    const afterManualSkip = gameReducer(afterTimeout, {
-      type: 'SKIP_WORD',
+    const afterTwo = gameReducer(afterOne, {
+      type: 'WORD_OVERTIME',
       playerId: 'local',
       at: 6000,
+      overtimeTicks: 3,
     });
-    expect(afterManualSkip.players['local'].pityTimeouts).toBe(1);
+    expect(afterTwo.players['local'].score).toBe(17);
+    expect(afterTwo.players['local'].overtimePenaltyTicks).toBe(3);
   });
 
-  it('decays pity on success and re-grows on auto-skip', () => {
-    let state = startedState();
-    for (let i = 0; i < 3; i++) {
-      state = gameReducer(state, { type: 'WORD_TIMEOUT', playerId: 'local', at: 1000 + i });
-    }
-    expect(state.players['local'].pityTimeouts).toBe(3);
-
-    const manual = stateWithManualTargetFrom(state, 'bal');
-    state = gameReducer(manual, { type: 'SUBMIT_WORD', playerId: 'local', at: 7000 });
-    expect(state.players['local'].pityTimeouts).toBe(2);
-
-    const manual2 = stateWithManualTargetFrom(state, 'bal');
-    state = gameReducer(manual2, { type: 'SUBMIT_WORD', playerId: 'local', at: 8000 });
-    expect(state.players['local'].pityTimeouts).toBe(1);
-
-    state = gameReducer(state, { type: 'WORD_TIMEOUT', playerId: 'local', at: 9000 });
-    expect(state.players['local'].pityTimeouts).toBe(2);
+  it('resets overtimePenaltyTicks on manual skip', () => {
+    const state = startedState();
+    const afterOvertime = gameReducer(state, {
+      type: 'WORD_OVERTIME',
+      playerId: 'local',
+      at: 9000,
+      overtimeTicks: 2,
+    });
+    const skipped = gameReducer(afterOvertime, {
+      type: 'SKIP_WORD',
+      playerId: 'local',
+      at: 9500,
+    });
+    expect(skipped.players['local'].overtimePenaltyTicks).toBe(0);
+    expect(skipped.players['local'].wordStartedAt).toBe(9500);
   });
 });
 

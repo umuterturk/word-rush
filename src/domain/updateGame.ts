@@ -1,6 +1,7 @@
 import type { GameAction, GameState } from './types';
 import { IS_DEV_GAMEPLAY } from './constants';
 import { gameReducer } from './gameReducer';
+import { tickWordOvertime } from './wordOvertime';
 
 /**
  * Advances game state to the given wall-clock time and folds any pending
@@ -19,17 +20,22 @@ export function updateGame(
     return actions.reduce(gameReducer, state);
   }
 
-  const logicalTime = wallClockTime - state.matchStartedAt;
+  let next = actions.length > 0 ? actions.reduce(gameReducer, state) : state;
+
+  if (next.matchStatus === 'playing' && !next.soloVictoryPending) {
+    next = tickWordOvertime(next, wallClockTime);
+  }
+
+  const logicalTime = wallClockTime - next.matchStartedAt;
 
   const soloTimedOut =
     state.matchMode === 'solo'
     && IS_DEV_GAMEPLAY
-    && !state.soloVictoryPending
-    && logicalTime >= state.matchDuration;
-  if (logicalTime >= state.matchDuration && (state.matchMode !== 'solo' || soloTimedOut)) {
-    return { ...state, matchStatus: 'ended' };
+    && !next.soloVictoryPending
+    && logicalTime >= next.matchDuration;
+  if (next.matchStatus === 'playing' && logicalTime >= next.matchDuration && (next.matchMode !== 'solo' || soloTimedOut)) {
+    return { ...next, matchStatus: 'ended' };
   }
 
-  if (actions.length === 0) return state;
-  return actions.reduce(gameReducer, state);
+  return next;
 }

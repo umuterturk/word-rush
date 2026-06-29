@@ -37,6 +37,7 @@ function playingState(overrides: Partial<GameState> = {}): GameState {
         pityTimeouts: 0,
         refillsRemaining: 3,
         soloAdaptiveMultiplier: 1,
+        overtimePenaltyTicks: 0,
       },
     },
     ...overrides,

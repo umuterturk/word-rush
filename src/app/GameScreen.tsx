@@ -508,9 +508,12 @@ export function GameScreen({
   const currentTime = gameClockNow;
   const wordElapsed = wordStartedAt > 0 ? Math.max(0, currentTime - wordStartedAt) : 0;
   const wordTimeLeft = Math.max(0, wordDuration - wordElapsed);
+  const isWordOvertime = wordDuration > 0 && wordElapsed > wordDuration;
   const wordTimerKey = `${targetWord}-${wordStartedAt}`;
   const isWordTimerUrgent =
-    wordDuration > 0 && (wordTimeLeft / wordDuration < 0.25 || wordTimeLeft <= 3000);
+    !isWordOvertime
+    && wordDuration > 0
+    && (wordTimeLeft / wordDuration < 0.25 || wordTimeLeft <= 3000);
   const initialWordElapsed = useMemo(
     () => Math.min(wordDuration, Math.max(0, clock.now() - wordStartedAt)),
     [wordTimerKey, wordDuration, clock, wordStartedAt],
@@ -753,6 +756,12 @@ export function GameScreen({
   }, [wordCompleteFx?.runId, wordCompleteFx]);
 
   const prevScoreRef = useRef(displayScore);
+  useEffect(() => {
+    if (hudScoreDisplay !== null && displayScore < hudScoreDisplay) {
+      setHudScoreDisplay(null);
+    }
+  }, [displayScore, hudScoreDisplay]);
+
   useEffect(() => {
     if (onScoreChange && displayScore !== prevScoreRef.current) {
       onScoreChange(displayScore);
@@ -1182,7 +1191,11 @@ export function GameScreen({
               className={`vs-card vs-card--you${isLeading ? ' vs-card--leading' : ''}${isBehind ? ' vs-card--behind' : ''}`}
             >
               <span className="vs-card-label">{t.you}</span>
-              <span className={`vs-card-score${isScoreCounting ? ' vs-card-score--counting' : ''}`}>
+              <span
+                className={`vs-card-score${
+                  isScoreCounting ? ' vs-card-score--counting' : ''
+                }${isWordOvertime ? ' vs-card-score--overtime' : ''}`}
+              >
                 {shownScore}
               </span>
               {player?.doubleBonusActive && (
@@ -1217,7 +1230,9 @@ export function GameScreen({
             <div className="hud-item">
               <span className="hud-label">{t.score}</span>
               <span
-                className={`hud-value hud-score${isScoreCounting ? ' hud-score--counting' : ''}`}
+                className={`hud-value hud-score${
+                  isScoreCounting ? ' hud-score--counting' : ''
+                }${isWordOvertime ? ' hud-score--overtime' : ''}`}
               >
                 {shownScore}
               </span>
@@ -1288,7 +1303,11 @@ export function GameScreen({
       <div className="arena-container">
         {/* Vertical word timer bar */}
         {targetWord && wordDuration > 0 && !isSoloVictory && (
-          <div className={`word-timer-bar word-timer-bar--vertical${isWordTimerUrgent ? ' word-timer-bar--urgent' : ''}`}>
+          <div
+            className={`word-timer-bar word-timer-bar--vertical${
+              isWordOvertime ? ' word-timer-bar--overtime' : isWordTimerUrgent ? ' word-timer-bar--urgent' : ''
+            }`}
+          >
             <div className="word-timer-bar__fill-track">
               <div
                 key={wordTimerKey}
@@ -1301,8 +1320,16 @@ export function GameScreen({
                 }
               />
             </div>
-            <div className={`word-timer-bar__text${isWordTimerUrgent ? ' word-timer-bar__text--urgent' : ''}`}>
-              {Math.ceil(wordTimeLeft / 1000)}s
+            <div
+              className={`word-timer-bar__text${
+                isWordOvertime
+                  ? ' word-timer-bar__text--overtime'
+                  : isWordTimerUrgent
+                    ? ' word-timer-bar__text--urgent'
+                    : ''
+              }`}
+            >
+              {isWordOvertime ? '0s' : `${Math.ceil(wordTimeLeft / 1000)}s`}
             </div>
           </div>
         )}

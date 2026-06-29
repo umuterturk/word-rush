@@ -3,6 +3,7 @@ import {
   MAX_BUFFER_SIZE,
   MATCH_DURATION_MS,
   SKIP_PENALTY,
+  WORD_OVERTIME_PENALTY_PER_TICK,
   getMatchGridDimensions,
   getSoloMatchDurationMs,
   getSoloRefillLimit,
@@ -29,6 +30,7 @@ export function createInitialPlayerState(): PlayerState {
     pityTimeouts: 0,
     refillsRemaining: 0,
     soloAdaptiveMultiplier: 1,
+    overtimePenaltyTicks: 0,
   };
 }
 
@@ -95,6 +97,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
             pityTimeouts: 0,
             refillsRemaining: isSolo ? getSoloRefillLimit() : 0,
             soloAdaptiveMultiplier: 1,
+            overtimePenaltyTicks: 0,
           },
         },
       };
@@ -316,6 +319,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
             pityTimeouts: Math.max(0, player.pityTimeouts - 1),
             refillsRemaining,
             soloAdaptiveMultiplier: newAdaptiveMultiplier,
+            overtimePenaltyTicks: 0,
           },
         },
       };
@@ -365,38 +369,22 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
             doubleBonusActive: false,
             doubleBonusUsed: player.doubleBonusActive || player.doubleBonusUsed,
             soloAdaptiveMultiplier: newAdaptiveMultiplier,
+            overtimePenaltyTicks: 0,
           },
         },
       };
     }
 
-    case 'WORD_TIMEOUT': {
+    case 'WORD_OVERTIME': {
       const player = state.players[action.playerId];
       if (!player) return state;
 
-      const newScore = player.score - SKIP_PENALTY;
-      const newWordsCompleted = player.wordsCompleted + 1;
-      const newPityTimeouts = player.pityTimeouts + 1;
-      const isSolo = state.matchMode === 'solo';
-      const grid = matchGrid(state);
-      const gameplayAllowedMs = getPlayerWordDuration(
-        player,
-        state.matchMode,
-        'gameplay',
-        grid,
-      );
-      const elapsedMs = Math.max(0, action.at - player.wordStartedAt);
-      const newAdaptiveMultiplier = isSolo
-        ? updateSoloAdaptiveMultiplier(
-            player.soloAdaptiveMultiplier ?? 1,
-            elapsedMs,
-            gameplayAllowedMs,
-            'timeout',
-          )
-        : (player.soloAdaptiveMultiplier ?? 1);
+      const charged = player.overtimePenaltyTicks ?? 0;
+      if (action.overtimeTicks <= charged) return state;
 
-      const rng = createSeededRng(state.seed + '-skip-' + newWordsCompleted);
-      const nextWord = pickTargetWord(rng, player.columns, player.wordPool);
+      const deltaTicks = action.overtimeTicks - charged;
+      const penalty = deltaTicks * WORD_OVERTIME_PENALTY_PER_TICK;
+      const newScore = Math.max(0, player.score - penalty);
 
       return {
         ...state,
@@ -405,16 +393,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
           [action.playerId]: {
             ...player,
             score: newScore,
-            selectedIds: [],
-            targetWord: nextWord ?? '',
-            wordsCompleted: newWordsCompleted,
-            wordStreak: 0,
-            doubleBonusStreak: player.doubleBonusActive ? 0 : player.doubleBonusStreak,
-            wordStartedAt: action.at,
-            pityTimeouts: newPityTimeouts,
-            doubleBonusActive: false,
-            doubleBonusUsed: player.doubleBonusActive || player.doubleBonusUsed,
-            soloAdaptiveMultiplier: newAdaptiveMultiplier,
+            overtimePenaltyTicks: action.overtimeTicks,
           },
         },
       };

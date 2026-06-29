@@ -118,11 +118,14 @@ export const WORD_SCORE: Readonly<Record<number, number>> = {
 /** Penalty for skipping a word. */
 export const SKIP_PENALTY = 0;
 
+/** Ms between each -1 point tick after the per-word timer expires. */
+export const WORD_OVERTIME_PENALTY_TICK_MS = 200;
+
+/** Points deducted on each overtime tick. */
+export const WORD_OVERTIME_PENALTY_PER_TICK = 1;
+
 /** Seconds per letter for word timer. */
 export const SECONDS_PER_LETTER = 1.2;
-
-/** Auto-skip word when timer expires. */
-export const AUTO_SKIP_ON_TIMEOUT = true;
 
 /** Delay before highlighting the next correct letter on the board. */
 export const LETTER_HINT_DELAY_MS = 5_000;
