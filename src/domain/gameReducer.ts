@@ -385,6 +385,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       const deltaTicks = action.overtimeTicks - charged;
       const penalty = deltaTicks * WORD_OVERTIME_PENALTY_PER_TICK;
       const newScore = Math.max(0, player.score - penalty);
+      const resetStreak = charged === 0;
 
       return {
         ...state,
@@ -393,6 +394,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
           [action.playerId]: {
             ...player,
             score: newScore,
+            wordStreak: resetStreak ? 0 : player.wordStreak,
             overtimePenaltyTicks: action.overtimeTicks,
           },
         },

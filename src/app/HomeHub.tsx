@@ -1,23 +1,28 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { CSSProperties } from 'react';
 import { useI18n } from '../i18n';
 import type { BadgeCounts } from '../domain/badges';
 import type { PlayerLifetimeStats } from '../domain/playerStats';
+import type { LeaderboardEntry } from '../ports';
 import {
   earnedBadgesForHome,
-  floatBadgePosition,
   totalGameplayBadgeCount,
   type HomeEarnedBadge,
 } from './homeBadgeDisplay';
-import { badgeKindClass, getBadgeIcon, getBadgeLabel, getBadgeShortLabel } from './badgeLabels';
+import { badgeKindClass, getBadgeIcon, getBadgeLabel } from './badgeLabels';
 import { BadgeDetailPopup } from './BadgeDetailPopup';
+import { HomeDailyTop3 } from './HomeDailyTop3';
 import { HomeLetterRain } from './HomeLetterRain';
+import { useHomeHubCompact } from './useHomeHubCompact';
+
+const HOME_TROPHY_CAP = 10;
 
 interface Props {
   bestScore: number;
   username: string;
   badgeStats: BadgeCounts;
   lifetimeStats: PlayerLifetimeStats;
+  todayLeaderboard: LeaderboardEntry[];
+  leaderboardLoading: boolean;
   multiplayerAvailable: boolean;
   onPlaySolo: () => void;
   onPlayWithFriend: () => void;
@@ -29,6 +34,8 @@ export function HomeHub({
   username,
   badgeStats,
   lifetimeStats,
+  todayLeaderboard,
+  leaderboardLoading,
   multiplayerAvailable,
   onPlaySolo,
   onPlayWithFriend,
@@ -37,12 +44,21 @@ export function HomeHub({
   const { t } = useI18n();
   const [selectedBadge, setSelectedBadge] = useState<HomeEarnedBadge | null>(null);
   const earned = useMemo(() => earnedBadgesForHome(badgeStats), [badgeStats]);
+  const visibleTrophies = earned.slice(0, HOME_TROPHY_CAP);
+  const overflowCount = Math.max(0, earned.length - HOME_TROPHY_CAP);
   const skillTotal = totalGameplayBadgeCount(badgeStats);
   const totalGames =
     lifetimeStats.soloGamesCompleted + lifetimeStats.multiplayerGamesCompleted;
   const displayName = username.trim();
   const avatarLetter = displayName ? displayName.charAt(0).toUpperCase() : '?';
   const hasNewBest = bestScore > 0;
+  const hubRef = useHomeHubCompact([
+    earned.length,
+    todayLeaderboard.length,
+    leaderboardLoading,
+    multiplayerAvailable,
+    hasNewBest,
+  ]);
 
   useEffect(() => {
     if (!import.meta.env.DEV || !onDevGrantRandomBadges) return;
@@ -64,15 +80,15 @@ export function HomeHub({
   }, [onDevGrantRandomBadges]);
 
   return (
-    <div className="home-hub">
+    <div className="home-hub" ref={hubRef} data-compact="0">
       <HomeLetterRain />
 
+      <div className="home-hub__stack">
       <header className="home-hub__header">
         <div className="home-hub__title-wrap">
           <h1 className="home-hub__title">{t.gameTitle}</h1>
           <div className="home-hub__title-glow" aria-hidden="true" />
         </div>
-        <p className="home-hub__tagline">{t.homeTagline}</p>
       </header>
 
       <div className={`home-score-card${hasNewBest ? ' home-score-card--lit' : ''}`}>
@@ -95,50 +111,48 @@ export function HomeHub({
         </div>
       </div>
 
+      <div className="home-hub__optional home-hub__optional--daily">
+        <HomeDailyTop3 entries={todayLeaderboard} loading={leaderboardLoading} />
+      </div>
+
       {earned.length > 0 && (
-        <section className="home-float-badges" aria-label={t.homeEarnedBadgesLabel}>
-          <div className="home-float-badges__field" role="list">
-            {earned.map((entry, index) => {
+        <section
+          className="home-trophy-strip home-hub__optional home-hub__optional--badges"
+          aria-label={t.homeEarnedBadgesLabel}
+        >
+          <h2 className="home-section-label">{t.homeTrophies}</h2>
+          <div className="home-trophy-strip__scroll" role="list">
+            {visibleTrophies.map(entry => {
               const id = entry.id;
               const label = getBadgeLabel(t, id);
-              const shortLabel = getBadgeShortLabel(t, id);
-              const pos = floatBadgePosition(index, earned.length);
-              const style = {
-                '--float-i': index,
-                '--float-x': `${pos.x}%`,
-                '--float-y': `${pos.y}%`,
-                '--float-duration': `${2.6 + (index % 4) * 0.45}s`,
-                '--float-delay': `${(index % 7) * 0.22}s`,
-              } as CSSProperties;
-
               return (
                 <button
                   key={`${entry.kind}-${id}`}
                   type="button"
                   role="listitem"
-                  className={`home-float-badge home-float-badge--${entry.kind} ${badgeKindClass(id)}`}
-                  style={style}
-                  aria-label={
-                    entry.kind === 'skill' ? `${label} ×${entry.count}` : label
-                  }
+                  className={`home-trophy-chip home-trophy-chip--${entry.kind} ${badgeKindClass(id)}`}
+                  aria-label={entry.kind === 'skill' ? `${label} ×${entry.count}` : label}
                   onClick={() => setSelectedBadge(entry)}
                 >
-                  <div className="home-float-badge__icon-wrap">
-                    <span className="home-float-badge__glow" aria-hidden="true" />
-                    <span className="home-float-badge__icon" aria-hidden="true">
-                      {getBadgeIcon(id)}
-                    </span>
-                    {entry.kind === 'skill' && (
-                      <span className="home-float-badge__count">×{entry.count}</span>
-                    )}
-                  </div>
-                  <span className="home-float-badge__name">{shortLabel}</span>
+                  <span className="home-trophy-chip__icon" aria-hidden="true">
+                    {getBadgeIcon(id)}
+                  </span>
+                  {entry.kind === 'skill' && (
+                    <span className="home-trophy-chip__count">{entry.count}</span>
+                  )}
                 </button>
               );
             })}
+            {overflowCount > 0 && (
+              <span className="home-trophy-chip home-trophy-chip--more" aria-hidden="true">
+                +{overflowCount}
+              </span>
+            )}
           </div>
         </section>
       )}
+
+      </div>
 
       <div className="home-play-zone">
         <button type="button" className="home-play-btn home-play-btn--solo" onClick={onPlaySolo}>

@@ -1,5 +1,11 @@
-import type { BadgeId } from '../domain/badges';
+import type { BadgeId, MilestoneBadgeId } from '../domain/badges';
+import { MILESTONE_RULES } from '../domain/playerStats';
 import type { Translations } from '../i18n/translations';
+
+function withMilestoneCount(template: string, id: MilestoneBadgeId): string {
+  const threshold = MILESTONE_RULES.find(rule => rule.id === id)?.threshold;
+  return template.replace('{count}', String(threshold ?? ''));
+}
 
 export function getBadgeIcon(id: BadgeId): string {
   if (id === 'fast_1') return '⚡';
@@ -32,21 +38,21 @@ export function getBadgeDescription(t: Translations, id: BadgeId): string {
     case 'mp_debut':
       return t.badgeDescMpDebut;
     case 'mp_sparring':
-      return t.badgeDescMpSparring;
+      return withMilestoneCount(t.badgeDescMpSparring, id);
     case 'mp_arena':
-      return t.badgeDescMpArena;
+      return withMilestoneCount(t.badgeDescMpArena, id);
     case 'mp_gladiator':
-      return t.badgeDescMpGladiator;
+      return withMilestoneCount(t.badgeDescMpGladiator, id);
     case 'mp_legend':
-      return t.badgeDescMpLegend;
+      return withMilestoneCount(t.badgeDescMpLegend, id);
     case 'mp_champion':
       return t.badgeDescMpChampion;
     case 'mp_dominator':
-      return t.badgeDescMpDominator;
+      return withMilestoneCount(t.badgeDescMpDominator, id);
     case 'solo_debut':
       return t.badgeDescSoloDebut;
     case 'solo_grinder':
-      return t.badgeDescSoloGrinder;
+      return withMilestoneCount(t.badgeDescSoloGrinder, id);
     default:
       return '';
   }

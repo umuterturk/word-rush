@@ -29,6 +29,7 @@ import { StartScreen } from './app/StartScreen';
 import { CountdownScreen } from './app/CountdownScreen';
 import { GameScreen } from './app/GameScreen';
 import { EndScreen } from './app/EndScreen';
+import { MultiplayerEndOverlay } from './app/MultiplayerEndOverlay';
 import { ProfilePopup } from './app/ProfilePopup';
 import { MultiplayerLobbyScreen } from './app/MultiplayerLobbyScreen';
 import { FriendMatchOverlay } from './app/FriendMatchOverlay';
@@ -440,7 +441,7 @@ export default function App() {
   }, []);
 
   const handlePlayAgain = useCallback(() => {
-    if (clock.now() - matchEndedAtRef.current < 500) return;
+    if (!isMultiplayer && clock.now() - matchEndedAtRef.current < 500) return;
 
     if (isMultiplayer) {
       // Rematch reuses the SAME match doc. Just mark ourselves ready; when both
@@ -1009,8 +1010,11 @@ export default function App() {
     );
   }
 
-  if (gameState.matchStatus === 'playing') {
-    if (!wordsReady) return null;
+  if (gameState.matchStatus === 'playing' || (isMultiplayer && gameState.matchStatus === 'ended')) {
+    if (gameState.matchStatus === 'playing' && !wordsReady) return null;
+
+    const localScore = gameState.players['local']?.score ?? 0;
+    const mpMatchEnded = isMultiplayer && gameState.matchStatus === 'ended';
 
     return (
       <>
@@ -1021,12 +1025,13 @@ export default function App() {
           onDispatch={dispatchAction}
           clock={clock}
           isMultiplayer={isMultiplayer}
+          isMatchEnded={mpMatchEnded}
           opponentScore={mp.opponentScore}
           opponentName={mp.opponentName}
           onScoreChange={handleScoreChange}
           onShuffle={handleShuffleAttack}
           shuffleSignal={shuffleSignal}
-          onQuit={handleQuitGame}
+          onQuit={mpMatchEnded ? undefined : handleQuitGame}
           bestScore={bestScore}
           leaderboardEntries={leaderboardEntries}
           username={username}
@@ -1036,6 +1041,20 @@ export default function App() {
           badgeCounts={displayBadgeCounts}
           sessionBadges={sessionBadges}
           lifetimeBadgeBefore={badges}
+          endOverlay={
+            mpMatchEnded ? (
+              <MultiplayerEndOverlay
+                sessionBadges={resolvedEndBadges?.session ?? sessionBadges}
+                lifetimeBefore={resolvedEndBadges?.before ?? badges}
+                result={resultSettled ? mp.getResult(localScore) : null}
+                resolving={!resultSettled}
+                opponentResigned={mp.opponentResigned}
+                opponentWantsRematch={mp.opponentWantsRematch}
+                onPlayAgain={handlePlayAgain}
+                onBackToMenu={handleBackToMenu}
+              />
+            ) : undefined
+          }
         />
         {globalOverlays}
       </>
@@ -1047,33 +1066,31 @@ export default function App() {
     return null;
   }
 
-  return (
-    <>
-      <EndScreen
-        score={gameState.players['local']?.score ?? 0}
-        bestScore={bestScore}
-        sessionBadges={resolvedEndBadges?.session ?? EMPTY_BADGE_COUNTS}
-        lifetimeBefore={resolvedEndBadges?.before ?? badges}
-        skipBadgeReveal={skipEndBadgeReveal}
-        onPlayAgain={handlePlayAgain}
-        onBackToMenu={handleBackToMenu}
-        isMultiplayer={isMultiplayer}
-        opponentScore={mp.opponentScore}
-        opponentName={mp.opponentName}
-        opponentWantsRematch={isMultiplayer && mp.opponentWantsRematch}
-        opponentResigned={isMultiplayer && mp.opponentResigned}
-        result={isMultiplayer ? mp.getResult(gameState.players['local']?.score ?? 0) : null}
-        resolving={isMultiplayer && !resultSettled}
-      />
-      {showEndProfilePopup && (
-        <ProfilePopup
-          username={username}
-          message={t.leaderboardNamePrompt}
-          onSave={handleEndProfileSave}
-          onClose={() => setEndProfileDismissed(true)}
+  if (gameState.matchStatus === 'ended') {
+    return (
+      <>
+        <EndScreen
+          score={gameState.players['local']?.score ?? 0}
+          bestScore={bestScore}
+          sessionBadges={resolvedEndBadges?.session ?? EMPTY_BADGE_COUNTS}
+          lifetimeBefore={resolvedEndBadges?.before ?? badges}
+          skipBadgeReveal={skipEndBadgeReveal}
+          onPlayAgain={handlePlayAgain}
+          onBackToMenu={handleBackToMenu}
+          isMultiplayer={false}
         />
-      )}
-      {globalOverlays}
-    </>
-  );
+        {showEndProfilePopup && (
+          <ProfilePopup
+            username={username}
+            message={t.leaderboardNamePrompt}
+            onSave={handleEndProfileSave}
+            onClose={() => setEndProfileDismissed(true)}
+          />
+        )}
+        {globalOverlays}
+      </>
+    );
+  }
+
+  return null;
 }

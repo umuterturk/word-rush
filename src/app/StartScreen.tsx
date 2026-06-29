@@ -142,6 +142,8 @@ export function StartScreen({
             username={username}
             badgeStats={badgeStats}
             lifetimeStats={lifetimeStats}
+            todayLeaderboard={todayLeaderboard}
+            leaderboardLoading={leaderboardLoading}
             multiplayerAvailable={multiplayerAvailable}
             onPlaySolo={() => onPlaySolo(SOLO_MODE)}
             onPlayWithFriend={onPlayWithFriend}

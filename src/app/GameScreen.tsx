@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { GameAction, GameState, LandedCell } from '../domain/types';
 import { SKIP_PENALTY, LETTER_HINT_DELAY_MS } from '../domain/constants';
 import type { ClockPort, LeaderboardEntry } from '../ports';
@@ -39,6 +39,8 @@ interface Props {
   onDispatch: (action: GameAction) => void;
   clock: ClockPort;
   isMultiplayer?: boolean;
+  isMatchEnded?: boolean;
+  endOverlay?: ReactNode;
   opponentScore?: number;
   opponentName?: string;
   onScoreChange?: (score: number) => void;
@@ -463,6 +465,8 @@ export function GameScreen({
   onDispatch,
   clock,
   isMultiplayer = false,
+  isMatchEnded = false,
+  endOverlay,
   opponentScore = 0,
   opponentName: _opponentName,
   onScoreChange,
@@ -1144,7 +1148,7 @@ export function GameScreen({
 
   return (
     <div
-      className={`screen game-screen${isMultiplayer ? ' game-screen--vs' : ''}${isSoloVictory ? ' game-screen--solo-victory' : ''}${isCelebrating ? ' game-screen--celebrating' : ''}${celebrationEpic ? ' game-screen--celebrating-epic' : ''}`}
+      className={`screen game-screen${isMultiplayer ? ' game-screen--vs' : ''}${isMatchEnded ? ' game-screen--ended' : ''}${isSoloVictory ? ' game-screen--solo-victory' : ''}${isCelebrating ? ' game-screen--celebrating' : ''}${celebrationEpic ? ' game-screen--celebrating-epic' : ''}`}
       style={{ '--celebration-pop-ms': `${CELEBRATION_TILE_POP_MS}ms` } as React.CSSProperties}
     >
       {showResignConfirm && onQuit && (
@@ -1302,7 +1306,7 @@ export function GameScreen({
       {/* Grid arena container with timer */}
       <div className="arena-container">
         {/* Vertical word timer bar */}
-        {targetWord && wordDuration > 0 && !isSoloVictory && (
+        {targetWord && wordDuration > 0 && !isSoloVictory && !isMatchEnded && (
           <div
             className={`word-timer-bar word-timer-bar--vertical${
               isWordOvertime ? ' word-timer-bar--overtime' : isWordTimerUrgent ? ' word-timer-bar--urgent' : ''
@@ -1400,7 +1404,7 @@ export function GameScreen({
                   height: `${rowPct}%`,
                   background: tileColor(cell.letter),
                 }}
-                onPointerDown={e => handleTapTile(cell.id, e)}
+                onPointerDown={isMatchEnded ? undefined : e => handleTapTile(cell.id, e)}
                 {...TILE_BUTTON_ATTRS}
               >
                 <LetterGlyph letter={cell.letter} language={gameLanguage} />
@@ -1419,7 +1423,7 @@ export function GameScreen({
       </div>
 
       {/* Action bar */}
-      {!isSoloVictory && (
+      {!isSoloVictory && !isMatchEnded && (
       <div className="word-panel">
         <div className="word-panel-actions">
           {onQuit && (
@@ -1590,6 +1594,8 @@ export function GameScreen({
           </div>
         </div>
       )}
+
+      {endOverlay}
     </div>
   );
 }

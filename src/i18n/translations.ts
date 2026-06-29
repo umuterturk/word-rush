@@ -111,6 +111,7 @@ export interface Translations {
   homeGamesPlayed: string;
   homeBadgesUnlocked: string;
   homeEarnedBadgesLabel: string;
+  homeTrophies: string;
   homeTagline: string;
   homeSkillsLabel: string;
   homeSkillsEmpty: string;
@@ -334,6 +335,7 @@ export const translations: Record<Language, Translations> = {
     homeGamesPlayed: 'GAMES',
     homeBadgesUnlocked: 'BADGES',
     homeEarnedBadgesLabel: 'Earned badges',
+    homeTrophies: 'TROPHIES',
     homeTagline: 'Catch letters · spell words · crush your best',
     homeSkillsLabel: 'SKILL LOOT',
     homeSkillsEmpty: 'Speed, streaks & 2× bonuses land here — go play!',
@@ -381,14 +383,14 @@ export const translations: Record<Language, Translations> = {
     badgeDescDouble: 'Score doubled while your 2× bonus is burning hot.',
     badgeDescStreak: 'Chain {count} correct words in a row without missing.',
     badgeDescMpDebut: 'Your first rival match — welcome to the arena.',
-    badgeDescMpSparring: 'Five multiplayer battles — battle tested.',
-    badgeDescMpArena: 'Ten rival matches — a true arena regular.',
-    badgeDescMpGladiator: 'Twenty-five grid battles fought and logged.',
-    badgeDescMpLegend: 'Fifty multiplayer matches. Legendary dedication.',
+    badgeDescMpSparring: '{count} multiplayer battles — battle tested.',
+    badgeDescMpArena: '{count} rival matches — a true arena regular.',
+    badgeDescMpGladiator: '{count} grid battles fought and logged.',
+    badgeDescMpLegend: '{count} multiplayer matches. Legendary dedication.',
     badgeDescMpChampion: 'Your first multiplayer win — champion status.',
-    badgeDescMpDominator: 'Five rival victories — you own the board.',
+    badgeDescMpDominator: '{count} rival victories — you own the board.',
     badgeDescSoloDebut: 'Your first solo rush — the journey begins.',
-    badgeDescSoloGrinder: 'Ten solo boards cleared. Pure grind energy.',
+    badgeDescSoloGrinder: '{count} solo games cleared — always one more round.',
 
     // Multiplayer lobby
     creatingRoom: 'CREATING ROOM...',
@@ -554,6 +556,7 @@ export const translations: Record<Language, Translations> = {
     homeGamesPlayed: 'OYUN',
     homeBadgesUnlocked: 'ROZET',
     homeEarnedBadgesLabel: 'Kazanılan rozetler',
+    homeTrophies: 'ROZETLER',
     homeTagline: 'Harfleri yakala · kelime yaz · rekoru kır',
     homeSkillsLabel: 'YETENEK GANIMETİ',
     homeSkillsEmpty: 'Hız, seri ve 2× bonuslar burada — hadi oyna!',
@@ -601,14 +604,14 @@ export const translations: Record<Language, Translations> = {
     badgeDescDouble: '2× bonusun aktifken puanın ikiye katlanır.',
     badgeDescStreak: 'Arka arkaya {count} kelimeyi hatasız tamamla.',
     badgeDescMpDebut: 'İlk düello maçın — arenaya hoş geldin.',
-    badgeDescMpSparring: 'Beş çok oyunculu maç — sınanmış savaşçı.',
-    badgeDescMpArena: 'On rakip maçı — gerçek bir arena müdavimi.',
-    badgeDescMpGladiator: 'Yirmi beş ızgara savaşı — gladyatör ruhu.',
-    badgeDescMpLegend: 'Elli çok oyunculu maç. Efsanevi bağlılık.',
+    badgeDescMpSparring: '{count} çok oyunculu maç — sınanmış savaşçı.',
+    badgeDescMpArena: '{count} rakip maçı — gerçek bir arena müdavimi.',
+    badgeDescMpGladiator: '{count} ızgara savaşı — gladyatör ruhu.',
+    badgeDescMpLegend: '{count} çok oyunculu maç. Efsanevi bağlılık.',
     badgeDescMpChampion: 'İlk çok oyunculu galibiyetin — şampiyonluk.',
-    badgeDescMpDominator: 'Beş rakip galibiyeti — tahtaya hükmediyorsun.',
+    badgeDescMpDominator: '{count} rakip galibiyeti — tahtaya hükmediyorsun.',
     badgeDescSoloDebut: 'İlk solo koşun — serüven başlıyor.',
-    badgeDescSoloGrinder: 'On solo tahta temizlendi. Saf grind enerjisi.',
+    badgeDescSoloGrinder: '{count} solo maç — hep bir tur daha.',
 
     // Multiplayer lobby
     creatingRoom: 'ODA OLUŞTURULUYOR...',

@@ -626,6 +626,34 @@ describe('word overtime penalty', () => {
     expect(afterTwo.players['local'].overtimePenaltyTicks).toBe(3);
   });
 
+  it('resets word streak on the first overtime tick', () => {
+    const state = {
+      ...startedState('overtime-streak', 1000),
+      players: {
+        local: {
+          ...startedState('overtime-streak', 1000).players['local'],
+          score: 20,
+          wordStreak: 4,
+        },
+      },
+    };
+    const afterFirst = gameReducer(state, {
+      type: 'WORD_OVERTIME',
+      playerId: 'local',
+      at: 9000,
+      overtimeTicks: 1,
+    });
+    expect(afterFirst.players['local'].wordStreak).toBe(0);
+
+    const afterSecond = gameReducer(afterFirst, {
+      type: 'WORD_OVERTIME',
+      playerId: 'local',
+      at: 9200,
+      overtimeTicks: 2,
+    });
+    expect(afterSecond.players['local'].wordStreak).toBe(0);
+  });
+
   it('resets overtimePenaltyTicks on manual skip', () => {
     const state = startedState();
     const afterOvertime = gameReducer(state, {
