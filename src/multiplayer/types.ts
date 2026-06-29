@@ -39,6 +39,8 @@ export interface MatchConfig {
   round: number;
   opponentUid: string;
   opponentName: string;
+  creatorName: string;
+  createdAt: number | null;
 }
 
 export interface MatchSnapshot {
@@ -62,6 +64,8 @@ export interface MatchSnapshot {
   opponentLeft: boolean;
   /** Nonce of the latest shuffle attack the opponent sent at us (0 = none). */
   incomingShuffleNonce: number;
+  creatorName: string;
+  createdAt: number | null;
 }
 
 /** Score-based result; resignation always awards the remaining player a win. */

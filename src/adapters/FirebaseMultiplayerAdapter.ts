@@ -50,6 +50,27 @@ function generatePlayerName(uid: string): string {
   return `Player ${suffix}`;
 }
 
+function timestampToMs(value: unknown): number | null {
+  if (value == null) return null;
+  if (typeof value === 'number') return value;
+  if (typeof value === 'object' && value !== null && 'toMillis' in value) {
+    const toMillis = (value as { toMillis?: () => number }).toMillis;
+    if (typeof toMillis === 'function') return toMillis.call(value);
+  }
+  if (typeof value === 'object' && value !== null && 'seconds' in value) {
+    const seconds = (value as { seconds?: number }).seconds;
+    if (typeof seconds === 'number') return seconds * 1000;
+  }
+  return null;
+}
+
+function parseMatchMeta(data: MatchDoc): { creatorName: string; createdAt: number | null } {
+  return {
+    creatorName: data.players[data.createdBy]?.name ?? '',
+    createdAt: timestampToMs(data.createdAt),
+  };
+}
+
 function parseSnapshot(matchId: string, data: MatchDoc, localUid: string): MatchSnapshot | null {
   const playerUids = Object.keys(data.players);
   console.log('[MP:parseSnapshot]', { matchId, status: data.status, playerUids, localUid, localPresent: playerUids.includes(localUid) });
@@ -60,6 +81,7 @@ function parseSnapshot(matchId: string, data: MatchDoc, localUid: string): Match
   }
 
   const opponentUid = playerUids.find(uid => uid !== localUid);
+  const meta = parseMatchMeta(data);
   if (!opponentUid) {
     console.log('[MP:parseSnapshot] no opponent yet, returning solo snapshot');
     return {
@@ -79,6 +101,8 @@ function parseSnapshot(matchId: string, data: MatchDoc, localUid: string): Match
       opponentDone: false,
       opponentLeft: false,
       incomingShuffleNonce: 0,
+      creatorName: meta.creatorName,
+      createdAt: meta.createdAt,
     };
   }
 
@@ -102,6 +126,8 @@ function parseSnapshot(matchId: string, data: MatchDoc, localUid: string): Match
     opponentLeft: Boolean(opponent.left),
     // An attack TARGETING us is one the opponent sent, i.e. keyed by their uid.
     incomingShuffleNonce: data.shuffleAttacks?.[opponentUid] ?? 0,
+    creatorName: meta.creatorName,
+    createdAt: meta.createdAt,
   };
   console.log('[MP:parseSnapshot] returning', result);
   return result;

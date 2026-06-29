@@ -109,6 +109,7 @@ export default function App() {
   const [endProfileDismissed, setEndProfileDismissed] = useState(false);
   const [loadedWordLanguage, setLoadedWordLanguage] = useState<WordLanguage | null>(null);
   const [challengingUid, setChallengingUid] = useState<string | null>(null);
+  const [invitedHostName, setInvitedHostName] = useState<string | null>(null);
   const [endSettleTimedOut, setEndSettleTimedOut] = useState(false);
   const [sessionBadges, setSessionBadges] = useState<BadgeCounts>(EMPTY_BADGE_COUNTS);
   const [endBadgeSnapshot, setEndBadgeSnapshot] = useState<{
@@ -381,14 +382,6 @@ export default function App() {
     setFriendMatchPhase('waiting');
   }, [mp, t]);
 
-  const handleJoinRoom = useCallback(
-    (code: string) => {
-      analytics.track('mp_room_joined');
-      void mp.joinRoom(code);
-    },
-    [mp],
-  );
-
   const handleDismissUnavailable = useCallback(() => {
     setGameUnavailable(false);
     setAppMode('solo');
@@ -399,6 +392,7 @@ export default function App() {
     void mp.cancel();
     setFriendMatchPhase(null);
     setInviteCopied(false);
+    setInvitedHostName(null);
     setAppMode('solo');
   }, [mp]);
 
@@ -566,6 +560,7 @@ export default function App() {
     await mp.reset();
     setAppMode('multiplayer');
     setLobbyMode('join');
+    setInvitedHostName(request.fromName);
     setGameUnavailable(false);
     analytics.track('friend_challenge_accepted');
     try {
@@ -935,11 +930,22 @@ export default function App() {
       <>
         <MultiplayerLobbyScreen
           mode={lobbyMode}
+          matchPhase={mp.phase}
+          hostName={(invitedHostName ?? mp.opponentName) || undefined}
+          gameMeta={
+            mp.matchConfig
+              ? {
+                  creatorName:
+                    (invitedHostName ?? mp.matchConfig.creatorName ?? mp.opponentName) || undefined,
+                  language: mp.matchConfig.language,
+                  matchDurationMs: mp.matchConfig.matchDuration,
+                  createdAt: mp.matchConfig.createdAt,
+                }
+              : undefined
+          }
           error={mp.error}
-          isSearching={isRematching || mp.phase === 'searching'}
           isRematch={isRematching}
           onCancel={handleCancelLobby}
-          onJoin={handleJoinRoom}
         />
         {globalOverlays}
       </>

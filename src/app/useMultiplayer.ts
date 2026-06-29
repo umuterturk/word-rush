@@ -45,6 +45,8 @@ function snapshotToConfig(snapshot: MatchSnapshot): MatchConfig {
     round: snapshot.round,
     opponentUid: snapshot.opponentUid,
     opponentName: snapshot.opponentName,
+    creatorName: snapshot.creatorName,
+    createdAt: snapshot.createdAt,
   };
 }
 

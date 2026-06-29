@@ -1,27 +1,69 @@
-import { useState } from 'react';
 import { useI18n } from '../i18n';
+import type { MatchPhase } from '../multiplayer/types';
+import {
+  formatGameLanguage,
+  formatMatchDuration,
+  formatRelativeCreatedAt,
+  type InviteGameMeta,
+} from './inviteGameMetaFormat';
 
 type LobbyMode = 'quick' | 'create' | 'join';
 
 interface Props {
   mode: LobbyMode;
+  matchPhase: MatchPhase;
+  hostName?: string;
+  gameMeta?: InviteGameMeta;
   error: string | null;
-  isSearching?: boolean;
   isRematch?: boolean;
   onCancel: () => void;
-  onJoin: (code: string) => void;
+}
+
+function InviteGameMetaPanel({ meta }: { meta: InviteGameMeta }) {
+  const { t } = useI18n();
+  const creator = meta.creatorName?.trim();
+  const durationMinutes = Math.max(1, Math.round(meta.matchDurationMs / 60_000));
+
+  return (
+    <dl className="lobby-meta">
+      {creator && (
+        <div className="lobby-meta-row">
+          <dt className="lobby-meta-label">{t.gameMetaHost}</dt>
+          <dd className="lobby-meta-value">{creator}</dd>
+        </div>
+      )}
+      <div className="lobby-meta-row">
+        <dt className="lobby-meta-label">{t.gameMetaLanguage}</dt>
+        <dd className="lobby-meta-value">{formatGameLanguage(meta.language, t)}</dd>
+      </div>
+      <div className="lobby-meta-row">
+        <dt className="lobby-meta-label">{t.gameMetaDuration}</dt>
+        <dd className="lobby-meta-value">{formatMatchDuration(durationMinutes, t)}</dd>
+      </div>
+      {meta.createdAt != null && (
+        <div className="lobby-meta-row">
+          <dt className="lobby-meta-label">{t.gameMetaCreated}</dt>
+          <dd className="lobby-meta-value">
+            {formatRelativeCreatedAt(meta.createdAt, t)}
+          </dd>
+        </div>
+      )}
+    </dl>
+  );
 }
 
 export function MultiplayerLobbyScreen({
   mode,
+  matchPhase,
+  hostName,
+  gameMeta,
   error,
-  isSearching = false,
   isRematch = false,
   onCancel,
-  onJoin,
 }: Props) {
-  const [joinCode, setJoinCode] = useState('');
   const { t } = useI18n();
+  const displayHost = hostName?.trim();
+  const showJoinMeta = !isRematch && mode === 'join' && gameMeta != null;
 
   return (
     <div className="screen lobby-screen">
@@ -35,34 +77,25 @@ export function MultiplayerLobbyScreen({
           </>
         )}
 
-        {!isRematch && mode === 'join' && !isSearching && (
-          <>
-            <h2 className="lobby-title">{t.joinRoomTitle}</h2>
-            <input
-              className="room-code-input"
-              type="text"
-              value={joinCode}
-              onChange={e => setJoinCode(e.target.value.toUpperCase())}
-              placeholder={t.enterCode}
-              maxLength={6}
-              autoCapitalize="characters"
-              autoComplete="off"
-            />
-            <button
-              className="play-btn play-btn--secondary"
-              disabled={joinCode.trim().length < 4}
-              onClick={() => onJoin(joinCode.trim())}
-            >
-              {t.join}
-            </button>
-          </>
-        )}
-
-        {!isRematch && mode === 'join' && isSearching && (
+        {!isRematch && mode === 'join' && matchPhase === 'searching' && (
           <>
             <div className="lobby-spinner" aria-hidden="true" />
             <h2 className="lobby-title">{t.joiningRoom}</h2>
             <p className="lobby-subtitle">{t.connecting}</p>
+            {showJoinMeta && <InviteGameMetaPanel meta={gameMeta} />}
+          </>
+        )}
+
+        {!isRematch && mode === 'join' && matchPhase === 'waiting' && (
+          <>
+            <div className="lobby-spinner" aria-hidden="true" />
+            <h2 className="lobby-title">{t.invitedGameTitle}</h2>
+            <p className="lobby-subtitle">
+              {displayHost
+                ? t.invitedGameWaiting.replace('{name}', displayHost)
+                : t.invitedGameWaitingAnonymous}
+            </p>
+            {showJoinMeta && <InviteGameMetaPanel meta={gameMeta} />}
           </>
         )}
 

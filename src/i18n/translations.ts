@@ -183,6 +183,20 @@ export interface Translations {
   connecting: string;
   opponentFound: string;
   waitingToJoin: string;
+  invitedGameTitle: string;
+  invitedGameWaiting: string;
+  invitedGameWaitingAnonymous: string;
+  gameMetaHost: string;
+  gameMetaLanguage: string;
+  gameMetaDuration: string;
+  gameMetaCreated: string;
+  gameLangTr: string;
+  gameLangEn: string;
+  gameDurationMin: string;
+  gameCreatedJustNow: string;
+  gameCreatedMinutesAgo: string;
+  gameCreatedHoursAgo: string;
+  gameCreatedDaysAgo: string;
   shareInviteHint: string;
   cancel: string;
 
@@ -392,6 +406,20 @@ export const translations: Record<Language, Translations> = {
     connecting: 'Connecting...',
     opponentFound: 'OPPONENT FOUND',
     waitingToJoin: 'Waiting for opponent to join...',
+    invitedGameTitle: "YOU'RE IN!",
+    invitedGameWaiting: 'Waiting for {name} to start the game...',
+    invitedGameWaitingAnonymous: 'Waiting for the game to start...',
+    gameMetaHost: 'Host',
+    gameMetaLanguage: 'Language',
+    gameMetaDuration: 'Duration',
+    gameMetaCreated: 'Created',
+    gameLangTr: 'Turkish',
+    gameLangEn: 'English',
+    gameDurationMin: '{n} min',
+    gameCreatedJustNow: 'Just now',
+    gameCreatedMinutesAgo: '{n} min ago',
+    gameCreatedHoursAgo: '{n} h ago',
+    gameCreatedDaysAgo: '{n} d ago',
     shareInviteHint: 'Paste the link in WhatsApp, iMessage, or any chat to invite your friend.',
     cancel: 'CANCEL',
 
@@ -598,6 +626,20 @@ export const translations: Record<Language, Translations> = {
     connecting: 'Bağlanıyor...',
     opponentFound: 'RAKİP BULUNDU',
     waitingToJoin: 'Rakip katılması bekleniyor...',
+    invitedGameTitle: 'OYUNA KATILDIN!',
+    invitedGameWaiting: '{name} oyunu başlatması bekleniyor...',
+    invitedGameWaitingAnonymous: 'Oyunun başlaması bekleniyor...',
+    gameMetaHost: 'Oluşturan',
+    gameMetaLanguage: 'Dil',
+    gameMetaDuration: 'Süre',
+    gameMetaCreated: 'Oluşturulma',
+    gameLangTr: 'Türkçe',
+    gameLangEn: 'İngilizce',
+    gameDurationMin: '{n} dk',
+    gameCreatedJustNow: 'Az önce',
+    gameCreatedMinutesAgo: '{n} dk önce',
+    gameCreatedHoursAgo: '{n} sa önce',
+    gameCreatedDaysAgo: '{n} gün önce',
     shareInviteHint: 'Linki WhatsApp, mesaj veya sohbet uygulamanıza yapıştırarak arkadaşınızı davet edin.',
     cancel: 'İPTAL',
 
