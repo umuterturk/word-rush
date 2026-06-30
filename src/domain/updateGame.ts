@@ -1,5 +1,4 @@
 import type { GameAction, GameState } from './types';
-import { IS_DEV_GAMEPLAY } from './constants';
 import { gameReducer } from './gameReducer';
 import { tickWordOvertime } from './wordOvertime';
 
@@ -28,12 +27,7 @@ export function updateGame(
 
   const logicalTime = wallClockTime - next.matchStartedAt;
 
-  const soloTimedOut =
-    state.matchMode === 'solo'
-    && IS_DEV_GAMEPLAY
-    && !next.soloVictoryPending
-    && logicalTime >= next.matchDuration;
-  if (next.matchStatus === 'playing' && logicalTime >= next.matchDuration && (next.matchMode !== 'solo' || soloTimedOut)) {
+  if (next.matchStatus === 'playing' && logicalTime >= next.matchDuration && next.matchMode !== 'solo') {
     return { ...next, matchStatus: 'ended' };
   }
 

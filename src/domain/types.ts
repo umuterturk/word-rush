@@ -31,6 +31,8 @@ export interface PlayerState {
   usedWords: string[];
   /** Timestamp when current target word was assigned (for per-word timer). */
   wordStartedAt: number;
+  /** Gameplay timer budget frozen when the current word started (ms). */
+  wordGameplayDurationMs: number;
   /** Whether this player has used their shuffle attack (multiplayer only). */
   shuffleUsed: boolean;
   /** Multiplayer: 2× active — halved timer and double score until a miss ends it. */
@@ -43,7 +45,7 @@ export interface PlayerState {
   refillsRemaining: number;
   /** Solo only: scales per-word gameplay timer up/down based on solve speed (1 = baseline). */
   soloAdaptiveMultiplier: number;
-  /** 200 ms overtime ticks already charged at -1 pt each. */
+  /** 1 s overtime ticks already charged at -5 pt each. */
   overtimePenaltyTicks: number;
 }
 

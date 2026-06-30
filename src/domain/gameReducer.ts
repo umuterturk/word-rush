@@ -24,6 +24,7 @@ export function createInitialPlayerState(): PlayerState {
     wordPool: [],
     usedWords: [],
     wordStartedAt: 0,
+    wordGameplayDurationMs: 0,
     shuffleUsed: false,
     doubleBonusActive: false,
     doubleBonusUsed: false,
@@ -50,6 +51,16 @@ function matchGrid(state: GameState): GridDimensions {
   return { cols: state.gridCols, rows: state.gridRows };
 }
 
+function wordGameplayDurationFor(
+  player: PlayerState,
+  matchMode: GameState['matchMode'],
+  grid: GridDimensions,
+  targetWord: string,
+): number {
+  if (!targetWord) return 0;
+  return getPlayerWordDuration({ ...player, targetWord }, matchMode, 'gameplay', grid);
+}
+
 /**
  * Pure reducer: (state, action) => state.
  * No side effects, no imports from React/DOM/timers.
@@ -64,6 +75,32 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       const grid = getMatchGridDimensions(action.mode, difficulty);
       const { columns, wordPool } = fillGrid(rng, language, grid);
       const targetWord = pickTargetWord(rng, columns, wordPool) ?? '';
+      const localPlayer: PlayerState = {
+        score: 0,
+        columns,
+        selectedIds: [],
+        targetWord,
+        wordsCompleted: 0,
+        wordStreak: 0,
+        doubleBonusStreak: 0,
+        wordPool,
+        usedWords: [...wordPool],
+        wordStartedAt: action.at,
+        wordGameplayDurationMs: 0,
+        shuffleUsed: false,
+        doubleBonusActive: false,
+        doubleBonusUsed: false,
+        pityTimeouts: 0,
+        refillsRemaining: isSolo ? getSoloRefillLimit() : 0,
+        soloAdaptiveMultiplier: 1,
+        overtimePenaltyTicks: 0,
+      };
+      localPlayer.wordGameplayDurationMs = wordGameplayDurationFor(
+        localPlayer,
+        action.mode,
+        grid,
+        targetWord,
+      );
       return {
         matchStatus: 'playing',
         matchMode: action.mode,
@@ -80,25 +117,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         gridCols: grid.cols,
         gridRows: grid.rows,
         players: {
-          local: {
-            score: 0,
-            columns,
-            selectedIds: [],
-            targetWord,
-            wordsCompleted: 0,
-            wordStreak: 0,
-            doubleBonusStreak: 0,
-            wordPool,
-            usedWords: [...wordPool],
-            wordStartedAt: action.at,
-            shuffleUsed: false,
-            doubleBonusActive: false,
-            doubleBonusUsed: false,
-            pityTimeouts: 0,
-            refillsRemaining: isSolo ? getSoloRefillLimit() : 0,
-            soloAdaptiveMultiplier: 1,
-            overtimePenaltyTicks: 0,
-          },
+          local: localPlayer,
         },
       };
     }
@@ -222,14 +241,12 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       const newWordsCompleted = player.wordsCompleted + 1;
       const newDoubleBonusStreak = player.doubleBonusActive ? player.doubleBonusStreak + 1 : player.doubleBonusStreak;
       const grid = matchGrid(state);
-      const gameplayAllowedMs = getPlayerWordDuration(
-        player,
-        state.matchMode,
-        'gameplay',
-        grid,
-      );
+      const gameplayAllowedMs = player.wordGameplayDurationMs > 0
+        ? player.wordGameplayDurationMs
+        : getPlayerWordDuration(player, state.matchMode, 'gameplay', grid);
       const elapsedMs = Math.max(0, action.at - player.wordStartedAt);
-      const newAdaptiveMultiplier = isSolo
+      const hadOvertime = (player.overtimePenaltyTicks ?? 0) > 0;
+      const newAdaptiveMultiplier = isSolo && !hadOvertime
         ? updateSoloAdaptiveMultiplier(
             player.soloAdaptiveMultiplier ?? 1,
             elapsedMs,
@@ -297,6 +314,19 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       const boardCleared = isBoardEmpty(finalColumns);
       const soloComplete = isSolo && boardCleared && refillsRemaining === 0;
       const newScore = player.score + points;
+      const resolvedTarget = nextWord ?? '';
+      const nextWordDuration = wordGameplayDurationFor(
+        {
+          ...player,
+          columns: finalColumns,
+          targetWord: resolvedTarget,
+          pityTimeouts: Math.max(0, player.pityTimeouts - 1),
+          soloAdaptiveMultiplier: newAdaptiveMultiplier,
+        },
+        state.matchMode,
+        grid,
+        resolvedTarget,
+      );
 
       return {
         ...state,
@@ -309,13 +339,14 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
             score: newScore,
             columns: finalColumns,
             selectedIds: [],
-            targetWord: nextWord ?? '',
+            targetWord: resolvedTarget,
             wordsCompleted: newWordsCompleted,
             wordStreak: player.wordStreak + 1,
             doubleBonusStreak: newDoubleBonusStreak,
             wordPool: finalWordPool,
             usedWords: finalUsedWords,
             wordStartedAt: action.at,
+            wordGameplayDurationMs: nextWordDuration,
             pityTimeouts: Math.max(0, player.pityTimeouts - 1),
             refillsRemaining,
             soloAdaptiveMultiplier: newAdaptiveMultiplier,
@@ -333,12 +364,9 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       const newWordsCompleted = player.wordsCompleted + 1;
       const isSolo = state.matchMode === 'solo';
       const grid = matchGrid(state);
-      const gameplayAllowedMs = getPlayerWordDuration(
-        player,
-        state.matchMode,
-        'gameplay',
-        grid,
-      );
+      const gameplayAllowedMs = player.wordGameplayDurationMs > 0
+        ? player.wordGameplayDurationMs
+        : getPlayerWordDuration(player, state.matchMode, 'gameplay', grid);
       const elapsedMs = Math.max(0, action.at - player.wordStartedAt);
       const newAdaptiveMultiplier = isSolo
         ? updateSoloAdaptiveMultiplier(
@@ -351,6 +379,17 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
 
       const rng = createSeededRng(state.seed + '-skip-' + newWordsCompleted);
       const nextWord = pickTargetWord(rng, player.columns, player.wordPool);
+      const resolvedTarget = nextWord ?? '';
+      const nextWordDuration = wordGameplayDurationFor(
+        {
+          ...player,
+          targetWord: resolvedTarget,
+          soloAdaptiveMultiplier: newAdaptiveMultiplier,
+        },
+        state.matchMode,
+        grid,
+        resolvedTarget,
+      );
 
       return {
         ...state,
@@ -360,11 +399,12 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
             ...player,
             score: newScore,
             selectedIds: [],
-            targetWord: nextWord ?? '',
+            targetWord: resolvedTarget,
             wordsCompleted: newWordsCompleted,
             wordStreak: 0,
             doubleBonusStreak: player.doubleBonusActive ? 0 : player.doubleBonusStreak,
             wordStartedAt: action.at,
+            wordGameplayDurationMs: nextWordDuration,
             pityTimeouts: player.pityTimeouts,
             doubleBonusActive: false,
             doubleBonusUsed: player.doubleBonusActive || player.doubleBonusUsed,
@@ -385,7 +425,32 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       const deltaTicks = action.overtimeTicks - charged;
       const penalty = deltaTicks * WORD_OVERTIME_PENALTY_PER_TICK;
       const newScore = Math.max(0, player.score - penalty);
-      const resetStreak = charged === 0;
+      const isFirstOvertimeTick = charged === 0;
+      const isSolo = state.matchMode === 'solo';
+      const grid = matchGrid(state);
+      const gameplayAllowedMs = player.wordGameplayDurationMs > 0
+        ? player.wordGameplayDurationMs
+        : getPlayerWordDuration(player, state.matchMode, 'gameplay', grid);
+      const elapsedMs = Math.max(0, action.at - player.wordStartedAt);
+
+      let pityTimeouts = player.pityTimeouts;
+      let soloAdaptiveMultiplier = player.soloAdaptiveMultiplier ?? 1;
+      let doubleBonusStreak = player.doubleBonusStreak;
+
+      if (isFirstOvertimeTick) {
+        pityTimeouts = player.pityTimeouts + 1;
+        if (isSolo) {
+          soloAdaptiveMultiplier = updateSoloAdaptiveMultiplier(
+            soloAdaptiveMultiplier,
+            elapsedMs,
+            gameplayAllowedMs,
+            'timeout',
+          );
+        }
+        if (player.doubleBonusActive) {
+          doubleBonusStreak = 0;
+        }
+      }
 
       return {
         ...state,
@@ -394,7 +459,10 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
           [action.playerId]: {
             ...player,
             score: newScore,
-            wordStreak: resetStreak ? 0 : player.wordStreak,
+            wordStreak: isFirstOvertimeTick ? 0 : player.wordStreak,
+            pityTimeouts,
+            soloAdaptiveMultiplier,
+            doubleBonusStreak,
             overtimePenaltyTicks: action.overtimeTicks,
           },
         },

@@ -55,7 +55,6 @@ interface Props {
   onVictoryUsernameSave?: (name: string, score: number) => void;
   onSoloVictoryDone?: (action: 'playAgain' | 'menu') => void;
   onBadgesEarned?: (ids: BadgeId[]) => void;
-  badgeCounts?: BadgeCounts;
   sessionBadges?: BadgeCounts;
   lifetimeBadgeBefore?: BadgeCounts;
 }
@@ -120,6 +119,8 @@ interface WordCompleteFx {
   scoreBefore: number;
   total: number;
   streak: number;
+  /** Times this streak tier was earned in the current match (including this pop). */
+  streakSessionCount: number;
   bonusCallouts: BonusCallout[];
   hasBurst: boolean;
   leftPct: number;
@@ -319,27 +320,15 @@ function resolveFastCallout(
   return { kind: 'fast', tier, label: tier === 1 ? labels.fastBonus1 : labels.fastBonus2 };
 }
 
-function resolveStreakCallout(
-  streak: number,
-  labelFor: (streak: number) => string,
-): BonusCallout | null {
-  if (streak < 2 || streak > 7) return null;
-  return { kind: 'streak', tier: streak, label: labelFor(streak) };
-}
-
 function buildBonusCallouts(
   elapsedMs: number,
   wordLength: number,
   doubleBonusActive: boolean,
-  streak: number,
   labels: BonusLabels,
-  streakLabel: (streak: number) => string,
 ): BonusCallout[] {
   const callouts: BonusCallout[] = [];
   const fast = resolveFastCallout(elapsedMs, wordLength, labels);
   if (fast) callouts.push(fast);
-  const streakCallout = resolveStreakCallout(streak, streakLabel);
-  if (streakCallout) callouts.push(streakCallout);
   if (doubleBonusActive) {
     callouts.push({ kind: 'double', tier: 1, label: labels.doubleBonusActive });
   }
@@ -349,17 +338,17 @@ function buildBonusCallouts(
 function HudFloatingBadges({
   fx,
   hidden,
-  badgeCounts,
+  sessionBadges,
   streakLabel,
   streakAria,
 }: {
   fx: WordCompleteFx;
   hidden: boolean;
-  badgeCounts: BadgeCounts;
+  sessionBadges: BadgeCounts;
   streakLabel: string;
   streakAria: string;
 }) {
-  const hasContent = fx.total > 0 || fx.streak > 0 || fx.bonusCallouts.length > 0;
+  const hasContent = fx.total > 0 || fx.streak >= 2 || fx.bonusCallouts.length > 0;
   if (!hasContent) return null;
 
   return (
@@ -370,18 +359,21 @@ function HudFloatingBadges({
       {fx.total > 0 && (
         <span className="hud-floating-badges__score">+{fx.total}</span>
       )}
-      {fx.streak > 0 && (
+      {fx.streak >= 2 && (
         <WordStreakBadge
           streak={fx.streak}
           label={streakLabel}
+          sessionCount={fx.streakSessionCount}
           bump={!hidden}
           ariaLabel={streakAria}
           className="word-streak-badge--float"
         />
       )}
-      {fx.bonusCallouts.map((bonus, index) => {
+      {fx.bonusCallouts
+        .filter(bonus => bonus.kind !== 'streak')
+        .map((bonus, index) => {
         const badgeId = badgeIdFromBonus(bonus.kind, bonus.tier);
-        const count = badgeCounts[badgeId] ?? 0;
+        const sessionCount = (sessionBadges[badgeId] ?? 0) + 1;
         return (
           <span
             key={`${bonus.kind}-${bonus.tier}-${index}`}
@@ -389,7 +381,9 @@ function HudFloatingBadges({
             style={{ animationDelay: `${index * 45}ms` }}
           >
             <span className="hud-bonus-callout__label">{bonus.label}</span>
-            {count > 0 && <span className="hud-bonus-callout__count">{count}</span>}
+            {sessionCount > 1 && (
+              <span className="hud-bonus-callout__count">×{sessionCount}</span>
+            )}
           </span>
         );
       })}
@@ -400,17 +394,19 @@ function HudFloatingBadges({
 function WordStreakBadge({
   streak,
   label,
+  sessionCount = 0,
   bump = false,
   className = '',
   ariaLabel,
 }: {
   streak: number;
   label: string;
+  sessionCount?: number;
   bump?: boolean;
   className?: string;
   ariaLabel: string;
 }) {
-  if (streak <= 0) return null;
+  if (streak < 2) return null;
   const tier = getWordStreakTier(streak);
   return (
     <span
@@ -418,7 +414,10 @@ function WordStreakBadge({
       className={`word-streak-badge word-streak-badge--tier-${tier}${bump ? ' word-streak-badge--bump' : ''}${className ? ` ${className}` : ''}`}
       aria-label={ariaLabel}
     >
-      {label}
+      <span className="word-streak-badge__label">{label}</span>
+      {sessionCount > 1 && (
+        <span className="word-streak-badge__count">×{sessionCount}</span>
+      )}
     </span>
   );
 }
@@ -479,7 +478,6 @@ export function GameScreen({
   onVictoryUsernameSave,
   onSoloVictoryDone,
   onBadgesEarned,
-  badgeCounts = EMPTY_BADGE_COUNTS,
   sessionBadges = EMPTY_BADGE_COUNTS,
   lifetimeBadgeBefore = EMPTY_BADGE_COUNTS,
 }: Props) {
@@ -507,7 +505,9 @@ export function GameScreen({
   // Word timer uses wall clock so it survives refresh (logicalTime is 0 until the first frame).
   const wordStartedAt = player?.wordStartedAt ?? 0;
   const wordDuration = player && targetWord
-    ? getPlayerWordDuration(player, gameState.matchMode, 'gameplay', matchGrid)
+    ? (player.wordGameplayDurationMs > 0
+      ? player.wordGameplayDurationMs
+      : getPlayerWordDuration(player, gameState.matchMode, 'gameplay', matchGrid))
     : 0;
   const currentTime = gameClockNow;
   const wordElapsed = wordStartedAt > 0 ? Math.max(0, currentTime - wordStartedAt) : 0;
@@ -640,22 +640,27 @@ export function GameScreen({
         elapsedMs,
         targetWord.length,
         player.doubleBonusActive,
-        nextStreak,
         {
           fastBonus1: t.fastBonus1,
           fastBonus2: t.fastBonus2,
           doubleBonusActive: t.doubleBonusActive,
         },
-        n => streakCalloutLabel(t, n),
       );
-      onBadgesEarned?.(
-        bonusCallouts.map(callout => badgeIdFromBonus(callout.kind, callout.tier)),
-      );
+      const earnedBadgeIds = bonusCallouts.map(callout => badgeIdFromBonus(callout.kind, callout.tier));
+      if (nextStreak >= 2 && nextStreak <= 7) {
+        earnedBadgeIds.push(badgeIdFromBonus('streak', nextStreak));
+      }
+      const streakSessionCount =
+        nextStreak >= 2 && nextStreak <= 7
+          ? (sessionBadges[badgeIdFromBonus('streak', nextStreak)] ?? 0) + 1
+          : 0;
+      onBadgesEarned?.(earnedBadgeIds);
       const fxBase = {
         runId: wordCompleteFxRunRef.current,
         scoreBefore,
         total: breakdown.total,
         streak: nextStreak,
+        streakSessionCount,
         bonusCallouts,
       };
       if (pos && lastCell) {
@@ -717,6 +722,7 @@ export function GameScreen({
     t.fastBonus2,
     t.doubleBonusActive,
     onBadgesEarned,
+    sessionBadges,
   ]);
 
   useEffect(() => {
@@ -807,18 +813,19 @@ export function GameScreen({
   }, [shuffleSignal]);
 
   const hintTimerKey = `${targetWord}-${wordStartedAt}-${selectedIds.length}`;
+  const hintColumns = player?.columns;
 
   useEffect(() => {
     setHintCellId(null);
-    if (!targetWord || !player || selectedIds.length >= targetWord.length) return;
+    if (!targetWord || !hintColumns || selectedIds.length >= targetWord.length) return;
 
     const timeoutId = window.setTimeout(() => {
-      const id = findHintCellId(player.columns, targetWord, selectedIds);
+      const id = findHintCellId(hintColumns, targetWord, selectedIds);
       setHintCellId(id);
     }, LETTER_HINT_DELAY_MS);
 
     return () => window.clearTimeout(timeoutId);
-  }, [hintTimerKey, targetWord, player, selectedIds]);
+  }, [hintTimerKey, targetWord, hintColumns, selectedIds]);
 
   useEffect(() => {
     if (!isSoloVictory) {
@@ -951,11 +958,16 @@ export function GameScreen({
       wordCompleteFxRunRef.current += 1;
       setSubmitFeedback('valid');
       setHudFxHidden(false);
+      const streak = player?.wordStreak ?? 0;
       setWordCompleteFx({
         runId: wordCompleteFxRunRef.current,
         scoreBefore: displayScore,
         total: 0,
-        streak: player?.wordStreak ?? 0,
+        streak,
+        streakSessionCount:
+          streak >= 2 && streak <= 7
+            ? (sessionBadges[badgeIdFromBonus('streak', streak)] ?? 0) + 1
+            : 0,
         bonusCallouts: callouts,
         hasBurst: false,
         leftPct: 0,
@@ -973,7 +985,7 @@ export function GameScreen({
         setHudFxHidden(false);
       }, WORD_COMPLETE_FX_MS);
     },
-    [onBadgesEarned, displayScore, player?.wordStreak],
+    [onBadgesEarned, displayScore, player?.wordStreak, sessionBadges],
   );
 
   useEffect(() => {
@@ -1125,8 +1137,12 @@ export function GameScreen({
     <HudFloatingBadges
       fx={activeWordCompleteFx}
       hidden={hudFxHidden}
-      badgeCounts={badgeCounts}
-      streakLabel={t.wordStreakPop.replace('{count}', String(activeWordCompleteFx.streak))}
+      sessionBadges={sessionBadges}
+      streakLabel={
+        activeWordCompleteFx.streak <= 7
+          ? streakCalloutLabel(t, activeWordCompleteFx.streak)
+          : t.wordStreakPop.replace('{count}', String(activeWordCompleteFx.streak))
+      }
       streakAria={t.wordStreakAria.replace('{count}', String(activeWordCompleteFx.streak))}
     />
   ) : null;

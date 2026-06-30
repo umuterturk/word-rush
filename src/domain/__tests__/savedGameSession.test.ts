@@ -31,6 +31,7 @@ function playingState(overrides: Partial<GameState> = {}): GameState {
         wordPool: ['AT'],
         usedWords: ['AT'],
         wordStartedAt: 1_000,
+        wordGameplayDurationMs: 5_000,
         shuffleUsed: false,
         doubleBonusActive: false,
         doubleBonusUsed: false,

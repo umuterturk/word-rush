@@ -14,7 +14,6 @@ import type { SoloDifficulty } from './domain/types';
 import {
   EMPTY_BADGE_COUNTS,
   addBadgeIds,
-  mergeBadgeCounts,
   totalBadgeCount,
   type BadgeCounts,
   type BadgeId,
@@ -120,11 +119,6 @@ export default function App() {
   const [skipEndBadgeReveal, setSkipEndBadgeReveal] = useState(false);
   /** Solo victory popup was dismissed — skip the duplicate EndScreen. */
   const [soloVictoryExit, setSoloVictoryExit] = useState<'playAgain' | 'menu' | null>(null);
-
-  const displayBadgeCounts = useMemo(
-    () => mergeBadgeCounts(badges, sessionBadges),
-    [badges, sessionBadges],
-  );
 
   const activeMatchIdRef = useRef<string | undefined>(undefined);
   const prevScoreRef = useRef(0);
@@ -1038,7 +1032,6 @@ export default function App() {
           onVictoryUsernameSave={isMultiplayer ? undefined : handleVictoryUsernameSave}
           onSoloVictoryDone={isMultiplayer ? undefined : handleSoloVictoryDone}
           onBadgesEarned={handleBadgesEarned}
-          badgeCounts={displayBadgeCounts}
           sessionBadges={sessionBadges}
           lifetimeBadgeBefore={badges}
           endOverlay={

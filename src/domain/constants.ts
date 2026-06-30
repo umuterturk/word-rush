@@ -22,18 +22,12 @@ export const MULTIPLAYER_MATCH_DURATION_MS = IS_DEV_GAMEPLAY ? 30_000 : MATCH_DU
 /** Solo: board refills allowed after correct words. */
 export const SOLO_REFILL_LIMIT = 10;
 
-/** Dev solo: no refills — clear the initial board only. */
-const DEV_SOLO_REFILL_LIMIT = 0;
-
-/** Dev solo: short overall timer so matches end quickly even if the board isn't cleared. */
-const DEV_SOLO_MATCH_DURATION_MS = 30_000;
-
 export function getSoloMatchDurationMs(): number {
-  return IS_DEV_GAMEPLAY ? DEV_SOLO_MATCH_DURATION_MS : MATCH_DURATION_MS;
+  return MATCH_DURATION_MS;
 }
 
 export function getSoloRefillLimit(): number {
-  return IS_DEV_GAMEPLAY ? DEV_SOLO_REFILL_LIMIT : SOLO_REFILL_LIMIT;
+  return SOLO_REFILL_LIMIT;
 }
 
 export interface GridDimensions {
@@ -56,9 +50,6 @@ export function getMatchGridDimensions(
   soloDifficulty?: SoloDifficulty,
 ): GridDimensions {
   if (matchMode === 'solo') {
-    if (IS_DEV_GAMEPLAY) {
-      return SOLO_GRID_BY_DIFFICULTY.easy;
-    }
     return SOLO_GRID_BY_DIFFICULTY[soloDifficulty ?? 'hard'];
   }
   return MULTIPLAYER_GRID;
@@ -118,11 +109,11 @@ export const WORD_SCORE: Readonly<Record<number, number>> = {
 /** Penalty for skipping a word. */
 export const SKIP_PENALTY = 0;
 
-/** Ms between each -1 point tick after the per-word timer expires. */
-export const WORD_OVERTIME_PENALTY_TICK_MS = 200;
+/** Ms between each overtime score penalty after the per-word timer expires. */
+export const WORD_OVERTIME_PENALTY_TICK_MS = 1000;
 
 /** Points deducted on each overtime tick. */
-export const WORD_OVERTIME_PENALTY_PER_TICK = 1;
+export const WORD_OVERTIME_PENALTY_PER_TICK = 5;
 
 /** Seconds per letter for word timer. */
 export const SECONDS_PER_LETTER = 1.2;

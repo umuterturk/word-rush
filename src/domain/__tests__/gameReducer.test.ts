@@ -566,11 +566,11 @@ describe('2× mode streak', () => {
 });
 
 describe('word overtime penalty', () => {
-  it('charges -1 per overtime tick without changing word or selection', () => {
+  it('charges -5 per overtime tick without changing word or selection', () => {
     const state = {
       ...startedState('overtime', 1000),
       players: {
-        local: { ...startedState('overtime', 1000).players['local'], score: 20 },
+        local: { ...startedState('overtime', 1000).players['local'], score: 30 },
       },
     };
     const player = state.players['local'];
@@ -582,7 +582,7 @@ describe('word overtime penalty', () => {
     });
     expect(next.players['local'].targetWord).toBe(player.targetWord);
     expect(next.players['local'].selectedIds).toEqual(player.selectedIds);
-    expect(next.players['local'].score).toBe(15);
+    expect(next.players['local'].score).toBe(5);
     expect(next.players['local'].overtimePenaltyTicks).toBe(5);
   });
 
@@ -622,7 +622,7 @@ describe('word overtime penalty', () => {
       at: 6000,
       overtimeTicks: 3,
     });
-    expect(afterTwo.players['local'].score).toBe(17);
+    expect(afterTwo.players['local'].score).toBe(5);
     expect(afterTwo.players['local'].overtimePenaltyTicks).toBe(3);
   });
 
@@ -670,6 +670,64 @@ describe('word overtime penalty', () => {
     expect(skipped.players['local'].overtimePenaltyTicks).toBe(0);
     expect(skipped.players['local'].wordStartedAt).toBe(9500);
   });
+
+  it('applies timeout pity and solo adaptive on the first overtime tick', () => {
+    const base = startedState('overtime-pity', 1000, 'solo');
+    const state = {
+      ...base,
+      players: {
+        local: { ...base.players['local'], wordStreak: 3 },
+      },
+    };
+    const player = state.players['local'];
+    const grid = stateGrid(state);
+    const allowed = getPlayerWordDuration(player, 'solo', 'gameplay', grid);
+    const next = gameReducer(state, {
+      type: 'WORD_OVERTIME',
+      playerId: 'local',
+      at: player.wordStartedAt + allowed + 1,
+      overtimeTicks: 1,
+    });
+    expect(next.players['local'].pityTimeouts).toBe(1);
+    expect(next.players['local'].soloAdaptiveMultiplier).toBeCloseTo(1.2, 5);
+    expect(next.players['local'].wordStreak).toBe(0);
+    expect(next.players['local'].targetWord).toBe(player.targetWord);
+  });
+
+  it('increments pity without solo adaptive in multiplayer overtime', () => {
+    const base = startedState('overtime-mp', 1000, 'multiplayer');
+    const player = base.players['local'];
+    const grid = stateGrid(base);
+    const allowed = getPlayerWordDuration(player, 'multiplayer', 'gameplay', grid);
+    const next = gameReducer(base, {
+      type: 'WORD_OVERTIME',
+      playerId: 'local',
+      at: player.wordStartedAt + allowed + 1,
+      overtimeTicks: 1,
+    });
+    expect(next.players['local'].pityTimeouts).toBe(1);
+    expect(next.players['local'].soloAdaptiveMultiplier).toBe(1);
+  });
+
+  it('does not double-apply solo adaptive when submitting after overtime', () => {
+    const base = stateWithManualTargetFrom(startedState('overtime-submit', 1000, 'solo', 'hard'), 'bal');
+    const player = base.players['local'];
+    const grid = stateGrid(base);
+    const allowed = getPlayerWordDuration(player, 'solo', 'gameplay', grid);
+    const afterOvertime = gameReducer(base, {
+      type: 'WORD_OVERTIME',
+      playerId: 'local',
+      at: player.wordStartedAt + allowed + 500,
+      overtimeTicks: 1,
+    });
+    const adaptiveAfterTimeout = afterOvertime.players['local'].soloAdaptiveMultiplier;
+    const afterSubmit = gameReducer(afterOvertime, {
+      type: 'SUBMIT_WORD',
+      playerId: 'local',
+      at: player.wordStartedAt + allowed + 5000,
+    });
+    expect(afterSubmit.players['local'].soloAdaptiveMultiplier).toBe(adaptiveAfterTimeout);
+  });
 });
 
 function stateWithOnlyTarget(word: string): GameState {
@@ -700,14 +758,19 @@ function stateWithManualTargetFrom(base: GameState, word: string): GameState {
   const newColumns = player.columns.map((col, colIdx) =>
     colIdx === 0 ? wordCells : col,
   );
+  const local = {
+    ...player,
+    columns: newColumns,
+    targetWord: word,
+    selectedIds: wordCells.map(c => c.id),
+  };
+  const grid = stateGrid(base);
   return {
     ...base,
     players: {
       local: {
-        ...player,
-        columns: newColumns,
-        targetWord: word,
-        selectedIds: wordCells.map(c => c.id),
+        ...local,
+        wordGameplayDurationMs: getPlayerWordDuration(local, base.matchMode, 'gameplay', grid),
       },
     },
   };

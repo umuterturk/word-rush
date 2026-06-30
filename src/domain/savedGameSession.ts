@@ -2,6 +2,7 @@ import type { BadgeCounts } from './badges';
 import { BADGE_IDS } from './badges';
 import type { GameState, LandedCell, MatchMode, MatchStatus, PlayerState, SoloDifficulty } from './types';
 import { getMatchGridDimensions } from './constants';
+import { getPlayerWordDuration } from './gridUtils';
 
 export interface SavedGameSession {
   gameState: GameState;
@@ -83,6 +84,12 @@ function isPlayerState(value: unknown): value is PlayerState {
     return false;
   }
   if (
+    player.wordGameplayDurationMs !== undefined
+    && typeof player.wordGameplayDurationMs !== 'number'
+  ) {
+    return false;
+  }
+  if (
     player.overtimePenaltyTicks !== undefined
     && typeof player.overtimePenaltyTicks !== 'number'
   ) {
@@ -142,6 +149,17 @@ export function parseSavedGameSession(raw: unknown): SavedGameSession | null {
     );
     session.gameState.gridCols = grid.cols;
     session.gameState.gridRows = grid.rows;
+  }
+  const local = session.gameState.players.local;
+  if (local.wordGameplayDurationMs === undefined) {
+    const grid = {
+      cols: session.gameState.gridCols,
+      rows: session.gameState.gridRows,
+    };
+    local.wordGameplayDurationMs =
+      local.targetWord && local.wordStartedAt > 0
+        ? getPlayerWordDuration(local, session.gameState.matchMode, 'gameplay', grid)
+        : 0;
   }
   return session;
 }

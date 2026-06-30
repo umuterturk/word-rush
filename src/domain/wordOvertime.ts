@@ -16,7 +16,9 @@ export function tickWordOvertime(state: GameState, wallClockTime: number): GameS
   if (!player?.targetWord || player.wordStartedAt <= 0) return state;
 
   const grid = { cols: state.gridCols, rows: state.gridRows };
-  const wordDuration = getPlayerWordDuration(player, state.matchMode, 'gameplay', grid);
+  const wordDuration = player.wordGameplayDurationMs > 0
+    ? player.wordGameplayDurationMs
+    : getPlayerWordDuration(player, state.matchMode, 'gameplay', grid);
   const elapsed = Math.max(0, wallClockTime - player.wordStartedAt);
   const overtimeMs = elapsed - wordDuration;
   const overtimeTicks = wordOvertimeTicksElapsed(overtimeMs);
