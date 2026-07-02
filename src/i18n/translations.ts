@@ -219,6 +219,23 @@ export interface Translations {
   installAction: string;
   installDismiss: string;
 
+  // In-app browser (WhatsApp, etc.)
+  inAppBrowserEyebrow: string;
+  inAppBrowserTitle: string;
+  inAppBrowserSubtitle: string;
+  inAppBrowserAppWhatsApp: string;
+  inAppBrowserAppInstagram: string;
+  inAppBrowserAppFacebook: string;
+  inAppBrowserAppTelegram: string;
+  inAppBrowserAppGeneric: string;
+  inAppBrowserStepIosMenu: string;
+  inAppBrowserStepIosOpen: string;
+  inAppBrowserStepAndroidMenu: string;
+  inAppBrowserStepAndroidAuto: string;
+  inAppBrowserOpenBrowser: string;
+  inAppBrowserRedirecting: string;
+  inAppBrowserLinkCopied: string;
+
   // PWA
   pwaName: string;
   pwaDescription: string;
@@ -443,6 +460,23 @@ export const translations: Record<Language, Translations> = {
     installAction: 'Install',
     installDismiss: 'Dismiss',
 
+    inAppBrowserEyebrow: 'OPEN THE APP',
+    inAppBrowserTitle: 'Open {game} in Chrome',
+    inAppBrowserSubtitle:
+      '{app} cannot run {game}. Your progress and login do not work in this private browser.',
+    inAppBrowserAppWhatsApp: 'WhatsApp',
+    inAppBrowserAppInstagram: 'Instagram',
+    inAppBrowserAppFacebook: 'Facebook',
+    inAppBrowserAppTelegram: 'Telegram',
+    inAppBrowserAppGeneric: 'This app',
+    inAppBrowserStepIosMenu: 'Tap the menu (⋯) at the bottom right',
+    inAppBrowserStepIosOpen: 'Choose "Open in Safari" — then open {game} from your home screen',
+    inAppBrowserStepAndroidMenu: 'Or tap ⋮ and choose "Open in Chrome"',
+    inAppBrowserStepAndroidAuto: 'Opening Chrome — if {game} is installed, it launches automatically',
+    inAppBrowserOpenBrowser: 'Open in Chrome',
+    inAppBrowserRedirecting: 'Opening Chrome…',
+    inAppBrowserLinkCopied: 'Link copied — paste it in Chrome.',
+
     pwaName: 'Word Rush',
     pwaDescription: 'Tap falling letters to spell Turkish words against the clock.',
   },
@@ -663,6 +697,23 @@ export const translations: Record<Language, Translations> = {
     installStepManualAdd: 'Ana ekrana ekle\'ye dokun',
     installAction: 'Yükle',
     installDismiss: 'Kapat',
+
+    inAppBrowserEyebrow: 'UYGULAMADA AÇ',
+    inAppBrowserTitle: '{game} Chrome\'da açılsın',
+    inAppBrowserSubtitle:
+      '{app} içinde {game} çalışmaz. Bu özel tarayıcı giriş ve ilerlemeyi saklamaz.',
+    inAppBrowserAppWhatsApp: 'WhatsApp',
+    inAppBrowserAppInstagram: 'Instagram',
+    inAppBrowserAppFacebook: 'Facebook',
+    inAppBrowserAppTelegram: 'Telegram',
+    inAppBrowserAppGeneric: 'Bu uygulama',
+    inAppBrowserStepIosMenu: 'Sağ alttaki menüye (⋯) dokun',
+    inAppBrowserStepIosOpen: '"Safari\'de Aç"ı seç — sonra {game}\'ı ana ekrandan aç',
+    inAppBrowserStepAndroidMenu: 'Veya ⋮ menüsünden "Chrome\'da aç"ı seç',
+    inAppBrowserStepAndroidAuto: 'Chrome açılıyor — {game} yüklüyse otomatik başlar',
+    inAppBrowserOpenBrowser: 'Chrome\'da aç',
+    inAppBrowserRedirecting: 'Chrome açılıyor…',
+    inAppBrowserLinkCopied: 'Link kopyalandı — Chrome\'a yapıştır.',
 
     pwaName: 'YazYaz',
     pwaDescription: 'Harflere dokunarak süreye karşı Türkçe kelime yaz.',

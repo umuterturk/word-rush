@@ -34,6 +34,7 @@ import { MultiplayerLobbyScreen } from './app/MultiplayerLobbyScreen';
 import { FriendMatchOverlay } from './app/FriendMatchOverlay';
 import { RoomUnavailableScreen } from './app/RoomUnavailableScreen';
 import { GameRequestModal } from './app/GameRequestModal';
+import { InAppBrowserBanner } from './app/InAppBrowserBanner';
 import { useAppUpdate } from './app/useAppUpdate';
 import { usePlayerProfile } from './app/usePlayerProfile';
 import { useBadgeStats } from './app/useBadgeStats';
@@ -583,6 +584,7 @@ export default function App() {
 
   const globalOverlays = (
     <>
+      <InAppBrowserBanner />
       {incomingRequest && (
         <GameRequestModal
           request={incomingRequest}

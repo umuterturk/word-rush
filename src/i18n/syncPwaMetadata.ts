@@ -1,7 +1,5 @@
 import type { Translations } from './translations';
-
-const BASE = import.meta.env.BASE_URL;
-const SCOPE = BASE.endsWith('/') ? BASE : `${BASE}/`;
+import { buildPwaManifest, pwaManifestIcons, pwaScopePath } from '../app/pwaManifest';
 
 let manifestBlobUrl: string | null = null;
 
@@ -16,34 +14,10 @@ function setMetaContent(name: string, content: string) {
 }
 
 function updateManifest(t: Translations) {
+  const scope = pwaScopePath(import.meta.env.BASE_URL);
   const manifest = {
-    name: t.pwaName,
-    short_name: t.pwaName,
-    description: t.pwaDescription,
-    theme_color: '#0b0b18',
-    background_color: '#0b0b18',
-    display: 'standalone',
-    orientation: 'portrait',
-    scope: SCOPE,
-    start_url: SCOPE,
-    icons: [
-      {
-        src: `${SCOPE}pwa-192x192.png`,
-        sizes: '192x192',
-        type: 'image/png',
-      },
-      {
-        src: `${SCOPE}pwa-512x512.png`,
-        sizes: '512x512',
-        type: 'image/png',
-      },
-      {
-        src: `${SCOPE}pwa-512x512.png`,
-        sizes: '512x512',
-        type: 'image/png',
-        purpose: 'maskable',
-      },
-    ],
+    ...buildPwaManifest(t, scope),
+    icons: pwaManifestIcons(scope),
   };
 
   if (manifestBlobUrl) {

@@ -1,5 +1,9 @@
 /* ─── Reset & Mobile Foundation ─────────────────────────────────────────── */
 
+:root {
+  color-scheme: dark;
+}
+
 *, *::before, *::after {
   box-sizing: border-box;
   -webkit-tap-highlight-color: transparent;
@@ -1834,6 +1838,138 @@ button {
 
 .install-banner__dismiss:active {
   background: rgba(255, 255, 255, 0.14);
+}
+
+.in-app-browser-gate {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  padding-top: max(24px, env(safe-area-inset-top, 0px));
+  padding-bottom: max(24px, env(safe-area-inset-bottom, 0px));
+  background: rgba(11, 11, 24, 0.94);
+  backdrop-filter: blur(8px);
+}
+
+.in-app-browser-gate__card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  max-width: 360px;
+  padding: 28px 24px;
+  text-align: center;
+  border-radius: 22px;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(255, 107, 107, 0.14), transparent 55%),
+    linear-gradient(180deg, #17172f 0%, #101022 100%);
+  border: 1px solid rgba(255, 107, 107, 0.35);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.5);
+}
+
+.in-app-browser-gate__eyebrow {
+  margin: 0;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  color: #ff8a80;
+  text-transform: uppercase;
+}
+
+.in-app-browser-gate__title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 900;
+  letter-spacing: 1px;
+  color: #fff;
+  line-height: 1.25;
+}
+
+.in-app-browser-gate__subtitle {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.45;
+  color: rgba(255, 255, 255, 0.68);
+}
+
+.in-app-browser-gate__status {
+  margin: 4px 0 0;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: #4fc3f7;
+}
+
+.in-app-browser-gate__steps {
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+}
+
+.in-app-browser-gate__steps li {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.in-app-browser-gate__step-icon {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  font-size: 14px;
+  font-weight: 900;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.in-app-browser-gate__step-icon--accent {
+  background: rgba(79, 195, 247, 0.16);
+  color: #4fc3f7;
+}
+
+.in-app-browser-gate__hint {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: #b9f6ca;
+}
+
+.in-app-browser-gate__cta {
+  width: 100%;
+  margin-top: 4px;
+  padding: 14px 20px;
+  border: none;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #4fc3f7, #29b6f6);
+  color: #0b0b18;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 900;
+  letter-spacing: 1.5px;
+  cursor: pointer;
+}
+
+.in-app-browser-gate__cta:active {
+  transform: scale(0.98);
+  opacity: 0.92;
 }
 
 @media (max-height: 740px) {
